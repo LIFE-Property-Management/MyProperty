@@ -37,3 +37,24 @@
 ### Decisions
 - **Client state: Zustand** — not Redux. Limited client-side state needs (UI state, user role, notifications) don't justify Redux overhead.
 - **Server state: TanStack Query** — all API data fetching, caching, and sync. No raw `fetch` or `useEffect` data fetching.
+
+## Progress Log
+
+### April 15, 2026
+
+#### Completed
+- Upgraded Next.js to 16.2.3 (patched DoS vulnerability)
+- Removed deprecated `@next/font`, migrated to `next/font`
+- Installed all missing dependencies: `zod`, `zustand`, `@tanstack/react-query`, `@tanstack/react-query-devtools`, `react-hook-form`, `@hookform/resolvers`, `framer-motion`
+- Fixed `globals.css` — correct design system color tokens, Playfair Display + DM Sans fonts, dark mode
+- Completed all Zod schemas for Tenant Portal (`lib/types/`)
+    - `enums.ts` — PaymentStatus, PaymentMethod, LeaseStatus, TenantAccountStatus
+    - `lease.ts` — LeaseSummary (depositAmount intentionally excluded from MVP)
+    - `payment.ts` — Payment, ReceiptUploadFormSchema, ManualRequestFormSchema, PaymentHistoryEntry, PaymentHistoryResponse
+    - `tenant.ts` — TenantAccount
+    - `index.ts` — barrel exports
+
+#### Up Next
+- Zustand store (`lib/store/`)
+- TanStack Query setup and tenant hooks (`lib/hooks/`)
+- Tenant Portal UI (`app/(tenant)/`)
