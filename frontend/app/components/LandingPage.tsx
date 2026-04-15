@@ -75,10 +75,6 @@ const TEXT_MUTED = "#6b7280";
 const BORDER = "#e5e7eb";
 const ERROR = "#b91c1c";
 
-const styles = {
-    "@import": "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap",
-};
-
 function Input({ label, type = "text", placeholder, value, onChange, error }: InputProps) {
     return (
         <div style={{ marginBottom: 16 }}>
@@ -189,8 +185,6 @@ function LandingView({ onLogin, onSignup } : LandingViewProps) {
             display: "flex",
             flexDirection: "column",
         }}>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" />
-
             {/* Nav */}
             <nav style={{
                 padding: "20px 48px",
@@ -366,8 +360,6 @@ function LoginView({ onBack, onSignup } : LoginViewProps) {
             padding: 24,
             fontFamily: "'DM Sans', sans-serif",
         }}>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" />
-
             <div style={{ marginBottom: 32 }}><Logo /></div>
 
             <Card>
@@ -476,8 +468,6 @@ function SignupView({ onBack, onLogin } :SignupViewProps) {
             padding: 24,
             fontFamily: "'DM Sans', sans-serif",
         }}>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" />
-
             <div style={{ marginBottom: 32 }}><Logo /></div>
 
             <Card>
