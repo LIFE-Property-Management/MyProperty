@@ -54,7 +54,29 @@
     - `tenant.ts` — TenantAccount
     - `index.ts` — barrel exports
 
+
+### April 16, 2026
+
+#### Completed
+- Completed Zustand store for Tenant Portal (`lib/store/`)
+  - `tenant/authSlice.ts` — userId, email, tenantAccountStatus, isReadOnly (derived), setAuth, clearAuth
+  - `tenant/uiSlice.ts` — UI state
+  - `tenant/notificationSlice.ts` — notifications with auto-dismiss
+  - `useTenantStore.ts` — combined store with devtools middleware
+- Completed TanStack Query + data layer setup
+  - `lib/auth/keycloak.ts` — mock Keycloak adapter (swappable)
+  - `lib/api/client.ts` — axios instance with auth interceptor
+  - `lib/api/endpoints.ts` — route constants (all placeholder, swappable)
+  - `lib/hooks/queryKeys.ts` — centralized query key factory
+  - `lib/hooks/useTenantAccount.ts`
+  - `lib/hooks/useLease.ts`
+  - `lib/hooks/useCurrentPayment.ts` — 30s polling
+  - `lib/hooks/usePaymentHistory.ts` — paginated
+  - `lib/hooks/useSubmitReceipt.ts` — multipart mutation
+  - `lib/hooks/useSubmitManualRequest.ts` — JSON mutation
+  - `lib/hooks/index.ts` — barrel export
+  - `app/(tenant)/_components/KeycloakInit.tsx`
+  - `app/(tenant)/layout.tsx`
+
 #### Up Next
-- Zustand store (`lib/store/`)
-- TanStack Query setup and tenant hooks (`lib/hooks/`)
 - Tenant Portal UI (`app/(tenant)/`)
