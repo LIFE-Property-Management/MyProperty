@@ -386,7 +386,6 @@ function UserBadge({ collapsed }: { collapsed: boolean }) {
 
                 return (
                     <>
-                        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" />
                 <div style={{ display: "flex", minHeight: "100vh", background: BG, fontFamily: "'DM Sans', sans-serif" }}>
                 <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
 

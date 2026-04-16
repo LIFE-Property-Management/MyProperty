@@ -246,8 +246,6 @@ export default function LandlordDashboard() {
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 32, fontFamily: "'DM Sans', sans-serif" }}>
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" />
-
             {/* Section 1 — Overview */}
             <section>
                 <SectionHeader title="Overview" />
