@@ -22,10 +22,10 @@ export interface CardProps extends Omit<HTMLMotionProps<'div'>, 'children'> {
 }
 
 const BASE_CLASSES =
-  'bg-white dark:bg-[#161b22] ' +
-  'border border-[#e5e7eb] dark:border-[#30363d] ' +
-  'rounded-xl ' +
-  'shadow-sm'
+    'bg-[var(--color-surface)] ' +
+    'border border-[var(--color-border)] ' +
+    'rounded-xl ' +
+    'shadow-sm'
 
 const PADDING_CLASSES: Record<CardPadding, string> = {
   none: 'p-0',
