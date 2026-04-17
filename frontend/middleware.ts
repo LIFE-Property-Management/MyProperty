@@ -6,11 +6,13 @@ const MOCK_TOKEN = "mock.dev.token";
 const IS_DEV = process.env.NODE_ENV === "development";
 
 const PUBLIC_PATHS = new Set<string>(["/"]);
+const PUBLIC_PREFIXES = ["/invite/"];
 
 export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
 
   const token = req.cookies.get(AUTH_COOKIE);
   if (token) return NextResponse.next();
