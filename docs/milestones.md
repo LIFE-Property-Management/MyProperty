@@ -78,5 +78,34 @@
   - `app/(tenant)/_components/KeycloakInit.tsx`
   - `app/(tenant)/layout.tsx`
 
+### April 17, 2026
+
+#### Completed
+- Built Tenant Portal UI (`app/(tenant)/`)
+  - `_components/LeaseSummaryCard.tsx` — lease details card
+  - `_components/LeaseSummarySection.tsx` — data-fetching wrapper
+  - `_components/PaymentSection.tsx` — current payment with 4 states (Outstanding, Pending, Confirmed, Rejected)
+  - `_components/PaymentSubmissionModal.tsx` — modal with tab switch between receipt upload and manual request
+  - `_components/ReceiptUploadForm.tsx` — file upload form with React Hook Form + Zod
+  - `_components/ManualRequestForm.tsx` — cash payment form with React Hook Form + Zod
+  - `_components/PaymentHistoryTable.tsx` — filterable, paginated history table
+  - `_components/ReadOnlyBanner.tsx` — post-lease read-only state indicator
+  - `_components/PageTransition.tsx` — Framer Motion page animation
+  - `ui/` — Badge, Button, Card, DataTable, Input, Modal, Notification, Spinner, Textarea primitives
+  - `tenant/dashboard/page.tsx`, `loading.tsx`, `error.tsx`
+- Fixed dark mode bug — `@theme` inside `@media` is build-time only; dark token overrides moved to `@media (prefers-color-scheme: dark) { :root { ... } }`
+- Fixed `Card.tsx` — replaced hardcoded hex values with CSS variable references
+- Set up MSW v2 for development mock data (`mocks/`)
+  - `mocks/fixtures/` — typed fixture data for all 4 endpoints
+  - `mocks/handlers.ts` — MSW `http` handlers matching all API endpoints
+  - `mocks/browser.ts` — service worker setup
+  - `mocks/MockProvider.tsx` — client component that gates rendering until worker is registered
+  - Integrated into `app/(tenant)/layout.tsx`
+- Confirmed all sections render with mock data: Lease Summary, Current Payment (Outstanding state), Payment History (11 entries, paginated)
+
 #### Up Next
-- Tenant Portal UI (`app/(tenant)/`)
+- M2.6 — Jest + RTL unit tests, Playwright e2e
+- M2.7 — axe DevTools accessibility audit
+- M2.8 — Lighthouse performance baseline
+- M2.9 — .cursorrules
+- M2.10 — AI Log Entry #2
