@@ -23,7 +23,7 @@ describe("<ReadOnlyBanner />", () => {
       tenantAccountStatus: "ReadOnly",
     });
     render(<ReadOnlyBanner />);
-    const alert = screen.getByRole("alert");
+    const alert = screen.getByRole("status");
     expect(alert).toHaveTextContent(/read-only/i);
   });
 });

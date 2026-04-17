@@ -104,9 +104,9 @@ describe("<PaymentHistoryTable />", () => {
   it("disables Previous on page 1 and Next on the last page", () => {
     setHistory({ data: makeResponse({ totalCount: 10, page: 1 }) });
     render(<PaymentHistoryTable />);
-    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Previous/ })).toBeDisabled();
     // Exactly one page when totalCount === pageSize
-    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Next/ })).toBeDisabled();
   });
 
   it("shows pagination footer with 'Page X of Y'", () => {
@@ -119,7 +119,7 @@ describe("<PaymentHistoryTable />", () => {
   it("advances the page via Next click (next fetch re-triggers via hook)", async () => {
     setHistory({ data: makeResponse({ totalCount: 25, page: 1 }) });
     render(<PaymentHistoryTable />);
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(screen.getByRole("button", { name: /Next/ }));
     // The hook mock is invoked anew with page=2 on the re-render.
     expect(mockedUsePaymentHistory).toHaveBeenLastCalledWith(2, 10);
   });
