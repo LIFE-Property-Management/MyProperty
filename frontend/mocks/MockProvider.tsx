@@ -17,11 +17,18 @@ export function MockProvider({ children }: MockProviderProps) {
     let cancelled = false;
 
     const start = async (): Promise<void> => {
-      const { worker } = await import("./browser");
-      await worker.start({
-        onUnhandledRequest: "bypass",
-      });
-      if (!cancelled) setReady(true);
+      try {
+        const { worker } = await import("./browser");
+        await worker.start({ onUnhandledRequest: "bypass" });
+      } catch (error) {
+        // Service worker registration can fail under some harness conditions
+        // (e.g. Playwright with unusual flags). Rendering must not stall —
+        // fall through and let requests hit the real transport or a
+        // test-framework intercept (e.g. page.route).
+        console.warn("[mocks] MSW worker failed to start; continuing without mocks", error);
+      } finally {
+        if (!cancelled) setReady(true);
+      }
     };
 
     void start();
