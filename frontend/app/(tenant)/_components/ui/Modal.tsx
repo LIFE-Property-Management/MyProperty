@@ -104,6 +104,7 @@ function Modal({
 
   // Wait for client mount before touching document.body (createPortal target).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: one-shot SSR → client transition
     setMounted(true)
   }, [])
 
