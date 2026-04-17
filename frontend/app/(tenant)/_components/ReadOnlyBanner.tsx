@@ -9,7 +9,8 @@ export function ReadOnlyBanner() {
 
   return (
     <div
-      role="alert"
+      role="status"
+      aria-live="polite"
       className="rounded-lg border border-[var(--color-border)] bg-[var(--color-border)] px-4 py-3 text-sm text-[var(--color-muted-text)] dark:bg-[var(--color-surface)]"
     >
       Your account is in read-only mode. Contact your landlord for assistance.

@@ -9,7 +9,7 @@ const PRIMARY_LIGHT = "#e8f0e9";
 const PRIMARY_DARK = "#1a3d1d";
 const BG = "#fbfbff";
 const TEXT = "#1a1a1a";
-const TEXT_MUTED = "#6b7280";
+const TEXT_MUTED = "#4b5563";
 const BORDER = "#e5e7eb";
 const SIDEBAR_WIDTH = 240;
 
@@ -17,7 +17,7 @@ const SIDEBAR_WIDTH = 240;
 
 function IconDashboard({ active }: { active: boolean }) {
     return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
     <rect x="1" y="1" width="7" height="7" rx="2" fill={active ? PRIMARY : "none"} stroke={active ? PRIMARY : TEXT_MUTED} strokeWidth="1.5" />
     <rect x="10" y="1" width="7" height="7" rx="2" fill={active ? PRIMARY : "none"} stroke={active ? PRIMARY : TEXT_MUTED} strokeWidth="1.5" />
     <rect x="1" y="10" width="7" height="7" rx="2" fill={active ? PRIMARY : "none"} stroke={active ? PRIMARY : TEXT_MUTED} strokeWidth="1.5" />
@@ -28,7 +28,7 @@ function IconDashboard({ active }: { active: boolean }) {
 
 function IconProperties({ active }: { active: boolean }) {
     return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
     <path d="M9 2L1.5 8v8h5v-4.5h5V16h5V8L9 2z" fill={active ? PRIMARY : "none"} stroke={active ? PRIMARY : TEXT_MUTED} strokeWidth="1.5" strokeLinejoin="round" />
         </svg>
 );
@@ -36,7 +36,7 @@ function IconProperties({ active }: { active: boolean }) {
 
 function IconTenants({ active }: { active: boolean }) {
     return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
     <circle cx="9" cy="6" r="3.5" fill={active ? PRIMARY : "none"} stroke={active ? PRIMARY : TEXT_MUTED} strokeWidth="1.5" />
     <path d="M2 16c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke={active ? PRIMARY : TEXT_MUTED} strokeWidth="1.5" strokeLinecap="round" />
         </svg>
@@ -45,7 +45,7 @@ function IconTenants({ active }: { active: boolean }) {
 
 function IconMenu() {
     return (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
     <path d="M3 5h14M3 10h14M3 15h14" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round" />
         </svg>
 );
@@ -53,7 +53,7 @@ function IconMenu() {
 
 function IconClose() {
     return (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
     <path d="M5 5l10 10M15 5L5 15" stroke={TEXT} strokeWidth="1.5" strokeLinecap="round" />
         </svg>
 );
@@ -61,7 +61,7 @@ function IconClose() {
 
 function IconChevron({ open }: { open: boolean }) {
     return (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.2s" }}>
     <path d="M3 5l4 4 4-4" stroke={TEXT_MUTED} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
 );
@@ -121,6 +121,7 @@ function NavItem({
     return (
         <Link
             href={href}
+    aria-current={active ? "page" : undefined}
     style={{ textDecoration: "none" }}
     onMouseEnter={() => setHovered(true)}
     onMouseLeave={() => setHovered(false)}
@@ -176,8 +177,13 @@ function UserBadge({ collapsed }: { collapsed: boolean }) {
 
     return (
         <div style={{ position: "relative" }}>
-    <div
+    <button
+        type="button"
         onClick={() => setOpen(!open)}
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={collapsed ? "User menu" : undefined}
     style={{
         display: "flex",
             alignItems: "center",
@@ -187,8 +193,10 @@ function UserBadge({ collapsed }: { collapsed: boolean }) {
             border: `1px solid ${BORDER}`,
             cursor: "pointer",
             background: "#fff",
+            width: "100%",
             justifyContent: collapsed ? "center" : "space-between",
             transition: "background 0.15s",
+            fontFamily: "inherit",
     }}
     onMouseEnter={e => (e.currentTarget.style.background = "#f9fafb")}
     onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
@@ -216,42 +224,51 @@ function UserBadge({ collapsed }: { collapsed: boolean }) {
     )}
     </div>
     {!collapsed && <IconChevron open={open} />}
-    </div>
+    </button>
 
         {/* Dropdown */}
         {open && !collapsed && (
-            <div style={{
-            position: "absolute",
-                bottom: "100%",
-                left: 0,
-                right: 0,
-                marginBottom: 6,
-                background: "#fff",
-                border: `1px solid ${BORDER}`,
-                borderRadius: 10,
-                overflow: "hidden",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-        }}>
+            <div
+                role="menu"
+                style={{
+                position: "absolute",
+                    bottom: "100%",
+                    left: 0,
+                    right: 0,
+                    marginBottom: 6,
+                    background: "#fff",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+            }}>
             {[
                 { label: "Account settings" },
                 { label: "Sign out", danger: true },
             ].map(item => (
-                <div
+                <button
                     key={item.label}
+                    type="button"
+                    role="menuitem"
                 style={{
-                padding: "10px 14px",
+                display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "10px 14px",
                     fontSize: 13,
                     fontFamily: "'DM Sans', sans-serif",
                     color: item.danger ? "#b91c1c" : TEXT,
                     cursor: "pointer",
                     transition: "background 0.1s",
+                    background: "none",
+                    border: "none",
             }}
                 onMouseEnter={e => (e.currentTarget.style.background = item.danger ? "#fef2f2" : "#f9fafb")}
-                onMouseLeave={e => (e.currentTarget.style.background = "#fff")}
+                onMouseLeave={e => (e.currentTarget.style.background = "none")}
                 onClick={() => setOpen(false)}
             >
                 {item.label}
-                </div>
+                </button>
             ))}
             </div>
         )}
@@ -299,7 +316,9 @@ function UserBadge({ collapsed }: { collapsed: boolean }) {
         }}>
         {!collapsed && <Logo collapsed={collapsed} />}
         <button
+            type="button"
             onClick={onToggle}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             style={{
             background: "none",
                 border: "none",
@@ -321,7 +340,7 @@ function UserBadge({ collapsed }: { collapsed: boolean }) {
             </div>
 
                 {/* Nav */}
-                <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                <nav aria-label="Sidebar navigation" style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
                 {navItems.map(item => {
                     const active = pathname === item.href;
                     return (
@@ -400,7 +419,7 @@ function UserBadge({ collapsed }: { collapsed: boolean }) {
                 }}>
                 <TopBar sidebarWidth={sidebarWidth} pageTitle={pageTitle} />
 
-                <main style={{
+                <main id="main-content" style={{
                     flex: 1,
                         padding: "84px 28px 28px",
                         maxWidth: 1200,
