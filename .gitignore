@@ -243,3 +243,8 @@ uptime-kuma-data/
 
 # Playwright browsers (downloaded on CI automatically)
 frontend/playwright/.cache/
+
+# ───────────────────────────────────────────────────────────
+#  CLAUDE CODE — per-developer local settings
+# ───────────────────────────────────────────────────────────
+.claude/settings.local.json
