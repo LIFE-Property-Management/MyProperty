@@ -102,8 +102,8 @@ export function PaymentHistoryTable() {
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[#111111] dark:text-[#f0f6fc]">
           Payment History
         </h2>
-        <div>
-          <label htmlFor="status-filter" className="sr-only">
+        <div className="flex items-center gap-2">
+          <label htmlFor="status-filter" className="font-sans text-sm font-medium text-[#111111] dark:text-[#f0f6fc] whitespace-nowrap">
             Filter by status
           </label>
           <select
@@ -160,6 +160,7 @@ export function PaymentHistoryTable() {
               size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1 || isFetching}
+              aria-label={`Previous page, currently on page ${data.page} of ${totalPages}`}
             >
               Previous
             </Button>
@@ -168,6 +169,7 @@ export function PaymentHistoryTable() {
               size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages || isFetching}
+              aria-label={`Next page, currently on page ${data.page} of ${totalPages}`}
             >
               Next
             </Button>

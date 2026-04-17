@@ -6,7 +6,7 @@ import { PaymentHistoryTable } from '../../_components/PaymentHistoryTable'
 
 export default function TenantDashboardPage() {
   return (
-      <div className="min-h-screen bg-[var(--color-background)]">
+      <main id="main-content" className="min-h-screen bg-[var(--color-background)]">
         <PageTransition>
           <div className="max-w-4xl mx-auto px-4 py-8 md:px-8 space-y-6">
               <h1 className="text-2xl md:text-3xl text-[var(--color-primary-text)]">
@@ -22,7 +22,7 @@ export default function TenantDashboardPage() {
             <PaymentHistoryTable />
           </div>
         </PageTransition>
-      </div>
+      </main>
     
   )
 }

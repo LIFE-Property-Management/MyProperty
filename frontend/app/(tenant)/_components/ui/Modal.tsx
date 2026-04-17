@@ -85,6 +85,9 @@ const FOOTER_CLASSES =
   'border-t border-[#e5e7eb] dark:border-[#30363d] ' +
   'flex items-center justify-end gap-2'
 
+const FOCUSABLE_SELECTORS =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 function Modal({
   isOpen,
   onClose,
@@ -99,6 +102,7 @@ function Modal({
 }: ModalProps) {
   const [mounted, setMounted] = useState(false)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
   const previousActiveElementRef = useRef<HTMLElement | null>(null)
   const titleId = useId()
 
@@ -137,12 +141,39 @@ function Modal({
     previousActiveElementRef.current =
       (document.activeElement as HTMLElement | null) ?? null
     const elementToFocus =
-      initialFocusRef?.current ?? closeButtonRef.current
+      initialFocusRef?.current ??
+      closeButtonRef.current ??
+      (dialogRef.current?.querySelector(FOCUSABLE_SELECTORS) as HTMLElement | null)
     elementToFocus?.focus()
     return () => {
       previousActiveElementRef.current?.focus()
     }
   }, [isOpen, initialFocusRef])
+
+  // Focus trap: keep Tab cycling within the dialog.
+  useEffect(() => {
+    if (!isOpen) return
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)
+      ).filter((el) => !el.closest('[aria-hidden="true"]'))
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', handleTab)
+    return () => window.removeEventListener('keydown', handleTab)
+  }, [isOpen])
 
   if (!mounted) return null
 
@@ -166,6 +197,7 @@ function Modal({
           transition={{ duration: 0.15 }}
         >
           <motion.div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? titleId : undefined}
@@ -212,7 +244,6 @@ function Modal({
             )}
             <div className={BODY_CLASSES}>{children}</div>
             {footer && <div className={FOOTER_CLASSES}>{footer}</div>}
-            {/* TODO(phase-2): implement focus trap for WCAG 2.1 AA compliance (M2.7) */}
           </motion.div>
         </motion.div>
       )}

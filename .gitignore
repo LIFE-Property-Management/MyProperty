@@ -249,3 +249,8 @@ frontend/playwright/.cache/
 frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
+
+# ───────────────────────────────────────────────────────────
+#  CLAUDE CODE — per-developer local settings
+# ───────────────────────────────────────────────────────────
+.claude/settings.local.json
