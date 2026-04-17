@@ -43,6 +43,8 @@ function decodePayload(token: string): DecodedPayload {
   return parsed;
 }
 
+const AUTH_COOKIE = "kc_token";
+
 export function getToken(): string | null {
   return FAKE_JWT;
 }
@@ -56,6 +58,9 @@ export function initKeycloak(): void {
       email: payload.email,
       tenantAccountStatus: payload.tenantAccountStatus,
     });
+    if (typeof document !== "undefined") {
+      document.cookie = `${AUTH_COOKIE}=${FAKE_JWT}; path=/; SameSite=Lax`;
+    }
     initialized = true;
   } catch (e) {
     console.error("initKeycloak failed", e);
