@@ -267,7 +267,7 @@ function LandingView({ onLogin, onSignup } : LandingViewProps) {
                             onMouseEnter={e => e.currentTarget.style.background = PRIMARY_DARK}
                             onMouseLeave={e => e.currentTarget.style.background = PRIMARY}
                         >
-                            Get started — it's free
+                            Get started — it&apos;s free
                         </button>
                         <button
                             onClick={onLogin}
@@ -405,7 +405,7 @@ function LoginView({ onBack, onSignup } : LoginViewProps) {
                 </Button>
 
                 <p style={{ textAlign: "center", fontSize: 13, color: TEXT_MUTED, margin: "20px 0 0" }}>
-                    Don't have an account?{" "}
+                    Don&apos;t have an account?{" "}
                     <span onClick={onSignup} style={{ color: PRIMARY, cursor: "pointer", fontWeight: 500 }}>
             Sign up
           </span>

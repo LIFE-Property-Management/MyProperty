@@ -20,7 +20,8 @@
     ],
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+    "types": ["jest", "jest-axe", "node"]
   },
   "include": [
     "next-env.d.ts",

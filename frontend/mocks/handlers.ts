@@ -7,6 +7,11 @@ import {
   buildPaymentHistoryResponse,
 } from "./fixtures";
 
+// In-memory "current payment" state — lets the dashboard show the post-submit
+// Pending state after a mutation, then a refetch of GET /current. The state
+// resets on page reload since the worker is per-page.
+let currentPaymentState: Payment = currentPaymentFixture;
+
 function parsePositiveInt(value: string | null, fallback: number): number {
   if (value === null) return fallback;
   const parsed = Number.parseInt(value, 10);
@@ -26,7 +31,7 @@ export const handlers = [
 
   http.get("/tenant/payments/current", async () => {
     await delay(300);
-    return HttpResponse.json(currentPaymentFixture);
+    return HttpResponse.json(currentPaymentState);
   }),
 
   http.get("/tenant/payments/history", async ({ request }) => {
@@ -40,24 +45,24 @@ export const handlers = [
   http.post("/tenant/payments/receipt", async ({ request }) => {
     await delay(500);
     await request.formData();
-    const submitted: Payment = {
-      ...currentPaymentFixture,
+    currentPaymentState = {
+      ...currentPaymentState,
       status: "Pending",
       method: "ReceiptUpload",
       submittedAt: new Date().toISOString(),
     };
-    return HttpResponse.json(submitted);
+    return HttpResponse.json(currentPaymentState);
   }),
 
   http.post("/tenant/payments/manual-request", async ({ request }) => {
     await delay(500);
     await request.json();
-    const submitted: Payment = {
-      ...currentPaymentFixture,
+    currentPaymentState = {
+      ...currentPaymentState,
       status: "Pending",
       method: "ManualRequest",
       submittedAt: new Date().toISOString(),
     };
-    return HttpResponse.json(submitted);
+    return HttpResponse.json(currentPaymentState);
   }),
 ];
