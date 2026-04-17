@@ -13,7 +13,7 @@ Next.js App Router · TypeScript strict (no `any`) · Tailwind CSS · TanStack Q
 | Border | `#e5e7eb` | `#30363d` |
 | Primary | `#275D2C` | `#3fb950` |
 | Primary text | `#111111` | `#f0f6fc` |
-| Muted text | `#6b7280` | `#8b949e` |
+| Muted text | `#4b5563` | `#8b949e` |
 | Error / Danger | `#931F1D` | `#f85149` |
 
 **⚠️ Never use red (`#931F1D`) as a brand or accent color. Red is strictly for error/danger states only.**

@@ -45,7 +45,7 @@ const THEAD_ROW_CLASSES =
 const TH_BASE_CLASSES =
   'px-4 py-3 ' +
   'text-xs font-medium uppercase tracking-wider ' +
-  'text-[#6b7280] dark:text-[#8b949e]'
+  'text-[#4b5563] dark:text-[#8b949e]'
 
 const ROW_BASE_CLASSES =
   'border-b border-[#e5e7eb] dark:border-[#30363d] ' +
@@ -60,7 +60,7 @@ const ROW_CLICKABLE_CLASSES =
 const TD_BASE_CLASSES = 'px-4 py-3 text-[#111111] dark:text-[#f0f6fc]'
 
 const STATE_CELL_CLASSES =
-  'px-4 py-8 text-center text-[#6b7280] dark:text-[#8b949e]'
+  'px-4 py-8 text-center text-[#4b5563] dark:text-[#8b949e]'
 
 const ALIGN_CLASSES: Record<ColumnAlign, string> = {
   left: 'text-left',

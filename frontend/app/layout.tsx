@@ -34,6 +34,12 @@ export default function RootLayout({
       className={`${dmSans.variable} ${playfairDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:bg-[#275D2C] focus:text-white focus:px-4 focus:py-2 focus:rounded-md focus:outline-none focus:shadow-lg"
+        >
+          Skip to main content
+        </a>
         <WebVitalsReporter />
         <Providers>{children}</Providers>
       </body>

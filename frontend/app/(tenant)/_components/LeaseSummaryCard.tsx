@@ -77,6 +77,7 @@ export function LeaseSummaryCard() {
       {isReadOnly && (
         <div
           role="status"
+          aria-live="polite"
           className="mb-4 rounded-md bg-[#fef3c7] dark:bg-[#78350f] px-4 py-3 text-sm text-[#92400e] dark:text-[#fef3c7] font-sans"
         >
           Your account is in read-only mode. Your lease has ended.
