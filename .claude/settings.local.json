@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next *)",
+      "Bash(curl -sf http://localhost:3100/ -o /dev/null)",
+      "Bash(npx -y lighthouse@13 http://localhost:3100/ --output=html --output=json --output-path=./docs/performance/lighthouse-home --chrome-flags=\"--headless=new --no-sandbox\" --quiet)",
+      "Bash(npx -y lighthouse@13 http://localhost:3100/dashboard --output=html --output=json --output-path=./docs/performance/lighthouse-dashboard --chrome-flags=\"--headless=new --no-sandbox\" --quiet)",
+      "Bash(node *)"
+    ]
+  }
+}
