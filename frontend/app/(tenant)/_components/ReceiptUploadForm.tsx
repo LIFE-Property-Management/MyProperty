@@ -5,7 +5,7 @@
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button } from './ui/Button';
+import { Button } from '@/components/ui/Button';
 import { Textarea } from './ui/Textarea';
 import { useSubmitReceipt } from '@/lib/hooks';
 import useTenantStore from '@/lib/store/useTenantStore';

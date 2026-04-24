@@ -1,12 +1,11 @@
 'use client'
 
-// Tenant Portal — Spinner primitive.
 // Pure SVG loader. Rotation is driven by Tailwind's `animate-spin`, paired
 // with `motion-reduce:animate-none` so users with prefers-reduced-motion
 // see a static icon (Tailwind's animate-spin does NOT auto-respect the
 // media query). Uses `currentColor` so it inherits from the nearest text
 // color — inside a primary button it reads as white, standalone it falls
-// back to the brand green.
+// back to the brand primary.
 
 export type SpinnerSize = 'sm' | 'md' | 'lg'
 
@@ -24,7 +23,7 @@ const SIZE_CLASSES: Record<SpinnerSize, string> = {
 
 function Spinner({ size = 'md', label = 'Loading', className }: SpinnerProps) {
   const wrapperClasses =
-    'inline-flex items-center justify-center text-[#275D2C] dark:text-[#3fb950]' +
+    'inline-flex items-center justify-center text-primary' +
     (className ? ' ' + className : '')
 
   const svgClasses = `animate-spin motion-reduce:animate-none ${SIZE_CLASSES[size]}`

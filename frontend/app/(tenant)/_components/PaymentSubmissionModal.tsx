@@ -5,7 +5,7 @@
 // useSubmitReceipt/useSubmitManualRequest still invalidate queries on success.
 'use client';
 
-import { Modal } from './ui/Modal';
+import { Modal } from '@/components/ui/Modal';
 import { ReceiptUploadForm } from './ReceiptUploadForm';
 import { ManualRequestForm } from './ManualRequestForm';
 import useTenantStore from '@/lib/store/useTenantStore';

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
 import { Button } from "../Button";
 
-describe("<Button /> (shared)", () => {
+describe("<Button />", () => {
   it("renders its children", () => {
     render(<Button>Save</Button>);
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
@@ -19,18 +19,29 @@ describe("<Button /> (shared)", () => {
     expect(screen.getByRole("button")).toHaveAttribute("type", "submit");
   });
 
-  it("applies variant classes", () => {
-    render(<Button variant="danger">Delete</Button>);
-    expect(screen.getByRole("button")).toHaveClass("bg-danger");
-  });
+  it.each(["primary", "secondary", "ghost", "danger"] as const)(
+    "applies variant=%s with a background class",
+    (variant) => {
+      render(
+        <Button variant={variant} data-testid="btn">
+          X
+        </Button>,
+      );
+      expect(screen.getByTestId("btn").className).toMatch(/bg-/);
+    },
+  );
 
-  it("applies size classes for sm", () => {
+  it.each([
+    ["sm", "h-8"],
+    ["md", "h-10"],
+    ["lg", "h-12"],
+  ] as const)("applies size=%s height class %s", (size, clazz) => {
     render(
-      <Button size="sm" data-testid="btn">
-        Small
+      <Button size={size} data-testid="btn">
+        X
       </Button>,
     );
-    expect(screen.getByTestId("btn")).toHaveClass("h-8");
+    expect(screen.getByTestId("btn")).toHaveClass(clazz);
   });
 
   it("forwards refs to the DOM element", () => {
@@ -55,5 +66,53 @@ describe("<Button /> (shared)", () => {
     render(<Button onClick={onClick}>Go</Button>);
     await userEvent.click(screen.getByRole("button"));
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks aria-busy='true' while isLoading", () => {
+    render(<Button isLoading>Working</Button>);
+    expect(screen.getByRole("button")).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("disables the button while isLoading", () => {
+    render(<Button isLoading>Working</Button>);
+    expect(screen.getByRole("button")).toBeDisabled();
+  });
+
+  it("renders the spinner while isLoading", () => {
+    render(<Button isLoading>Working</Button>);
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+  });
+
+  it("renders leftIcon when not loading", () => {
+    render(<Button leftIcon={<span data-testid="icon">i</span>}>Go</Button>);
+    expect(screen.getByTestId("icon")).toBeInTheDocument();
+  });
+
+  it("hides rightIcon while loading", () => {
+    render(
+      <Button isLoading rightIcon={<span data-testid="right">→</span>}>
+        X
+      </Button>,
+    );
+    expect(screen.queryByTestId("right")).not.toBeInTheDocument();
+  });
+
+  it("applies the w-full class when fullWidth is set", () => {
+    render(
+      <Button fullWidth data-testid="btn">
+        X
+      </Button>,
+    );
+    expect(screen.getByTestId("btn")).toHaveClass("w-full");
+  });
+
+  it("wraps children in an invisible container while isLoading (overlay pattern)", () => {
+    render(
+      <Button isLoading>
+        <span data-testid="label">Working</span>
+      </Button>,
+    );
+    const label = screen.getByTestId("label");
+    expect(label.parentElement?.className).toContain("invisible");
   });
 });
