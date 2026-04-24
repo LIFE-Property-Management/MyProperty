@@ -18,6 +18,11 @@
   --color-warning-light: #fffbeb;
   --color-success: #166534;
   --color-success-light: #f0fdf4;
+  --color-info: #1e40af;
+  --color-info-light: #dbeafe;
+  --color-neutral-light: #f3f4f6;
+
+  --animate-toast-enter: toast-enter 200ms ease-out;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -36,6 +41,20 @@
     --color-warning-light: #3a2e14;
     --color-success: #3fb950;
     --color-success-light: #14321a;
+    --color-info: #58a6ff;
+    --color-info-light: #0c2d6b;
+    --color-neutral-light: #21262d;
+  }
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
