@@ -42,14 +42,14 @@ function makeRequest(pathname: string, token?: string) {
   } as unknown as import("next/server").NextRequest;
 }
 
-describe("middleware", () => {
+describe("proxy", () => {
   beforeEach(() => {
     nextCalls.length = 0;
     jest.resetModules();
   });
 
   it("allows the public root path without auth", async () => {
-    const { default: middleware } = await import("../middleware");
+    const { default: middleware } = await import("../proxy");
     middleware(makeRequest("/"));
     expect(nextCalls).toHaveLength(1);
     expect(nextCalls[0].type).toBe("next");
@@ -57,7 +57,7 @@ describe("middleware", () => {
   });
 
   it("passes through an authed request with a kc_token cookie", async () => {
-    const { default: middleware } = await import("../middleware");
+    const { default: middleware } = await import("../proxy");
     middleware(makeRequest("/tenant/dashboard", "real.token"));
     expect(nextCalls).toHaveLength(1);
     expect(nextCalls[0].type).toBe("next");
@@ -68,7 +68,7 @@ describe("middleware", () => {
     const restore = jest.replaceProperty(process.env, "NODE_ENV", "development");
     try {
       await jest.isolateModulesAsync(async () => {
-        const { default: middleware } = await import("../middleware");
+        const { default: middleware } = await import("../proxy");
         middleware(makeRequest("/tenant/dashboard"));
       });
       expect(nextCalls).toHaveLength(1);
@@ -84,7 +84,7 @@ describe("middleware", () => {
     const restore = jest.replaceProperty(process.env, "NODE_ENV", "production");
     try {
       await jest.isolateModulesAsync(async () => {
-        const { default: middleware } = await import("../middleware");
+        const { default: middleware } = await import("../proxy");
         middleware(makeRequest("/tenant/dashboard"));
       });
       expect(nextCalls).toHaveLength(1);

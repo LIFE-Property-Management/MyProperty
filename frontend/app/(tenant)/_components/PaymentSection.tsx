@@ -6,7 +6,7 @@
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from './ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { useCurrentPayment } from '@/lib/hooks';
 import useTenantStore from '@/lib/store/useTenantStore';

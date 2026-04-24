@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { Badge } from "../Badge";
 
-describe("<Badge /> (tenant)", () => {
+describe("<Badge />", () => {
   it("renders children as text", () => {
     render(<Badge>Outstanding</Badge>);
     expect(screen.getByText("Outstanding")).toBeInTheDocument();
@@ -9,21 +9,19 @@ describe("<Badge /> (tenant)", () => {
 
   it("uses neutral tone by default", () => {
     render(<Badge>Plain</Badge>);
-    // Neutral bg hex from the component source — we only assert the hex
-    // signature, not the full class list, to keep the test non-brittle.
     const badge = screen.getByText("Plain");
-    expect(badge.className).toMatch(/bg-\[#f3f4f6\]/);
+    expect(badge).toHaveClass("bg-neutral-light");
   });
 
   it.each([
-    ["success", "#dcfce7"],
-    ["warning", "#fef3c7"],
-    ["info", "#dbeafe"],
-    ["danger", "#fee2e2"],
-  ] as const)("applies the %s tone classes", (tone, hex) => {
+    ["neutral", "bg-neutral-light"],
+    ["success", "bg-success-light"],
+    ["warning", "bg-warning-light"],
+    ["info", "bg-info-light"],
+    ["danger", "bg-danger-light"],
+  ] as const)("applies the %s tone background class", (tone, bgClass) => {
     render(<Badge tone={tone}>x</Badge>);
-    const badge = screen.getByText("x");
-    expect(badge.className).toContain(`bg-[${hex}]`);
+    expect(screen.getByText("x")).toHaveClass(bgClass);
   });
 
   it("merges a user-supplied className with base classes", () => {
