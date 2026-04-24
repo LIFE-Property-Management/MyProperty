@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { Spinner } from "../Spinner";
 
-describe("<Spinner /> (tenant)", () => {
+describe("<Spinner />", () => {
   it("exposes role='status' with aria-label", () => {
     render(<Spinner />);
     const status = screen.getByRole("status");

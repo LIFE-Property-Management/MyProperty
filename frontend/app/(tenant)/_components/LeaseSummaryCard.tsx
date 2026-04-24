@@ -5,7 +5,7 @@
 
 import type { ReactNode } from 'react';
 import { Card } from './ui/Card';
-import { Spinner } from './ui/Spinner';
+import { Spinner } from '@/components/ui/Spinner';
 import { useLease } from '@/lib/hooks';
 import useTenantStore from '@/lib/store/useTenantStore';
 import type { LeaseStatus } from '@/lib/types';

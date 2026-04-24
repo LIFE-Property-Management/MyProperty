@@ -5,9 +5,9 @@
 'use client';
 
 import { Card } from './ui/Card';
-import { Button } from './ui/Button';
+import { Button } from '@/components/ui/Button';
 import { Badge } from './ui/Badge';
-import { Spinner } from './ui/Spinner';
+import { Spinner } from '@/components/ui/Spinner';
 import { useCurrentPayment } from '@/lib/hooks';
 import useTenantStore from '@/lib/store/useTenantStore';
 import type { PaymentStatus } from '@/lib/types';

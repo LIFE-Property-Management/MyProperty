@@ -8,7 +8,7 @@
 // instead of forcing a responsive column layout.
 
 import { ReactNode, KeyboardEvent } from 'react'
-import Spinner from './Spinner'
+import Spinner from '@/components/ui/Spinner'
 
 export type ColumnAlign = 'left' | 'right' | 'center'
 

@@ -7,7 +7,7 @@ import { useState, useMemo } from 'react';
 import { Card } from './ui/Card';
 import { DataTable, type Column } from './ui/DataTable';
 import { Badge } from './ui/Badge';
-import { Button } from './ui/Button';
+import { Button } from '@/components/ui/Button';
 import { usePaymentHistory } from '@/lib/hooks';
 import type { PaymentHistoryEntry, PaymentStatus } from '@/lib/types';
 
