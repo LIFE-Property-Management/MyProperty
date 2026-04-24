@@ -4,7 +4,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Card } from './ui/Card';
+import { Card } from '@/components/ui/Card';
 import { DataTable, type Column } from './ui/DataTable';
 import { Badge } from './ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -97,7 +97,7 @@ export function PaymentHistoryTable() {
   const totalPages: number = data ? Math.max(1, Math.ceil(data.totalCount / PAGE_SIZE)) : 1;
 
   return (
-    <Card padding="lg" animateOnMount>
+    <Card padding="lg">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[#111111] dark:text-[#f0f6fc]">
           Payment History

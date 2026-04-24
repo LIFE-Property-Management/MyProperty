@@ -4,7 +4,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Card } from './ui/Card';
+import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useLease } from '@/lib/hooks';
 import useTenantStore from '@/lib/store/useTenantStore';
@@ -34,7 +34,7 @@ export function LeaseSummaryCard() {
 
   if (isLoading) {
     return (
-      <Card padding="lg" animateOnMount>
+      <Card padding="lg">
         <div className="min-h-[180px] flex items-center justify-center">
           <Spinner size="md" />
         </div>
@@ -45,7 +45,7 @@ export function LeaseSummaryCard() {
   // !lease after isLoading=false should not happen, but TS narrowing requires the branch.
   if (isError || !lease) {
     return (
-      <Card padding="lg" animateOnMount>
+      <Card padding="lg">
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[#111111] dark:text-[#f0f6fc]">
           Lease
         </h2>
@@ -73,7 +73,7 @@ export function LeaseSummaryCard() {
   ];
 
   return (
-    <Card padding="lg" animateOnMount>
+    <Card padding="lg">
       {isReadOnly && (
         <div
           role="status"
