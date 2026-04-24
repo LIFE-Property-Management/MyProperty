@@ -156,7 +156,7 @@ export function PaymentSection() {
   }
 
   return (
-    <Card padding="lg" animateOnMount>
+    <Card padding="lg">
       <div className="flex items-center justify-between">
         <h2 className="font-serif text-2xl md:text-3xl font-bold text-[#111111] dark:text-[#f0f6fc]">
           Current Payment
