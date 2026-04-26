@@ -27,6 +27,15 @@ Next.js App Router · TypeScript strict (no `any`) · Tailwind CSS · TanStack Q
 - Dark mode via `prefers-color-scheme` media query — use Tailwind `dark:` variant. No class-based toggle.
 - Use exact color tokens above. Do not invent new dark mode colors.
 
+## Color token semantics
+- `*-light` (e.g. `primary-light`, `danger-light`): tinted background fill,
+  designed to pair with the strong color (e.g. `bg-primary-light text-primary`).
+  Does NOT literally mean "a lighter shade." Values are tuned per mode for
+  contrast — pale in light mode, deep-tinted in dark mode.
+- `*-dark` (e.g. `primary-dark`): the hover/pressed state for the strong color.
+  In light mode this is darker than the base; in dark mode it's brighter.
+  Use it for interactive states, not as a "darker shade" primitive.
+
 ## Coding Rules
 - TypeScript strict — no `any` without justification.
 - All data fetching via **TanStack Query** — no raw `fetch` or `useEffect`-based fetching.
