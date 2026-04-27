@@ -12,11 +12,13 @@ Carried over from [M2](./m2-frontend-mvp.md#known-gaps-at-m2-close). Items here 
 
 Blocking items that must be fixed before M3 work begins, because building on top of them compounds the debt:
 
-1. **Consolidate `ui/` folders** — merge into `components/ui/` (root), migrate tenant imports, delete `app/(tenant)/_components/ui/`. Per-component decision on which version is canonical (audit found tenant versions are feature-richer, root versions are token-compliant).
-2. **Rewrite landlord dashboard + layout** — `app/dashboard/LandlordDashboard.tsx` and `LandlordLayout.tsx` from scratch in Tailwind + design tokens. No inline styles, no hex constants, `dark:` variants, `md:`/`lg:` breakpoints. Use the compliant tenant portal as the model.
-3. **Generalize `lib/auth/keycloak.ts`** — discriminated union for `DecodedPayload` (tenant / landlord / admin), role-aware `setAuth` routing, per-role dev JWTs. Required before any landlord auth work.
-4. **Fix `useSubmitReceipt.ts` multipart header bug** — delete the manual `"Content-Type": "multipart/form-data"` line; let the browser set it with the correct boundary.
-5. **Update `docs/portals.md`** — reflect current code state and any new flows surfaced during pre-M3 work.
+1. Consolidate ui/ folders — ✅ done (April 23). Merged into components/ui/, tenant imports migrated, app/(tenant)/_components/ui/ deleted.
+2. Rewrite landlord dashboard + layout — partial. LandlordLayout shell ✅ done via Batch L2 (April 24): DashboardShell, AccountBlock, Sidebar primitive, stub Properties/Tenants pages, 21 new tests. LandlordDashboard.tsx rewrite (Batch L3) — ⏳ pending.
+3. Generalize lib/auth/keycloak.ts — ⏳ in progress (Batch K, April 27). Discriminated DecodedPayload union by portal, derived from realm_access.roles[]. Auth moved to shared useAuthStore (not per-portal). tenantAccountStatus moved out of JWT to /me endpoint. Per-portal KeycloakInit mints role-specific JWTs in dev (no ?devRole= query param — each portal hardcodes its role). Real Keycloak end-session wired with env vars, MSW intercepts in dev. Sign-out redirects to new top-level /logout page.
+4. Fix useSubmitReceipt.ts multipart header bug — ✅ done (April 23).
+5. Update docs/portals.md — ⏳ pending Batch K wrap-up.
+
+Also done in this window (not on original list): Navbar hamburger hover bug fix (April 27, bundled with Batch K).
 
 ### M3-scope debt (resolved as part of M3 deliverables)
 
@@ -79,12 +81,20 @@ Not in the official M3 deliverable list, but blocking — without these, the M3 
 
 - Complete invite flow per Inherited debt
 - Landlord Zod schemas: `property`, `invite`, `landlordDashboard`, `landlordTenant`, `landlordAccount`, `paymentAction`
-- Landlord store: `authSlice`, `uiSlice`, `notificationSlice`, `useLandlordStore`
+- Shared useAuthStore (built in Batch K)
+- Landlord store: uiSlice, notificationSlice, useLandlordStore (auth removed; lives in shared store)
 - Landlord endpoints in `lib/api/endpoints.ts` — see `docs/api-contract.md` (to be written)
 - Landlord MSW handlers + fixtures
 - Payment confirmation hooks (`useConfirmPayment`, `useRejectPayment`) + MSW handlers that transition tenant-side payment state so the tenant's `useCurrentPayment` polling observes the change
 - Landlord dashboard, tenants page, tenant detail page UI
 - MSW payment-state selector (env var or `?mockState=` query param) + 4 fixture variants
+
+## Frontend follow-ups discovered during pre-M3
+Not blocking M3 backend, but tracked here so they don't get lost.
+
+- Landing/login/signup separation. / is currently a combined landing + login + signup page that doesn't reflect the role-aware auth model. Should be refactored into separate role-aware login flows. Surfaced during Batch K.
+- /logout is a placeholder. Currently a transitional page outside both portal route groups, used because redirecting to / after sign-out re-triggers KeycloakInit and silently re-signs the user in. Revisit when real Keycloak ships in M3.2 — Keycloak's end-session typically redirects to its own login page, which makes the placeholder obsolete.
+- Sidebar mobile drawer has no visible close button. Carried from L1 known gaps. User closes via backdrop click or Escape. Worth a Sidebar follow-up batch eventually.
 
 ## Decisions
 
@@ -120,8 +130,19 @@ Not in the official M3 deliverable list, but blocking — without these, the M3 
 - **AI feature confirmed mandatory** — receipt OCR (M3.10) satisfies this. No change to plan.
 - **`.claude/` directory visibility** — instructor wants to review Claude Code configs and any custom skills. Ensure `.claude/` is checked into the repo (not gitignored) before submission.
 
+## Frontend pre-M3 work (April 23–27)
+
+- April 23: ui/ folder consolidation, useSubmitReceipt.ts multipart fix
+- April 23–24: Batch L1 (Sidebar primitive, useMediaQuery)
+- April 24: Batch L2 (LandlordLayout shell — DashboardShell, AccountBlock, stub Properties/Tenants pages, 21 new tests)
+- April 27: Batch K (keycloak.ts generalization, shared useAuthStore, useAuth() hook, /me endpoint for tenantAccountStatus, MockProvider/KeycloakInit wrapping for landlord layout, real sign-out wiring, /logout page, doc updates) + Navbar hover fix bundled in
+
+Note: Cleanup batches were not enumerated in the original April 22 plan. Surfaced as the work decomposed.
+
 #### Up Next
-- Pre-M3 cleanup items 1–5 (target April 24 — **already overdue**, must close before backend scaffolding starts)
+- Batch K + Navbar (in progress, target close: April 27)
+- Batch L3 — LandlordDashboard.tsx rewrite (target: April 28)
+- Backend scaffolding starts April 28 after L3 closes. Tight window: M3 runs through May 8 — losing 5 days to cleanup leaves 11 days for the full backend MVP (15 deliverables including Keycloak in Docker, RabbitMQ, SignalR, Postgres + migrations, Hangfire, OCR, Testcontainers tests, Loki/Grafana, AI Log #3).
 - File storage decision (offline + online split) — pending instructor confirmation
 - Begin M3.1 (.NET API scaffold), M3.3 (Postgres + EF Core), and M3.11 setup (Testcontainers + Keycloak — start early)
 
