@@ -34,7 +34,7 @@ export function Navbar({ brand, children, actions }: Props) {
           aria-label="Toggle menu"
           aria-expanded={open}
           aria-controls="mobile-nav-menu"
-          className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-primary-text hover:bg-primary-light"
+          className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-primary-text hover:bg-neutral-light"
           onClick={() => setOpen((v) => !v)}
         >
           <span aria-hidden="true" className="block w-5 h-0.5 bg-current relative before:absolute before:left-0 before:-top-1.5 before:w-5 before:h-0.5 before:bg-current after:absolute after:left-0 after:top-1.5 after:w-5 after:h-0.5 after:bg-current" />

@@ -1,20 +1,31 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AccountBlock } from "../AccountBlock";
 
-let logSpy: jest.SpyInstance;
+const mockSignOut = jest.fn();
+
+jest.mock("@/lib/hooks", () => ({
+  ...jest.requireActual("@/lib/hooks"),
+  useAuth: () => ({
+    user: { portal: "landlord", sub: "u1", email: "landlord@dev.local" },
+    isAuthenticated: true,
+    isReadOnly: false,
+    isMeLoading: false,
+    signOut: mockSignOut,
+  }),
+}));
+
+jest.mock("next/navigation", () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 beforeEach(() => {
-  logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
-});
-
-afterEach(() => {
-  logSpy.mockRestore();
+  mockSignOut.mockReset();
+  global.fetch = jest.fn().mockResolvedValue({ ok: true });
 });
 
 describe("AccountBlock", () => {
-  it("renders trigger with name, role, and avatar initials", () => {
+  it("renders trigger with display name, role, and avatar initials", () => {
     render(<AccountBlock />);
-    expect(screen.getAllByText("Landlord")).toHaveLength(2);
+    expect(screen.getByText("landlord@dev.local")).toBeInTheDocument();
+    expect(screen.getByText("Landlord")).toBeInTheDocument();
     expect(screen.getByText("L")).toBeInTheDocument();
   });
 
@@ -80,20 +91,19 @@ describe("AccountBlock", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("clicking the Sign out menu item closes the dropdown", () => {
+  it("clicking the Sign out menu item calls signOut", () => {
+    render(<AccountBlock />);
+    const trigger = screen.getByRole("button", { name: /landlord/i });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking Sign out closes the dropdown", () => {
     render(<AccountBlock />);
     const trigger = screen.getByRole("button", { name: /landlord/i });
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));
     expect(screen.queryByRole("menu")).toBeNull();
-  });
-
-  it("clicking the Sign out menu item calls console.log exactly once with the stub message", () => {
-    render(<AccountBlock />);
-    const trigger = screen.getByRole("button", { name: /landlord/i });
-    fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));
-    expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(logSpy).toHaveBeenCalledWith("[AccountBlock] sign-out stub invoked");
   });
 });

@@ -1,42 +1,102 @@
-import { resetTenantStore } from "@/test-utils/resetTenantStore";
+import { resetAuthStore } from "@/test-utils/resetAuthStore";
 
-// The FAKE_JWT decodes to: sub='0193b42d-df5a-7f2a-8c3b-e2f8a97c1456',
-// email='tenant@dev.local', tenantAccountStatus='Active'. We isolate the module
-// so initKeycloak's module-scope `initialized` flag resets between tests.
-
+// Isolate the module so the `initialized` flag and `cachedToken` reset between tests.
 beforeEach(() => {
-  resetTenantStore();
+  resetAuthStore();
   jest.resetModules();
 });
 
+// Helpers to build minimal JWTs for testing decodePayload.
+function makeJwt(roles: string[]): string {
+  const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const payload = btoa(
+    JSON.stringify({
+      sub: "test-sub",
+      email: "test@dev.local",
+      realm_access: { roles },
+    }),
+  )
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  return `${header}.${payload}.sig`;
+}
+
 describe("keycloak (mock adapter)", () => {
-  it("getToken returns the fake JWT string", async () => {
+  it("decodePayload with tenant-role token returns portal=tenant, sub, email", async () => {
+    const { decodePayload } = await import("../keycloak");
+    const result = decodePayload(makeJwt(["tenant"]));
+    expect(result.portal).toBe("tenant");
+    expect(result.sub).toBe("test-sub");
+    expect(result.email).toBe("test@dev.local");
+  });
+
+  it("decodePayload with landlord-role token returns portal=landlord", async () => {
+    const { decodePayload } = await import("../keycloak");
+    const result = decodePayload(makeJwt(["landlord"]));
+    expect(result.portal).toBe("landlord");
+  });
+
+  it("decodePayload with no matching role throws", async () => {
+    const { decodePayload } = await import("../keycloak");
+    expect(() => decodePayload(makeJwt(["unknown-role"]))).toThrow(
+      "JWT has no recognized portal role",
+    );
+  });
+
+  it("decodePayload with two matching roles throws", async () => {
+    const { decodePayload } = await import("../keycloak");
+    expect(() => decodePayload(makeJwt(["tenant", "landlord"]))).toThrow(
+      "JWT has multiple portal roles",
+    );
+  });
+
+  it("decodePayload does not include tenantAccountStatus in return value", async () => {
+    const { decodePayload } = await import("../keycloak");
+    const result = decodePayload(makeJwt(["tenant"]));
+    expect(result).not.toHaveProperty("tenantAccountStatus");
+  });
+
+  it("getToken returns null before initKeycloak", async () => {
     const { getToken } = await import("../keycloak");
+    expect(getToken()).toBeNull();
+  });
+
+  it("initKeycloak populates useAuthStore with the correct portal", async () => {
+    const { initKeycloak } = await import("../keycloak");
+    const useAuthStore = (await import("@/lib/store/auth/useAuthStore")).default;
+    initKeycloak();
+    const user = useAuthStore.getState().user;
+    expect(user?.portal).toBe("tenant");
+    expect(user?.sub).toBe("0193b42d-df5a-7f2a-8c3b-e2f8a97c1456");
+    expect(user?.email).toBe("tenant@dev.local");
+  });
+
+  it("getToken returns the fake JWT after initKeycloak", async () => {
+    const { initKeycloak, getToken } = await import("../keycloak");
+    initKeycloak();
     const token = getToken();
     expect(typeof token).toBe("string");
-    expect(token).toMatch(/^ey/); // base64 header prefix
+    expect(token).toMatch(/^ey/);
   });
 
-  it("initKeycloak populates the tenant store from the decoded JWT payload", async () => {
+  it("initKeycloak is idempotent (setAuth called only once)", async () => {
+    const useAuthStore = (await import("@/lib/store/auth/useAuthStore")).default;
+    const setAuthSpy = jest.spyOn(useAuthStore.getState(), "setAuth");
     const { initKeycloak } = await import("../keycloak");
-    const useTenantStore = (await import("@/lib/store/useTenantStore")).default;
     initKeycloak();
-    const state = useTenantStore.getState();
-    expect(state.userId).toBe("0193b42d-df5a-7f2a-8c3b-e2f8a97c1456");
-    expect(state.email).toBe("tenant@dev.local");
-    expect(state.tenantAccountStatus).toBe("Active");
-    expect(state.isReadOnly).toBe(false);
+    initKeycloak();
+    expect(setAuthSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("initKeycloak is idempotent (second call does not re-dispatch setAuth)", async () => {
-    const { initKeycloak } = await import("../keycloak");
-    const useTenantStore = (await import("@/lib/store/useTenantStore")).default;
+  it("clearCachedToken makes getToken return null again", async () => {
+    const { initKeycloak, getToken, clearCachedToken } = await import("../keycloak");
     initKeycloak();
-    const firstSnapshot = useTenantStore.getState().userId;
-    // Mutate store between calls; if init were re-entrant, it'd restore from JWT.
-    useTenantStore.setState({ userId: "mutated" });
-    initKeycloak();
-    expect(useTenantStore.getState().userId).toBe("mutated");
-    expect(firstSnapshot).not.toBe("mutated");
+    expect(getToken()).not.toBeNull();
+    clearCachedToken();
+    expect(getToken()).toBeNull();
   });
 });

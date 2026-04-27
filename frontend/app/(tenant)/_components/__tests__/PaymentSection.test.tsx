@@ -22,17 +22,19 @@ const OUTSTANDING: Payment = {
   notes: null,
 };
 
-// Mock the data hook so the test doesn't depend on the HTTP/MSW layer.
+// Mock the data hooks so the test doesn't depend on the HTTP/MSW layer.
 // Relative path intentional: Jest's resolver misresolves the `@/` alias from
 // inside directories with parentheses (e.g. (tenant)).
 jest.mock("../../../../lib/hooks", () => ({
   useCurrentPayment: jest.fn(),
+  useAuth: jest.fn(),
 }));
 
-import { useCurrentPayment } from "../../../../lib/hooks";
+import { useCurrentPayment, useAuth } from "../../../../lib/hooks";
 import { PaymentSection } from "../PaymentSection";
 
 const mockedUseCurrentPayment = useCurrentPayment as jest.MockedFunction<typeof useCurrentPayment>;
+const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
 function setQueryResult(value: {
   data?: Payment;
@@ -43,18 +45,37 @@ function setQueryResult(value: {
     data: value.data,
     isLoading: value.isLoading ?? false,
     isError: value.isError ?? false,
-    // The component only reads these three fields; cast keeps the signature happy.
   } as unknown as ReturnType<typeof useCurrentPayment>);
 }
 
 beforeEach(() => {
   resetTenantStore();
   mockedUseCurrentPayment.mockReset();
+  mockedUseAuth.mockReturnValue({
+    user: null,
+    isAuthenticated: false,
+    isReadOnly: false,
+    isMeLoading: false,
+    signOut: jest.fn(),
+  });
 });
 
 describe("<PaymentSection />", () => {
   it("shows a spinner while loading", () => {
     setQueryResult({ isLoading: true });
+    renderWithQuery(<PaymentSection />);
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+  });
+
+  it("shows a spinner while /me is loading", () => {
+    setQueryResult({ data: OUTSTANDING });
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isReadOnly: false,
+      isMeLoading: true,
+      signOut: jest.fn(),
+    });
     renderWithQuery(<PaymentSection />);
     expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
   });
@@ -79,10 +100,12 @@ describe("<PaymentSection />", () => {
   });
 
   it("hides action buttons when the tenant is read-only (even if Outstanding)", () => {
-    useTenantStore.getState().setAuth({
-      userId: "u1",
-      email: "a@a.com",
-      tenantAccountStatus: "ReadOnly",
+    mockedUseAuth.mockReturnValue({
+      user: { portal: "tenant", sub: "u1", email: "a@a.com" },
+      isAuthenticated: true,
+      isReadOnly: true,
+      isMeLoading: false,
+      signOut: jest.fn(),
     });
     setQueryResult({ data: OUTSTANDING });
     renderWithQuery(<PaymentSection />);
