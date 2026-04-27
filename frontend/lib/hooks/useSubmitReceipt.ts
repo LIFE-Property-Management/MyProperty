@@ -14,9 +14,7 @@ export function useSubmitReceipt() {
 
   return useMutation<void, Error, FormData>({
     mutationFn: async (formData: FormData) => {
-      await apiClient.post(ENDPOINTS.submitReceipt, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await apiClient.post(ENDPOINTS.submitReceipt, formData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

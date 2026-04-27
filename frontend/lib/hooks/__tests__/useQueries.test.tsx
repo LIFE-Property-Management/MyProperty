@@ -113,9 +113,6 @@ describe("useSubmitReceipt", () => {
     expect(mockedPost).toHaveBeenCalledWith(
       ENDPOINTS.submitReceipt,
       fd,
-      expect.objectContaining({
-        headers: expect.objectContaining({ "Content-Type": "multipart/form-data" }),
-      }),
     );
   });
 });
