@@ -27,15 +27,6 @@ Next.js App Router · TypeScript strict (no `any`) · Tailwind CSS · TanStack Q
 - Dark mode via `prefers-color-scheme` media query — use Tailwind `dark:` variant. No class-based toggle.
 - Use exact color tokens above. Do not invent new dark mode colors.
 
-## Color token semantics
-- `*-light` (e.g. `primary-light`, `danger-light`): tinted background fill,
-  designed to pair with the strong color (e.g. `bg-primary-light text-primary`).
-  Does NOT literally mean "a lighter shade." Values are tuned per mode for
-  contrast — pale in light mode, deep-tinted in dark mode.
-- `*-dark` (e.g. `primary-dark`): the hover/pressed state for the strong color.
-  In light mode this is darker than the base; in dark mode it's brighter.
-  Use it for interactive states, not as a "darker shade" primitive.
-
 ## Coding Rules
 - TypeScript strict — no `any` without justification.
 - All data fetching via **TanStack Query** — no raw `fetch` or `useEffect`-based fetching.
@@ -50,8 +41,14 @@ Next.js App Router · TypeScript strict (no `any`) · Tailwind CSS · TanStack Q
 ## API
 - REST via `NEXT_PUBLIC_API_BASE_URL`. Whether calls are direct or proxied via Route Handlers is TBD — do not hardcode either pattern.
 
+## Real-time (SignalR)
+- Backend exposes a `NotificationsHub` at `/hubs/notifications`. Frontend connects via `@microsoft/signalr` with the JWT bearer token (passed as `?access_token=` for the WebSocket handshake).
+- Server pushes events for payment + invite state changes; the client uses these as **signals only**, not as data.
+- On every received event, the client calls `queryClient.invalidateQueries([...])` for the relevant query key. TanStack Query refetches authoritative data from the API.
+- **TanStack Query remains the source of truth.** Do not store SignalR payloads as canonical state. Do not bypass the API to read pushed payloads as data.
+- Connection management: one hub connection per authenticated session, lifecycle owned by a top-level provider (`SignalRProvider`). Auto-reconnect enabled with `withAutomaticReconnect()`.
+
 ## Key Omissions (intentional)
-- **SignalR (FE-10): not implemented.** TanStack Query polling handles data freshness — sufficient for this domain's low-frequency events.
 - **v0.dev: opted out.** Do not suggest it.
 
 ## Further Specs
