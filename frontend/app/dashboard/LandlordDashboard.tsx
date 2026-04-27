@@ -4,8 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 
 const PRIMARY = "#275D2C";
-const PRIMARY_LIGHT = "#e8f0e9";
-const BG = "#fbfbff";
 const TEXT = "#1a1a1a";
 const TEXT_MUTED = "#6b7280";
 const BORDER = "#e5e7eb";

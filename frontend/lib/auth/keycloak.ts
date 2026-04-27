@@ -19,17 +19,6 @@ function isPortalRole(r: string): r is PortalRole {
   return (PORTAL_ROLES as readonly string[]).includes(r);
 }
 
-function isDecodedPayload(x: unknown): x is DecodedPayload {
-  if (typeof x !== "object" || x === null) return false;
-  const obj = x as Record<string, unknown>;
-  return (
-    typeof obj.portal === "string" &&
-    isPortalRole(obj.portal) &&
-    typeof obj.sub === "string" &&
-    typeof obj.email === "string"
-  );
-}
-
 export function decodePayload(token: string): DecodedPayload {
   const base64Url = token.split(".")[1];
   let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");

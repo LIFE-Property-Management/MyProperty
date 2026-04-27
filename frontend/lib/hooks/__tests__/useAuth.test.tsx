@@ -27,9 +27,11 @@ function makeWrapper() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
   });
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  const Wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
+  Wrapper.displayName = "TestQueryWrapper";
+  return Wrapper;
 }
 
 beforeEach(() => {

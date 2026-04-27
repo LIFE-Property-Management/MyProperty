@@ -17,17 +17,6 @@ beforeEach(() => {
   mockedGet.mockReset();
 });
 
-function renderUseMe() {
-  const { client } = renderWithQuery(<></>);
-  const { result } = renderHook(() => useMe(), {
-    wrapper: ({ children }) => {
-      const { QueryClientProvider } = require("@tanstack/react-query");
-      return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-    },
-  });
-  return result;
-}
-
 describe("useMe", () => {
   it("fires the query when portal is tenant and returns tenantAccountStatus", async () => {
     useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
