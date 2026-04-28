@@ -1,4 +1,6 @@
 import { http, HttpResponse, delay } from "msw";
+
+const keycloakLogoutUrl = `${process.env.NEXT_PUBLIC_KEYCLOAK_URL}/realms/${process.env.NEXT_PUBLIC_KEYCLOAK_REALM}/protocol/openid-connect/logout`;
 import type { Payment } from "@/lib/types";
 import {
   tenantAccountFixture,
@@ -19,6 +21,15 @@ function parsePositiveInt(value: string | null, fallback: number): number {
 }
 
 export const handlers = [
+  http.post(keycloakLogoutUrl, () => {
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get("/me", async () => {
+    await delay(300);
+    return HttpResponse.json({ tenantAccountStatus: "Active" });
+  }),
+
   http.get("/tenant/me", async () => {
     await delay(300);
     return HttpResponse.json(tenantAccountFixture);

@@ -1,10 +1,11 @@
 'use client'
 
-import useTenantStore from '@/lib/store/useTenantStore'
+import { useAuth } from '@/lib/hooks'
 
 export function ReadOnlyBanner() {
-  const isReadOnly = useTenantStore((s) => s.isReadOnly)
+  const { isReadOnly, isMeLoading } = useAuth()
 
+  if (isMeLoading) return null
   if (!isReadOnly) return null
 
   return (

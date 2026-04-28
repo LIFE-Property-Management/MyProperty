@@ -1,16 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import type { LeaseSummary } from "@/lib/types";
-import { resetTenantStore } from "@/test-utils/resetTenantStore";
-import useTenantStore from "@/lib/store/useTenantStore";
 
 jest.mock("../../../../lib/hooks", () => ({
   useLease: jest.fn(),
+  useAuth: jest.fn(),
 }));
 
-import { useLease } from "../../../../lib/hooks";
+import { useLease, useAuth } from "../../../../lib/hooks";
 import { LeaseSummaryCard } from "../LeaseSummaryCard";
 
 const mockedUseLease = useLease as jest.MockedFunction<typeof useLease>;
+const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
 const LEASE: LeaseSummary = {
   id: "1c7e4f88-2d5a-4f93-bb20-7a6c8e1d4f02",
@@ -39,13 +39,32 @@ function setLease(value: {
 }
 
 beforeEach(() => {
-  resetTenantStore();
   mockedUseLease.mockReset();
+  mockedUseAuth.mockReturnValue({
+    user: null,
+    isAuthenticated: false,
+    isReadOnly: false,
+    isMeLoading: false,
+    signOut: jest.fn(),
+  });
 });
 
 describe("<LeaseSummaryCard />", () => {
   it("shows a spinner while loading", () => {
     setLease({ isLoading: true });
+    render(<LeaseSummaryCard />);
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+  });
+
+  it("shows a spinner while /me is loading", () => {
+    setLease({ data: LEASE });
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isReadOnly: false,
+      isMeLoading: true,
+      signOut: jest.fn(),
+    });
     render(<LeaseSummaryCard />);
     expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
   });
@@ -81,10 +100,12 @@ describe("<LeaseSummaryCard />", () => {
   });
 
   it("shows the read-only banner inside the card when tenant is read-only", () => {
-    useTenantStore.getState().setAuth({
-      userId: "u",
-      email: "a@a.com",
-      tenantAccountStatus: "ReadOnly",
+    mockedUseAuth.mockReturnValue({
+      user: { portal: "tenant", sub: "u1", email: "a@a.com" },
+      isAuthenticated: true,
+      isReadOnly: true,
+      isMeLoading: false,
+      signOut: jest.fn(),
     });
     setLease({ data: LEASE });
     render(<LeaseSummaryCard />);
@@ -92,14 +113,8 @@ describe("<LeaseSummaryCard />", () => {
   });
 
   it("hides the read-only banner for Active tenants", () => {
-    useTenantStore.getState().setAuth({
-      userId: "u",
-      email: "a@a.com",
-      tenantAccountStatus: "Active",
-    });
     setLease({ data: LEASE });
     render(<LeaseSummaryCard />);
-    // There should be no role=status element (we'd only get one if the banner was rendered).
     expect(screen.queryByText(/read-only mode/i)).not.toBeInTheDocument();
   });
 });

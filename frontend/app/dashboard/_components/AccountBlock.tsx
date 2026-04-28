@@ -2,24 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-
-// TODO Batch K (Keycloak generalization):
-// Replace these placeholder values with data from the landlord auth slice
-// once the Zustand store + role-aware setAuth routing exist.
-const PLACEHOLDER_NAME = "Landlord";
-const PLACEHOLDER_ROLE = "Landlord";
-const PLACEHOLDER_INITIALS = "L";
+import { useAuth } from "@/lib/hooks";
 
 export function AccountBlock() {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // TODO Batch K: Wire to real Keycloak sign-out (clear store, redirect to
-  // Keycloak end-session endpoint). Currently a stub.
-  const handleSignOut = () => {
-    console.log("[AccountBlock] sign-out stub invoked");
+  const { user, signOut } = useAuth();
+
+  const email = user?.email ?? null;
+  const role = user?.portal
+    ? user.portal.charAt(0).toUpperCase() + user.portal.slice(1)
+    : "User";
+  // TODO M3.2: derive initials from name field once /me returns landlord profile data.
+  const initials = email ? email.charAt(0).toUpperCase() : "U";
+  const displayName = email ?? "User";
+
+  const handleSignOut = async () => {
     setIsOpen(false);
+    await signOut();
   };
 
   useEffect(() => {
@@ -57,11 +59,11 @@ export function AccountBlock() {
         className="flex w-full items-center gap-3 rounded-md px-3 py-2 hover:bg-neutral-light transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary font-medium text-sm">
-          {PLACEHOLDER_INITIALS}
+          {initials}
         </span>
         <span className="flex min-w-0 flex-1 flex-col items-start">
-          <span className="text-sm font-medium">{PLACEHOLDER_NAME}</span>
-          <span className="text-xs text-muted-text">{PLACEHOLDER_ROLE}</span>
+          <span className="text-sm font-medium">{displayName}</span>
+          <span className="text-xs text-muted-text">{role}</span>
         </span>
         {isOpen ? (
           <ChevronUp size={16} aria-hidden="true" data-testid="account-chevron-up" />

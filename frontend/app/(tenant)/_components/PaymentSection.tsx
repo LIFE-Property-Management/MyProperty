@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
-import { useCurrentPayment } from '@/lib/hooks';
+import { useCurrentPayment, useAuth } from '@/lib/hooks';
 import useTenantStore from '@/lib/store/useTenantStore';
 import type { PaymentStatus } from '@/lib/types';
 
@@ -44,8 +44,8 @@ function toneFor(status: PaymentStatus): 'warning' | 'info' | 'success' | 'dange
 }
 
 export function PaymentSection() {
-  // Separate selectors preserve Zustand's shallow-compare optimization.
-  const isReadOnly = useTenantStore((s) => s.isReadOnly);
+  const { isReadOnly, isMeLoading } = useAuth();
+  // Separate selector preserves Zustand's shallow-compare optimization.
   const openModal = useTenantStore((s) => s.openModal);
   const { data: payment, isLoading, isError } = useCurrentPayment();
 
@@ -74,6 +74,14 @@ export function PaymentSection() {
   }
 
   function renderBody() {
+    if (isMeLoading) {
+      return (
+        <div className="min-h-[160px] flex items-center justify-center">
+          <Spinner size="md" />
+        </div>
+      );
+    }
+
     if (isLoading) {
       return (
         <div className="min-h-[160px] flex items-center justify-center">

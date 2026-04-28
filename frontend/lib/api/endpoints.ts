@@ -1,4 +1,5 @@
 export const ENDPOINTS = {
+  me: "/me",
   tenantAccount: "/tenant/me",
   lease: "/tenant/lease",
   currentPayment: "/tenant/payments/current",

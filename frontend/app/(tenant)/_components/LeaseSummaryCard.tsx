@@ -1,13 +1,9 @@
-// Self-contained lease overview card. Reads all data from useLease() and isReadOnly from the store.
-// isReadOnly is derived from tenantAccountStatus in the store — when a lease ends, the backend
-// downgrades the account and this banner appears automatically on next auth refresh.
 'use client';
 
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
-import { useLease } from '@/lib/hooks';
-import useTenantStore from '@/lib/store/useTenantStore';
+import { useLease, useAuth } from '@/lib/hooks';
 import type { LeaseStatus } from '@/lib/types';
 
 // Resolved once at module scope; 'en-US' fallback covers SSR/test environments.
@@ -29,10 +25,10 @@ const STATUS_CLASSES: Record<LeaseStatus, string> = {
 };
 
 export function LeaseSummaryCard() {
-  const isReadOnly = useTenantStore((s) => s.isReadOnly);
+  const { isReadOnly, isMeLoading } = useAuth();
   const { data: lease, isLoading, isError } = useLease();
 
-  if (isLoading) {
+  if (isLoading || isMeLoading) {
     return (
       <Card padding="lg">
         <div className="min-h-[180px] flex items-center justify-center">

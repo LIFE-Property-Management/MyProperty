@@ -6,6 +6,18 @@ import { DashboardShell } from "../DashboardShell";
 
 jest.mock("next/navigation", () => ({
   usePathname: jest.fn(),
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
+jest.mock("@/lib/hooks", () => ({
+  ...jest.requireActual("@/lib/hooks"),
+  useAuth: () => ({
+    user: { portal: "landlord", sub: "u1", email: "landlord@dev.local" },
+    isAuthenticated: true,
+    isReadOnly: false,
+    isMeLoading: false,
+    signOut: jest.fn(),
+  }),
 }));
 
 jest.mock("next/link", () => {
@@ -62,9 +74,10 @@ describe("DashboardShell", () => {
     expect(screen.getByText("MyProperty")).toBeInTheDocument();
   });
 
-  it("renders the AccountBlock placeholder", () => {
+  it("renders the AccountBlock with user data", () => {
     render(<DashboardShell><div /></DashboardShell>);
-    expect(screen.getAllByText("Landlord").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("landlord@dev.local")).toBeInTheDocument();
+    expect(screen.getByText("Landlord")).toBeInTheDocument();
     expect(screen.getByText("L")).toBeInTheDocument();
   });
 
