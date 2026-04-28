@@ -10,6 +10,9 @@ const config = {
   setupFiles: ["<rootDir>/jest.polyfills.ts"],
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   testPathIgnorePatterns: ["/node_modules/", "/.next/", "/e2e/"],
+  moduleNameMapper: {
+    "^@/(.*)$": "<rootDir>/$1",
+  },
   collectCoverageFrom: [
     "app/**/*.{ts,tsx}",
     "components/**/*.{ts,tsx}",
