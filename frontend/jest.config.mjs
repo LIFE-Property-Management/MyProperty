@@ -26,6 +26,9 @@ const config = {
   ],
   coverageDirectory: "coverage",
   coverageReporters: ["text", "html", "lcov"],
+  transformIgnorePatterns: [
+    "/node_modules/(?!(keycloak-js)/)",
+  ],
 };
 
 export default createJestConfig(config);
