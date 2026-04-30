@@ -19,6 +19,7 @@ jest.mock("@/lib/auth/keycloak", () => ({
   initKeycloak: jest.fn(),
   getToken: jest.fn(),
   decodePayload: jest.fn(),
+  logout: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockedGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
@@ -38,7 +39,6 @@ beforeEach(() => {
   resetAuthStore();
   mockedGet.mockReset();
   mockPush.mockReset();
-  // jsdom doesn't ship fetch; stub it so signOut doesn't throw.
   global.fetch = jest.fn().mockResolvedValue({ ok: true });
 });
 
@@ -64,7 +64,6 @@ describe("useAuth", () => {
 
   it("isReadOnly is false when portal is tenant and isMeLoading is true", () => {
     useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
-    // Keep the promise pending so isMeLoading stays true
     mockedGet.mockReturnValueOnce(new Promise(() => {}));
     const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
     expect(result.current.isMeLoading).toBe(true);
@@ -79,19 +78,12 @@ describe("useAuth", () => {
     expect(result.current.isReadOnly).toBe(true);
   });
 
-  it("signOut calls clearAuth on the store", async () => {
+  it("signOut calls logout", async () => {
+    const { logout } = await import("@/lib/auth/keycloak");
     useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
     const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
     await act(() => result.current.signOut());
-    expect(useAuthStore.getState().user).toBeNull();
-  });
-
-  it("signOut calls clearCachedToken", async () => {
-    const { clearCachedToken } = await import("@/lib/auth/keycloak");
-    useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
-    const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
-    await act(() => result.current.signOut());
-    expect(clearCachedToken).toHaveBeenCalled();
+    expect(logout).toHaveBeenCalled();
   });
 
   it("signOut calls router.push('/logout')", async () => {
