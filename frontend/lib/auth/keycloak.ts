@@ -1,16 +1,7 @@
-// Mock Keycloak adapter. Replace with a real adapter by keeping the same
-// exported surface: getToken(), initKeycloak(), and clearCachedToken(). Callers
-// must not import anything else from this file except for testing purposes.
-
 "use client";
 
+import Keycloak from "keycloak-js";
 import useAuthStore, { type DecodedPayload } from "@/lib/store/auth/useAuthStore";
-
-const FAKE_JWT =
-  "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIwMTkzYjQyZC1kZjVhLTdmMmEtOGMzYi1lMmY4YTk3YzE0NTYiLCJlbWFpbCI6InRlbmFudEBkZXYubG9jYWwiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsidGVuYW50Il19fQ.sig";
-
-let cachedToken: string | null = null;
-let initialized = false;
 
 const PORTAL_ROLES = ["tenant", "landlord", "admin"] as const;
 type PortalRole = (typeof PORTAL_ROLES)[number];
@@ -31,7 +22,9 @@ export function decodePayload(token: string): DecodedPayload {
   const roles: string[] = Array.isArray(
     (parsed.realm_access as Record<string, unknown> | undefined)?.roles,
   )
-    ? ((parsed.realm_access as Record<string, unknown>).roles as string[])
+    ? ((parsed.realm_access as Record<string, unknown>).roles as string[]).map(
+        (r) => r.toLowerCase(),
+      )
     : [];
 
   const matched = roles.filter(isPortalRole);
@@ -50,22 +43,52 @@ export function decodePayload(token: string): DecodedPayload {
   };
 }
 
+let _keycloak: Keycloak | null = null;
+let initialized = false;
+
+function getInstance(): Keycloak {
+  if (!_keycloak) {
+    _keycloak = new Keycloak({
+      url: process.env.NEXT_PUBLIC_KEYCLOAK_URL!,
+      realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM!,
+      clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID!,
+    });
+  }
+  return _keycloak;
+}
+
 export function getToken(): string | null {
-  return cachedToken;
+  return _keycloak?.token ?? null;
 }
 
 export function clearCachedToken(): void {
-  cachedToken = null;
+  _keycloak = null;
+  initialized = false;
 }
 
-export function initKeycloak(): void {
+export async function initKeycloak(): Promise<void> {
   if (initialized) return;
-  try {
-    const payload = decodePayload(FAKE_JWT);
+  const kc = getInstance();
+  const authenticated = await kc.init({
+    onLoad: "login-required",
+    checkLoginIframe: false,
+  });
+  if (authenticated && kc.token) {
+    const payload = decodePayload(kc.token);
     useAuthStore.getState().setAuth(payload);
-    cachedToken = FAKE_JWT;
     initialized = true;
-  } catch (e) {
-    console.error("initKeycloak failed", e);
+    kc.onTokenExpired = () => {
+      kc.updateToken(60).catch(() => {
+        useAuthStore.getState().clearAuth();
+      });
+    };
   }
+}
+
+export async function logout(): Promise<void> {
+  const kc = _keycloak;
+  _keycloak = null;
+  initialized = false;
+  useAuthStore.getState().clearAuth();
+  await kc?.logout({ redirectUri: window.location.origin });
 }
