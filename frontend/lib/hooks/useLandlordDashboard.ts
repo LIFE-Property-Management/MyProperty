@@ -1,6 +1,20 @@
-// Landlord – Dashboard hooks
-// ENDPOINTS.landlordDashboardStats   → GET /landlord/dashboard/stats
-// ENDPOINTS.landlordOverduePayments  → GET /landlord/payments/overdue
-// ENDPOINTS.landlordExpiringLeases   → GET /landlord/leases/expiring  (query: withinDays)
-// ENDPOINTS.landlordRecentPayments   → GET /landlord/payments/recent   (query: limit)
-// ENDPOINTS.landlordUpcomingPayments → GET /landlord/payments/upcoming (query: page, pageSize)
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import apiClient from "@/lib/api/client";
+import { ENDPOINTS } from "@/lib/api/endpoints";
+import { queryKeys } from "./queryKeys";
+import {
+  landlordDashboardSchema,
+  type LandlordDashboard,
+} from "@/lib/types/landlord/dashboard";
+
+export function useLandlordDashboard() {
+  return useQuery<LandlordDashboard>({
+    queryKey: queryKeys.landlord.dashboard(),
+    queryFn: () =>
+      apiClient
+        .get(ENDPOINTS.landlordDashboard)
+        .then((r) => landlordDashboardSchema.parse(r.data)),
+  });
+}

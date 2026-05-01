@@ -13,7 +13,7 @@ Carried over from [M2](./m2-frontend-mvp.md#known-gaps-at-m2-close). Items here 
 Blocking items that must be fixed before M3 work begins, because building on top of them compounds the debt:
 
 1. Consolidate ui/ folders — ✅ done (April 23). Merged into components/ui/, tenant imports migrated, app/(tenant)/_components/ui/ deleted.
-2. Rewrite landlord dashboard + layout — partial. LandlordLayout shell ✅ done via Batch L2 (April 24): DashboardShell, AccountBlock, Sidebar primitive, stub Properties/Tenants pages, 21 new tests. LandlordDashboard.tsx rewrite (Batch L3) — ⏳ pending.
+2. Rewrite landlord dashboard + layout — ✅ done. LandlordLayout shell ✅ done via Batch L2 (April 24): DashboardShell, AccountBlock, Sidebar primitive, stub Properties/Tenants pages, 21 new tests. LandlordDashboard.tsx rewrite (Batch L3) ✅ done (April 29): Pagination primitive, formatDate util, Zod schemas, MSW fixture + handlers, TanStack Query hooks, tenant detail stub route, full dashboard rewrite.
 3. Generalize lib/auth/keycloak.ts — ⏳ in progress (Batch K, April 27). Discriminated DecodedPayload union by portal, derived from realm_access.roles[]. Auth moved to shared useAuthStore (not per-portal). tenantAccountStatus moved out of JWT to /me endpoint. Per-portal KeycloakInit mints role-specific JWTs in dev (no ?devRole= query param — each portal hardcodes its role). Real Keycloak end-session wired with env vars, MSW intercepts in dev. Sign-out redirects to new top-level /logout page.
 4. Fix useSubmitReceipt.ts multipart header bug — ✅ done (April 23).
 5. Update docs/portals.md — ⏳ pending Batch K wrap-up.
@@ -95,6 +95,8 @@ Not blocking M3 backend, but tracked here so they don't get lost.
 - Landing/login/signup separation. / is currently a combined landing + login + signup page that doesn't reflect the role-aware auth model. Should be refactored into separate role-aware login flows. Surfaced during Batch K.
 - /logout is a placeholder. Currently a transitional page outside both portal route groups, used because redirecting to / after sign-out re-triggers KeycloakInit and silently re-signs the user in. Revisit when real Keycloak ships in M3.2 — Keycloak's end-session typically redirects to its own login page, which makes the placeholder obsolete.
 - Sidebar mobile drawer has no visible close button. Carried from L1 known gaps. User closes via backdrop click or Escape. Worth a Sidebar follow-up batch eventually.
+- Per-section error handling on LandlordDashboard. Currently shows a whole-page error if either the dashboard query or the upcoming-payments query fails. Should be replaced with per-section error states. Tracked as M3 frontend work.
+- SignalR wiring for landlord queries. `useLandlordDashboard` and `useLandlordUpcomingPayments` need to call `queryClient.invalidateQueries` on `PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected` events from `NotificationsHub`. Blocked on M3.6 (SignalR hub). Tracked as M3 frontend work.
 
 ## Decisions
 
@@ -145,6 +147,22 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 - Backend scaffolding starts April 28 after L3 closes. Tight window: M3 runs through May 8 — losing 5 days to cleanup leaves 11 days for the full backend MVP (15 deliverables including Keycloak in Docker, RabbitMQ, SignalR, Postgres + migrations, Hangfire, OCR, Testcontainers tests, Loki/Grafana, AI Log #3).
 - File storage decision (offline + online split) — pending instructor confirmation
 - Begin M3.1 (.NET API scaffold), M3.3 (Postgres + EF Core), and M3.11 setup (Testcontainers + Keycloak — start early)
+
+### April 29, 2026
+
+#### Completed
+- Batch L3: LandlordDashboard rewrite + landlord data layer
+  - `components/ui/Pagination.tsx` — new shared primitive, ellipsis truncation, single render path across viewports
+  - `lib/utils/formatDate.ts` — ISO date → "Apr 20, 2026" via Intl
+  - `lib/types/landlord/dashboard.ts` — Zod schemas for all landlord dashboard shapes
+  - `mocks/fixtures/landlordDashboard.ts` — fixture data + `buildUpcomingPaymentsResponse` helper, schema-validated at module load
+  - `lib/api/endpoints.ts` — landlordDashboard, landlordUpcomingPayments endpoints
+  - `lib/hooks/queryKeys.ts` — landlord namespace
+  - `mocks/handlers.ts` — MSW handlers for both landlord endpoints
+  - `lib/hooks/useLandlordDashboard.ts` + `useLandlordUpcomingPayments.ts` — TanStack Query hooks
+  - `app/dashboard/tenants/[id]/page.tsx` — tenant detail stub route
+  - `app/dashboard/LandlordDashboard.tsx` — full rewrite using DataTable, Badge, Card, Pagination primitives + real hooks
+  - Pre-M3 cleanup complete. Backend scaffolding starts April 29.
 
 ## Deliverable Status
 

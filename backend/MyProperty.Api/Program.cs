@@ -1,8 +1,13 @@
+using Asp.Versioning;
+using Asp.Versioning.ApiExplorer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi;
 using MyProperty.Api.Auth;
+using MyProperty.Api.Errors;
+using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
+using MyProperty.Api.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,7 +20,7 @@ builder.Services.AddOptions<KeycloakOptions>()
 var keycloakAuthority = builder.Configuration[$"{KeycloakOptions.SectionName}:Authority"]
     ?? throw new InvalidOperationException("Keycloak:Authority is required.");
 
-// ── Authentication — JWT Bearer validated against Keycloak JWKS ───────────────
+// ── Authentication ────────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -28,10 +33,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Map Keycloak realm_access.roles → ClaimTypes.Role
 builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesTransformer>();
 
-// ── Authorization policies ────────────────────────────────────────────────────
+// ── Authorization ─────────────────────────────────────────────────────────────
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("RequireTenant",   p => p.RequireRole("Tenant"));
@@ -39,11 +43,45 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RequireAdmin",    p => p.RequireRole("Admin"));
 });
 
+// ── Problem Details ───────────────────────────────────────────────────────────
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = ctx =>
+    {
+        ctx.ProblemDetails.Instance ??= ctx.HttpContext.Request.Path;
+        ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier;
+        ctx.ProblemDetails.Type ??= ProblemTypes.Internal;
+    };
+});
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+// ── API Versioning ────────────────────────────────────────────────────────────
+builder.Services
+    .AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+    })
+    .AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'V";
+        options.SubstituteApiVersionInUrl = true;
+    });
+
 // ── API + Swagger ─────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen(c =>
 {
+    c.EnableAnnotations();
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        c.IncludeXmlComments(xmlPath);
+
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name         = "Authorization",
@@ -54,7 +92,6 @@ builder.Services.AddSwaggerGen(c =>
         Description  = "Paste a Keycloak access token.",
     });
 
-    // Swashbuckle v10 / OpenAPI v2: factory receives the host document for reference resolution.
     c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
     {
         { new OpenApiSecuritySchemeReference("Bearer", doc, null), new List<string>() },
@@ -63,10 +100,23 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
+if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
 {
+    var versionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        foreach (var description in versionProvider.ApiVersionDescriptions)
+        {
+            options.SwaggerEndpoint(
+                $"/swagger/{description.GroupName}/swagger.json",
+                $"MyProperty API {description.GroupName.ToUpperInvariant()}");
+        }
+        options.RoutePrefix = "swagger";
+    });
 }
 
 app.UseHttpsRedirection();
@@ -75,3 +125,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;
