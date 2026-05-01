@@ -1,12 +1,19 @@
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
+using MyProperty.Api.Authentication;
 using MyProperty.Api.Errors;
 using MyProperty.Api.Middleware;
 using MyProperty.Api.Swagger;
+using MyProperty.Application.Common.Interfaces;
+using MyProperty.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddProblemDetails(options =>
 {
