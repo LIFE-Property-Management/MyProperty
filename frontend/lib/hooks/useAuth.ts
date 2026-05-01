@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import useAuthStore, { type DecodedPayload } from "@/lib/store/auth/useAuthStore";
-import { logout } from "@/lib/auth/keycloak";
+import { clearCachedToken } from "@/lib/auth/keycloak";
 import { useMe } from "./useMe";
 
 interface UseAuthReturn {
@@ -25,7 +25,8 @@ export function useAuth(): UseAuthReturn {
   })();
 
   const signOut = async () => {
-    await logout();
+    useAuthStore.getState().clearAuth();
+    clearCachedToken();
     router.push("/logout");
   };
 

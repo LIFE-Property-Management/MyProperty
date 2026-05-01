@@ -24,7 +24,7 @@ services:
 
   # ── Keycloak ─────────────────────────────────────────────────────────────────
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
+    image: quay.io/keycloak/keycloak:26.2
     container_name: myproperty-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
@@ -41,6 +41,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # Realm endpoint returns 200 only after the import is complete.
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/realms/MyProperty/.well-known/openid-configuration > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
     networks:
       - myproperty-net
 

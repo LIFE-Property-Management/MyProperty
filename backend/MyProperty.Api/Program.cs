@@ -2,24 +2,36 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi;
 using MyProperty.Api.Auth;
+using MyProperty.Api.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Authentication ────────────────────────────────────────────────────────────
+// ── Keycloak options ──────────────────────────────────────────────────────────
+builder.Services.AddOptions<KeycloakOptions>()
+    .Bind(builder.Configuration.GetSection(KeycloakOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+var keycloakAuthority = builder.Configuration[$"{KeycloakOptions.SectionName}:Authority"]
+    ?? throw new InvalidOperationException("Keycloak:Authority is required.");
+
+// ── Authentication — JWT Bearer validated against Keycloak JWKS ───────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = builder.Configuration["Keycloak:Authority"];
-        options.RequireHttpsMetadata = false;
+        options.Authority = keycloakAuthority;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.TokenValidationParameters = new()
         {
             ValidateAudience = false,
+            NameClaimType = "preferred_username",
         };
     });
 
+// Map Keycloak realm_access.roles → ClaimTypes.Role
 builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesTransformer>();
 
-// ── Authorization ─────────────────────────────────────────────────────────────
+// ── Authorization policies ────────────────────────────────────────────────────
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("RequireTenant",   p => p.RequireRole("Tenant"));
@@ -36,10 +48,16 @@ builder.Services.AddSwaggerGen(c =>
     {
         Name         = "Authorization",
         Type         = SecuritySchemeType.Http,
-        Scheme       = "Bearer",
+        Scheme       = "bearer",
         BearerFormat = "JWT",
         In           = ParameterLocation.Header,
-        Description  = "Paste a Keycloak access token",
+        Description  = "Paste a Keycloak access token.",
+    });
+
+    // Swashbuckle v10 / OpenAPI v2: factory receives the host document for reference resolution.
+    c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
+    {
+        { new OpenApiSecuritySchemeReference("Bearer", doc, null), new List<string>() },
     });
 });
 

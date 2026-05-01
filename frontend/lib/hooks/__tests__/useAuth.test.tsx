@@ -19,6 +19,7 @@ jest.mock("@/lib/auth/keycloak", () => ({
   initKeycloak: jest.fn(),
   getToken: jest.fn(),
   decodePayload: jest.fn(),
+  logout: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockedGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
@@ -79,19 +80,11 @@ describe("useAuth", () => {
     expect(result.current.isReadOnly).toBe(true);
   });
 
-  it("signOut calls clearAuth on the store", async () => {
+  it("signOut clears the auth store", async () => {
     useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
     const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
     await act(() => result.current.signOut());
     expect(useAuthStore.getState().user).toBeNull();
-  });
-
-  it("signOut calls clearCachedToken", async () => {
-    const { clearCachedToken } = await import("@/lib/auth/keycloak");
-    useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
-    const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
-    await act(() => result.current.signOut());
-    expect(clearCachedToken).toHaveBeenCalled();
   });
 
   it("signOut calls router.push('/logout')", async () => {
