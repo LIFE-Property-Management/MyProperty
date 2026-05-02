@@ -97,6 +97,7 @@ Not blocking M3 backend, but tracked here so they don't get lost.
 - Sidebar mobile drawer has no visible close button. Carried from L1 known gaps. User closes via backdrop click or Escape. Worth a Sidebar follow-up batch eventually.
 - Per-section error handling on LandlordDashboard. Currently shows a whole-page error if either the dashboard query or the upcoming-payments query fails. Should be replaced with per-section error states. Tracked as M3 frontend work.
 - SignalR wiring for landlord queries. `useLandlordDashboard` and `useLandlordUpcomingPayments` need to call `queryClient.invalidateQueries` on `PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected` events from `NotificationsHub`. Blocked on M3.6 (SignalR hub). Tracked as M3 frontend work.
+- **NEXT_PUBLIC_API_BASE_URL + MSW interaction**: when the base URL is set, axios builds absolute URLs that MSW's relative-path handlers don't match, so requests escape to the real network. For dev and E2E we leave the var unset so MSW can intercept. Production wiring (Next.js rewrites vs direct absolute calls) is a follow-up — TBD per CLAUDE.md.
 
 ## Decisions
 

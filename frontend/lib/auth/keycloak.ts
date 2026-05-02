@@ -44,7 +44,7 @@ export function decodePayload(token: string): DecodedPayload {
 }
 
 let _keycloak: Keycloak | null = null;
-let initialized = false;
+let initPromise: Promise<void> | null = null;
 
 function getInstance(): Keycloak {
   if (!_keycloak) {
@@ -63,32 +63,34 @@ export function getToken(): string | null {
 
 export function clearCachedToken(): void {
   _keycloak = null;
-  initialized = false;
+  initPromise = null;
 }
 
-export async function initKeycloak(): Promise<void> {
-  if (initialized) return;
-  const kc = getInstance();
-  const authenticated = await kc.init({
-    onLoad: "login-required",
-    checkLoginIframe: false,
-  });
-  if (authenticated && kc.token) {
-    const payload = decodePayload(kc.token);
-    useAuthStore.getState().setAuth(payload);
-    initialized = true;
-    kc.onTokenExpired = () => {
-      kc.updateToken(60).catch(() => {
-        useAuthStore.getState().clearAuth();
-      });
-    };
-  }
+export function initKeycloak(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    const kc = getInstance();
+    const authenticated = await kc.init({
+      onLoad: "login-required",
+      checkLoginIframe: false,
+    });
+    if (authenticated && kc.token) {
+      const payload = decodePayload(kc.token);
+      useAuthStore.getState().setAuth(payload);
+      kc.onTokenExpired = () => {
+        kc.updateToken(60).catch(() => {
+          useAuthStore.getState().clearAuth();
+        });
+      };
+    }
+  })();
+  return initPromise;
 }
 
 export async function logout(): Promise<void> {
   const kc = _keycloak;
   _keycloak = null;
-  initialized = false;
+  initPromise = null;
   useAuthStore.getState().clearAuth();
   await kc?.logout({ redirectUri: window.location.origin });
 }
