@@ -28,7 +28,7 @@ const config = {
   coverageReporters: ["text", "html", "lcov"],
 };
 
-export default async () => {
+const jestConfig = async () => {
   const finalConfig = await createJestConfig(config)();
   return {
     ...finalConfig,
@@ -37,3 +37,5 @@ export default async () => {
     ],
   };
 };
+
+export default jestConfig;

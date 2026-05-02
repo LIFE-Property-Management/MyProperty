@@ -34,6 +34,8 @@ services:
       KC_DB_PASSWORD: postgres123
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin123
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-GOOGLE_CLIENT_ID_PLACEHOLDER}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-GOOGLE_CLIENT_SECRET_PLACEHOLDER}
     ports:
       - "8080:8080"   # Admin console + OIDC  →  http://localhost:8080
     volumes:
