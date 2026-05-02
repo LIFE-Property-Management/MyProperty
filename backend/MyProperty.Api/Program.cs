@@ -10,6 +10,8 @@ using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
 using MyProperty.Api.Swagger;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Infrastructure;
+
 
 // Disable Microsoft's legacy inbound claim mapping so JWT claims are read by
 // their original short names (sub, email, etc.) rather than rewritten to long
@@ -53,6 +55,7 @@ builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesTransformer>()
 // ── Current-user abstraction ──────────────────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // ── Authorization ─────────────────────────────────────────────────────────────
 builder.Services.AddAuthorization(options =>
