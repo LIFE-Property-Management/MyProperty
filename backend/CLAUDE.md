@@ -1,7 +1,7 @@
 # MyProperty Backend — CLAUDE.md
 
 ## Stack
-.NET 10 · C# · Clean Architecture · EF Core 9 · PostgreSQL · Keycloak · Hangfire · RabbitMQ · SignalR · Redis · MailKit · Serilog → Loki → Grafana · FluentValidation · Mapperly · xUnit + WebApplicationFactory + Testcontainers · OpenAI/Anthropic (receipt OCR)
+.NET 10 · C# · Clean Architecture · EF Core 10 · PostgreSQL 16 · Keycloak · Hangfire · RabbitMQ · SignalR · Redis · MailKit · Serilog → Loki → Grafana · FluentValidation · Mapperly · xUnit + WebApplicationFactory + Testcontainers · OpenAI/Anthropic (receipt OCR)
 
 ## Solution Layout
 
@@ -148,7 +148,7 @@ public class PaymentsController(SubmitPaymentHandler submit) : ControllerBase
 
 ## Database
 
-- **PostgreSQL** via EF Core 9. Connection string from `ConnectionStrings:Postgres` config.
+- **PostgreSQL 16** via EF Core 10. Connection string from `ConnectionStrings:Postgres` config.
 - **Migrations:** code-first. Generate with `dotnet ef migrations add <Name> -p MyProperty.Infrastructure -s MyProperty.Api`. Apply via migration bundle in CI/CD; never call `Database.Migrate()` from `Program.cs` in production.
 - **DbContext** lives in `Infrastructure/Persistence/AppDbContext.cs`. Entity configurations in `Infrastructure/Persistence/Configurations/<Entity>Configuration.cs` using `IEntityTypeConfiguration<T>`. **No** fluent API in the DbContext itself.
 - **Soft deletes** via global query filter on `BaseEntity`-derived entities.
