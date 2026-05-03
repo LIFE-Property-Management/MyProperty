@@ -6,7 +6,7 @@ services:
     container_name: myproperty-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres123
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: myproperty
     ports:
       - "5432:5432"
@@ -31,7 +31,7 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: postgres
-      KC_DB_PASSWORD: postgres123
+      KC_DB_PASSWORD: postgres
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin123
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-GOOGLE_CLIENT_ID_PLACEHOLDER}
