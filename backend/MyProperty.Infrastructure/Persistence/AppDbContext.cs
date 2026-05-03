@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Lease> Leases => Set<Lease>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<Invite> Invites => Set<Invite>();
+    public DbSet<FailedEmail> FailedEmails => Set<FailedEmail>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
