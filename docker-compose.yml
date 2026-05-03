@@ -53,6 +53,21 @@ services:
     networks:
       - myproperty-net
 
+  # ── MailHog (dev SMTP catcher) ──────────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: myproperty-mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI →  http://localhost:8025
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8025/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
 
