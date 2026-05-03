@@ -1,11 +1,13 @@
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
+using Hangfire;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi;
 using MyProperty.Api.Auth;
 using MyProperty.Api.Errors;
+using MyProperty.Api.Hangfire;
 using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
 using MyProperty.Api.Swagger;
@@ -151,6 +153,13 @@ if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new AdminOnlyDashboardFilter() },
+    DashboardTitle = "MyProperty — Background Jobs",
+});
+
 app.MapControllers();
 
 app.Run();
