@@ -16,7 +16,7 @@ public sealed class HttpContextCurrentUser(IHttpContextAccessor httpContextAcces
 {
     private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
-    public string? UserId => Principal?.FindFirst("sub")?.Value;
+    public string? KeycloakSubId => Principal?.FindFirst("sub")?.Value;
 
     public string? UserName => Principal?.Identity?.Name;
 

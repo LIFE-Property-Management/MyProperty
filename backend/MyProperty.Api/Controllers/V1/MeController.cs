@@ -30,7 +30,7 @@ public sealed class MeController(ICurrentUser currentUser) : ControllerBase
         // reaches this method — UserId cannot be null here. Defensive null
         // coalescing kept for type-system honesty.
         return Ok(new MeDto(
-            UserId: currentUser.UserId ?? string.Empty,
+            UserId: currentUser.KeycloakSubId ?? string.Empty,
             UserName: currentUser.UserName ?? string.Empty,
             Roles: currentUser.Roles));
     }
@@ -48,7 +48,7 @@ public sealed class MeController(ICurrentUser currentUser) : ControllerBase
     public ActionResult<MeDto> GetTenantOnly()
     {
         return Ok(new MeDto(
-            UserId: currentUser.UserId ?? string.Empty,
+            UserId: currentUser.KeycloakSubId ?? string.Empty,
             UserName: currentUser.UserName ?? string.Empty,
             Roles: currentUser.Roles));
     }

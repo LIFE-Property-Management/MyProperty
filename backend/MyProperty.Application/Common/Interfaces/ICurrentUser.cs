@@ -12,7 +12,7 @@ public interface ICurrentUser
     /// authenticated — e.g. for anonymous endpoints or system-initiated work.
     /// Persisted to <c>BaseEntity.CreatedBy</c> / <c>UpdatedBy</c>.
     /// </summary>
-    string? UserId { get; }
+    string? KeycloakSubId { get; }
 
     /// <summary>
     /// Preferred username from the JWT (typically email). Null when unauthenticated.
