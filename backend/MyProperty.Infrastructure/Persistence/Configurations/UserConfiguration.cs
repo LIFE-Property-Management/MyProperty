@@ -17,11 +17,9 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.FirstName).HasMaxLength(128).IsRequired();
         builder.Property(u => u.LastName).HasMaxLength(128).IsRequired();
         builder.Property(u => u.Phone).HasMaxLength(32);
-        builder.Property(u => u.Role).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(u => u.AccountStatus).HasConversion<string>().HasMaxLength(16);
 
         builder.HasIndex(u => u.KeycloakSubId).IsUnique();
         builder.HasIndex(u => u.Email).IsUnique();
-        builder.HasIndex(u => u.Role);
     }
 }
