@@ -1,13 +1,16 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using MyProperty.Application.Health;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace MyProperty.Api.Controllers.V1;
 
+[AllowAnonymous]
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/health")]
-public class HealthController : ControllerBase
+public sealed class HealthController : ControllerBase
 {
     [HttpGet]
     [SwaggerOperation(Summary = "Liveness probe", Description = "Returns 200 if the API process is up.")]
@@ -15,5 +18,3 @@ public class HealthController : ControllerBase
     public ActionResult<HealthResponse> Get()
         => Ok(new HealthResponse("ok", DateTimeOffset.UtcNow));
 }
-
-public sealed record HealthResponse(string Status, DateTimeOffset Timestamp);

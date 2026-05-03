@@ -35,6 +35,8 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       NODE_ENV: "development",
+      NEXT_PUBLIC_DEV_AUTH_BYPASS: "true",
+      NEXT_PUBLIC_API_BASE_URL: "",
     },
     stdout: "pipe",
     stderr: "pipe",

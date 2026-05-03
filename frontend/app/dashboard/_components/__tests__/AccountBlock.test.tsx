@@ -4,7 +4,6 @@ import { AccountBlock } from "../AccountBlock";
 const mockSignOut = jest.fn();
 
 jest.mock("@/lib/hooks", () => ({
-  ...jest.requireActual("@/lib/hooks"),
   useAuth: () => ({
     user: { portal: "landlord", sub: "u1", email: "landlord@dev.local" },
     isAuthenticated: true,

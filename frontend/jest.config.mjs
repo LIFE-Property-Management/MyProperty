@@ -28,4 +28,14 @@ const config = {
   coverageReporters: ["text", "html", "lcov"],
 };
 
-export default createJestConfig(config);
+const jestConfig = async () => {
+  const finalConfig = await createJestConfig(config)();
+  return {
+    ...finalConfig,
+    transformIgnorePatterns: [
+      "/node_modules/(?!(keycloak-js)/)",
+    ],
+  };
+};
+
+export default jestConfig;

@@ -2,7 +2,6 @@ import { z } from "zod";
 import {
   landlordDashboardSchema,
   upcomingPaymentRowSchema,
-  upcomingPaymentsResponseSchema,
   type LandlordDashboard,
   type UpcomingPaymentRow,
   type UpcomingPaymentsResponse,

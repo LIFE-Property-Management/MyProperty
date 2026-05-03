@@ -1,0 +1,92 @@
+{
+  "realm": "MyProperty",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      { "name": "Tenant",   "composite": false },
+      { "name": "Landlord", "composite": false },
+      { "name": "Admin",    "composite": false }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "myproperty-frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access", "microprofile-jwt"]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "updateProfileFirstLoginMode": "on",
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "tenant@dev.local",
+      "email": "tenant@dev.local",
+      "firstName": "Test",
+      "lastName": "Tenant",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "tenant123", "temporary": false }
+      ],
+      "realmRoles": ["Tenant"]
+    },
+    {
+      "username": "landlord@dev.local",
+      "email": "landlord@dev.local",
+      "firstName": "Test",
+      "lastName": "Landlord",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "landlord123", "temporary": false }
+      ],
+      "realmRoles": ["Landlord"]
+    },
+    {
+      "username": "admin@dev.local",
+      "email": "admin@dev.local",
+      "firstName": "Test",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "admin123", "temporary": false }
+      ],
+      "realmRoles": ["Admin"]
+    }
+  ]
+}

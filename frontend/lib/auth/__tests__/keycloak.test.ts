@@ -1,6 +1,6 @@
 import { resetAuthStore } from "@/test-utils/resetAuthStore";
 
-// Isolate the module so the `initialized` flag and `cachedToken` reset between tests.
+// Isolate the module so `initialized` and `_keycloak` reset between tests.
 beforeEach(() => {
   resetAuthStore();
   jest.resetModules();
@@ -25,7 +25,38 @@ function makeJwt(roles: string[]): string {
   return `${header}.${payload}.sig`;
 }
 
-describe("keycloak (mock adapter)", () => {
+// Mock keycloak-js. The factory runs each time the module is re-required after
+// jest.resetModules(), so each test gets a fresh Keycloak instance.
+jest.mock("keycloak-js", () => {
+  const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const payload = btoa(
+    JSON.stringify({
+      sub: "test-sub",
+      email: "test@dev.local",
+      realm_access: { roles: ["tenant"] },
+    }),
+  )
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const mockToken = `${header}.${payload}.sig`;
+
+  return {
+    __esModule: true,
+    default: jest.fn(() => ({
+      init: jest.fn().mockResolvedValue(true),
+      token: mockToken,
+      logout: jest.fn().mockResolvedValue(undefined),
+      onTokenExpired: undefined as (() => void) | undefined,
+      updateToken: jest.fn().mockResolvedValue(true),
+    })),
+  };
+});
+
+describe("keycloak", () => {
   it("decodePayload with tenant-role token returns portal=tenant, sub, email", async () => {
     const { decodePayload } = await import("../keycloak");
     const result = decodePayload(makeJwt(["tenant"]));
@@ -68,16 +99,16 @@ describe("keycloak (mock adapter)", () => {
   it("initKeycloak populates useAuthStore with the correct portal", async () => {
     const { initKeycloak } = await import("../keycloak");
     const useAuthStore = (await import("@/lib/store/auth/useAuthStore")).default;
-    initKeycloak();
+    await initKeycloak();
     const user = useAuthStore.getState().user;
     expect(user?.portal).toBe("tenant");
-    expect(user?.sub).toBe("0193b42d-df5a-7f2a-8c3b-e2f8a97c1456");
-    expect(user?.email).toBe("tenant@dev.local");
+    expect(user?.sub).toBe("test-sub");
+    expect(user?.email).toBe("test@dev.local");
   });
 
-  it("getToken returns the fake JWT after initKeycloak", async () => {
+  it("getToken returns the Keycloak token after initKeycloak", async () => {
     const { initKeycloak, getToken } = await import("../keycloak");
-    initKeycloak();
+    await initKeycloak();
     const token = getToken();
     expect(typeof token).toBe("string");
     expect(token).toMatch(/^ey/);
@@ -87,14 +118,14 @@ describe("keycloak (mock adapter)", () => {
     const useAuthStore = (await import("@/lib/store/auth/useAuthStore")).default;
     const setAuthSpy = jest.spyOn(useAuthStore.getState(), "setAuth");
     const { initKeycloak } = await import("../keycloak");
-    initKeycloak();
-    initKeycloak();
+    await initKeycloak();
+    await initKeycloak();
     expect(setAuthSpy).toHaveBeenCalledTimes(1);
   });
 
   it("clearCachedToken makes getToken return null again", async () => {
     const { initKeycloak, getToken, clearCachedToken } = await import("../keycloak");
-    initKeycloak();
+    await initKeycloak();
     expect(getToken()).not.toBeNull();
     clearCachedToken();
     expect(getToken()).toBeNull();

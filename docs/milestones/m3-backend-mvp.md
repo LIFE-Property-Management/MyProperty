@@ -97,6 +97,7 @@ Not blocking M3 backend, but tracked here so they don't get lost.
 - Sidebar mobile drawer has no visible close button. Carried from L1 known gaps. User closes via backdrop click or Escape. Worth a Sidebar follow-up batch eventually.
 - Per-section error handling on LandlordDashboard. Currently shows a whole-page error if either the dashboard query or the upcoming-payments query fails. Should be replaced with per-section error states. Tracked as M3 frontend work.
 - SignalR wiring for landlord queries. `useLandlordDashboard` and `useLandlordUpcomingPayments` need to call `queryClient.invalidateQueries` on `PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected` events from `NotificationsHub`. Blocked on M3.6 (SignalR hub). Tracked as M3 frontend work.
+- **NEXT_PUBLIC_API_BASE_URL + MSW interaction**: when the base URL is set, axios builds absolute URLs that MSW's relative-path handlers don't match, so requests escape to the real network. For dev and E2E we leave the var unset so MSW can intercept. Production wiring (Next.js rewrites vs direct absolute calls) is a follow-up — TBD per CLAUDE.md.
 
 ## Decisions
 
@@ -105,6 +106,11 @@ Not blocking M3 backend, but tracked here so they don't get lost.
 - **RabbitMQ event set (M3.8)** — five events end-to-end: `PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected`, `InviteAccepted`, `InviteRejected`. Each consumed by a hosted service that translates the event into side effects (Hangfire job for retryable async work, SignalR push for real-time client notification). The queue genuinely earns its place as the integration point between command handlers, retryable jobs, and real-time notifications. Library: `RabbitMQ.Client` directly; no MassTransit.
 - **Loki + Grafana scoped to local Docker Compose (M3.13)** — Serilog is real and used everywhere, but the Loki/Grafana pipeline runs locally in Docker Compose for the demo rather than being deployed. Production-grade log aggregation is out of scope for the milestone window.
 - **Roles for RBAC (M3.2 / BE-4)** — three roles: `Tenant`, `Landlord`, `Admin`. Admin is the lightest-touch role and gates one or two debug/admin endpoints to satisfy the "3+ roles" requirement without bloating scope.
+- **M3.2 audience validation deferred** — JWT bearer config currently sets
+  `ValidateAudience = false`. Real fix requires an audience mapper on a
+  `myproperty-api` Keycloak client (realm-export.json) plus matching
+  `ValidAudience` in `Program.cs`. Tracked as M3.2 follow-up; target close
+  before May 6 demo. Loudly TODO'd in Program.cs so it cannot ship silently.
 
 ## Progress Log
 
@@ -163,6 +169,31 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
   - `app/dashboard/tenants/[id]/page.tsx` — tenant detail stub route
   - `app/dashboard/LandlordDashboard.tsx` — full rewrite using DataTable, Badge, Card, Pagination primitives + real hooks
   - Pre-M3 cleanup complete. Backend scaffolding starts April 29.
+
+### May 2, 2026
+
+#### Completed (M3.2 continuation, taking over from teammate)
+- JWT hardening:
+  - Cleared legacy inbound claim type map (`JsonWebTokenHandler.DefaultInboundClaimTypeMap.Clear()`)
+  - Documented and hardened `KeycloakRolesTransformer` (idempotency guard, XML docs explaining why a transformer is needed at all)
+  - Default-deny authorization via `FallbackPolicy = RequireAuthenticatedUser`
+  - `HealthController` explicitly `[AllowAnonymous]`, sealed, `HealthResponse` extracted to `Application/Health/`
+- `ICurrentUser` abstraction: interface in `Application/Common/Interfaces/`, `HttpContextCurrentUser` impl in `Api/Auth/`, registered scoped
+- `MeController`: `GET /api/v1/me` (any authenticated user), `GET /api/v1/me/tenant-only` (RequireTenant policy)
+- Google IdP added to Keycloak realm with env-var-substituted credentials; real Google OAuth credentials provisioned and verified end-to-end
+- `defaultClientScopes` explicitly assigned to `myproperty-frontend` client (defensive against Keycloak default changes)
+- Repo-root `.env.example` created for compose-level secrets (Google OAuth)
+- Frontend dev-bypass: implicit (missing `NEXT_PUBLIC_KEYCLOAK_URL`) → explicit `NEXT_PUBLIC_DEV_AUTH_BYPASS=true`
+- Symmetric bypass added to landlord-portal `KeycloakInit` (was previously missing — landlord portal broke without Keycloak URL set)
+
+#### Known gaps (carried forward)
+- **Audience validation disabled** — JWT bearer config has `ValidateAudience = false`. Loud TODO in `Program.cs`. Requires audience mapper on a Keycloak `myproperty-api` client. Target close: before May 6 demo.
+- **Per-portal `KeycloakInit` duplication**: bypass logic now identical across `(tenant)` and `dashboard` versions. Worth extracting to a shared `useKeycloakInit({ portal })` hook in a future batch.
+- Testcontainers integration test for Keycloak → JWT → policy flow deferred to M3.11.
+
+#### M3.2 deliverable status
+- M3.2 / BE-3 (Keycloak + OAuth2 SSO): ✅
+- M3.2 / BE-4 (RBAC, 3 roles, policy guards): ✅
 
 ## Deliverable Status
 

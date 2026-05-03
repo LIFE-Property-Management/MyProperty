@@ -10,7 +10,6 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/lib/hooks", () => ({
-  ...jest.requireActual("@/lib/hooks"),
   useAuth: () => ({
     user: { portal: "landlord", sub: "u1", email: "landlord@dev.local" },
     isAuthenticated: true,

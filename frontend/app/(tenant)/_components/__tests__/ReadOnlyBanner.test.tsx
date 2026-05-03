@@ -2,7 +2,6 @@ import { render, screen } from "@testing-library/react";
 import { ReadOnlyBanner } from "../ReadOnlyBanner";
 
 jest.mock("../../../../lib/hooks", () => ({
-  ...jest.requireActual("../../../../lib/hooks"),
   useAuth: jest.fn(),
 }));
 
