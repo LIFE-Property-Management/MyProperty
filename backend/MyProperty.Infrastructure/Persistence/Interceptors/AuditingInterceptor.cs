@@ -30,7 +30,7 @@ public sealed class AuditingInterceptor(ICurrentUser currentUser, TimeProvider t
         if (context is null) return;
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
-        var userId = currentUser.UserId;
+        var userId = currentUser.KeycloakSubId;
 
         foreach (EntityEntry<BaseEntity> entry in context.ChangeTracker.Entries<BaseEntity>())
         {

@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MyProperty.Application.Common.Interfaces;
 using MyProperty.Infrastructure.Persistence;
 using MyProperty.Infrastructure.Persistence.Interceptors;
+using MyProperty.Infrastructure.Persistence.Repositories;
 
 namespace MyProperty.Infrastructure;
 
@@ -24,6 +26,8 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName));
             options.AddInterceptors(sp.GetRequiredService<AuditingInterceptor>());
         });
+
+        services.AddScoped<IUserRepository, UserRepository>();
 
         return services;
     }
