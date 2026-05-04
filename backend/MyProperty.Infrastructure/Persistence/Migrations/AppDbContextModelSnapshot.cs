@@ -307,7 +307,9 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DueDate");
+                    b.HasIndex("DueDate")
+                        .HasDatabaseName("IX_payments_DueDate_Outstanding")
+                        .HasFilter("\"Status\" = 'Outstanding' AND \"DeletedAt\" IS NULL");
 
                     b.HasIndex("LeaseId", "Status");
 
