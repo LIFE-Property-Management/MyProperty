@@ -27,6 +27,16 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(p => new { p.LeaseId, p.Status });
-        builder.HasIndex(p => p.DueDate);
+
+        // Partial index sized to the recurring "mark overdue" Hangfire job's
+        // filter. ~74% of payment rows match `DueDate < today`, so an
+        // unfiltered b-tree on DueDate hurts the job (the planner walks the
+        // full date range and discards rows by Status). A partial index
+        // scoped to Outstanding/non-deleted rows is ~4% the size and lets
+        // the job answer from the index alone. See
+        // docs/performance/m3-sql-optimization/README.md (Q2).
+        builder.HasIndex(p => p.DueDate)
+            .HasDatabaseName("IX_payments_DueDate_Outstanding")
+            .HasFilter("\"Status\" = 'Outstanding' AND \"DeletedAt\" IS NULL");
     }
 }
