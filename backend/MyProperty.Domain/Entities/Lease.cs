@@ -5,6 +5,9 @@ namespace MyProperty.Domain.Entities;
 
 public class Lease : BaseEntity
 {
+    public required Guid LandlordId { get; set; }
+    public User? Landlord { get; set; }
+
     public required Guid PropertyId { get; set; }
     public Property? Property { get; set; }
 

@@ -14,7 +14,7 @@ namespace MyProperty.Api.Auth;
 /// </remarks>
 public sealed class HttpContextCurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUser
 {
-    private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
+    public ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
     public string? KeycloakSubId => Principal?.FindFirst("sub")?.Value;
 

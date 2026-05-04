@@ -190,22 +190,51 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 - **Audience validation disabled** — JWT bearer config has `ValidateAudience = false`. Loud TODO in `Program.cs`. Requires audience mapper on a Keycloak `myproperty-api` client. Target close: before May 6 demo.
 - **Per-portal `KeycloakInit` duplication**: bypass logic now identical across `(tenant)` and `dashboard` versions. Worth extracting to a shared `useKeycloakInit({ portal })` hook in a future batch.
 - Testcontainers integration test for Keycloak → JWT → policy flow deferred to M3.11.
+- **`HashToken` duplication in invite handlers** — `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, and `GetInviteByTokenHandler` each carry an identical private static `HashToken` method (SHA256 hex, lowercase). Extract to `Application/Invites/InviteTokenHasher.cs` (internal static class) in a post-M3 cleanup pass.
 
 #### M3.2 deliverable status
 - M3.2 / BE-3 (Keycloak + OAuth2 SSO): ✅
 - M3.2 / BE-4 (RBAC, 3 roles, policy guards): ✅
 
+### May 4, 2026
+
+#### Completed (M3.1 invite flow MVP — Batch I)
+- 4 endpoints live: `POST /api/v1/invites` (landlord), `GET /api/v1/invites/by-token/{token}` (anon), `POST /api/v1/invites/{token}/accept` (auth), `POST /api/v1/invites/{token}/reject` (anon).
+- Token model: plain token (32-byte URL-safe base64) → SHA256 hex `TokenHash` in DB. Plain token only in email body + Hangfire arg.
+- Repositories established: `IInviteRepository` (UoW owner for accept), `ILeaseRepository` (`AddAsync` only), `IPropertyRepository` (`GetByIdAsync` with `.Include(Landlord)`).
+- CQRS folder pattern established for the codebase: `Application/Invites/Commands/{Name}/{Command,Handler}.cs` and `Application/Invites/Queries/{Name}/{Query,Handler,Dto}.cs`.
+- Lease created at acceptance, not at invite creation. Email match enforced on accept (403 on mismatch). Non-Pending/expired invites → 404 (no 410 Gone).
+- `InviteOptions` bound with `ValidateDataAnnotations().ValidateOnStart()`.
+- Migration `RenameInviteTokenToTokenHash` applied (Drop+Add semantics; dev `invites` truncated before apply). Also added `LandlordId` to `Lease` (Option B — denormalized for dashboard queries).
+- `ClaimsPrincipal? Principal` added to `ICurrentUser` as an acknowledged abstraction leak — TODO'd for post-M3 cleanup.
+- `basic` client scope added to `myproperty-frontend` in Keycloak (was missing, causing `sub` claim to be absent from JWTs). Realm re-exported.
+- `Microsoft.Extensions.Logging.Abstractions` and `Microsoft.Extensions.Options` (both `10.0.0`) added to `MyProperty.Application.csproj`.
+
+#### Cut from this batch (post-M3 follow-ups)
+- Keycloak admin client for fresh-tenant role assignment — demo with seeded `tenant@dev.local`.
+- Mapperly — manual DTO construction in handlers; retrofit batch post-M3.
+- `ClaimsPrincipal` on `ICurrentUser` — cleanup post-M3.
+- FluentValidation validators (M3.12).
+- Invite audit fields (`RejectionReason`, `AcceptedByUserId`, `ResultingLeaseId`).
+- RabbitMQ `InviteAccepted` / `InviteRejected` events (M3.8).
+- SignalR push on accept/reject (M3.6).
+- Per-IP rate limiting on anonymous invite endpoints (token enumeration mitigation) — owned by M3.12.
+- `HashToken` extraction to `InviteTokenHasher` — duplicated across 4 handlers; post-M3 cleanup pass.
+
+#### Up Next
+- M3.5 (Redis dashboard cache) or M3.6 (SignalR hub). M3.6 unblocks frontend SignalR wiring already tracked under follow-ups.
+
 ## Deliverable Status
 
 | ID | Status | Notes |
 |---|---|---|
-| M3.1 | ⏳ open | |
-| M3.2 | ⏳ open | |
-| M3.3 | ⏳ open | |
-| M3.4 | ⏳ open | |
+| M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). Progress log entry to be added. |
+| M3.2 | ✅ done | Keycloak + JWT + RBAC. Progress log entry to be added. |
+| M3.3 | ✅ done | PostgreSQL + EF Core + migrations. Progress log entry to be added. |
+| M3.4 | ✅ done | N+1 prevention + EXPLAIN ANALYZE. Progress log entry to be added. |
 | M3.5 | ⏳ open | |
 | M3.6 | ⏳ open | Scope: NotificationsHub, payment + invite events, no Redis backplane |
-| M3.7 | ⏳ open | |
+| M3.7 | ✅ done | Hangfire email job + retry + DLQ. Progress log entry to be added. |
 | M3.8 | ⏳ open | Scope: 5 events (`PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected`, `InviteAccepted`, `InviteRejected`) |
 | M3.9 | ⏳ open | |
 | M3.10 | ⏳ open | Scope: receipt OCR (replaces RAG) |

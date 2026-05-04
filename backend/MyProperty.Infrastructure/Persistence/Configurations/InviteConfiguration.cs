@@ -15,7 +15,7 @@ internal sealed class InviteConfiguration : IEntityTypeConfiguration<Invite>
         builder.Property(i => i.Email).HasMaxLength(256).IsRequired();
         builder.Property(i => i.FirstName).HasMaxLength(128).IsRequired();
         builder.Property(i => i.LastName).HasMaxLength(128).IsRequired();
-        builder.Property(i => i.Token).HasMaxLength(128).IsRequired();
+        builder.Property(i => i.TokenHash).HasMaxLength(64).IsRequired();
         builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(i => i.Currency).HasMaxLength(3).IsFixedLength().IsRequired();
         builder.Property(i => i.ProposedMonthlyRent).HasPrecision(12, 2);
@@ -30,7 +30,7 @@ internal sealed class InviteConfiguration : IEntityTypeConfiguration<Invite>
             .HasForeignKey(i => i.PropertyId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(i => i.Token).IsUnique();
+        builder.HasIndex(i => i.TokenHash).IsUnique();
         builder.HasIndex(i => i.ExpiresAt);
         builder.HasIndex(i => new { i.LandlordId, i.Status });
     }

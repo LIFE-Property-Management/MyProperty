@@ -15,7 +15,7 @@ public class Invite : BaseEntity
     public required string FirstName { get; set; }
     public required string LastName { get; set; }
 
-    public required string Token { get; set; }
+    public required string TokenHash { get; set; }
     public required InviteStatus Status { get; set; } = InviteStatus.Pending;
     public required DateTime ExpiresAt { get; set; }
 
