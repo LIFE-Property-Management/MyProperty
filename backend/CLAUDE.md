@@ -154,11 +154,11 @@ public class PaymentsController(SubmitPaymentHandler submit) : ControllerBase
 - **Soft deletes** via global query filter on `BaseEntity`-derived entities.
 - **Indexes:** add explicitly in entity configurations. Required indexes (initial set):
     - `Payment(LeaseId, Status)` — dashboard queries
-    - `Payment(DueDate)` — overdue scans
+    - `Payment(DueDate) WHERE Status = 'Outstanding' AND DeletedAt IS NULL` — partial index for the recurring overdue-scan job. The unfiltered `(DueDate)` was demonstrably *slower* than no index (~74% of rows match `DueDate < today` so the planner walked nearly the whole table); the partial form covers ~24% of rows and answers the job's filter from the index alone. See `docs/performance/m3-sql-optimization/`.
     - `Lease(LandlordId, Status)` — landlord dashboards
     - `Invite(Token)` unique — invite lookup
     - `Invite(ExpiresAt)` — orphan cleanup job
-- **N+1 prevention:** every query that loads related data uses `.Include()` or projection (`.Select()`). Run `EXPLAIN ANALYZE` on the three slowest queries before M3 close (M3.4 deliverable).
+- **N+1 prevention:** every query that loads related data uses `.Include()` or projection (`.Select()`). The three slowest queries were profiled with `EXPLAIN (ANALYZE, BUFFERS)` for M3.4 — see `docs/performance/m3-sql-optimization/README.md`.
 
 ## Caching
 

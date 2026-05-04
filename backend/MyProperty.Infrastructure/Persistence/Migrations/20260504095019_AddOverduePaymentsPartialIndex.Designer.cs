@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyProperty.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MyProperty.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260504095019_AddOverduePaymentsPartialIndex")]
+    partial class AddOverduePaymentsPartialIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -150,10 +153,10 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
-                    b.Property<string>("TokenHash")
+                    b.Property<string>("Token")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -167,7 +170,7 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PropertyId");
 
-                    b.HasIndex("TokenHash")
+                    b.HasIndex("Token")
                         .IsUnique();
 
                     b.HasIndex("LandlordId", "Status");
@@ -199,9 +202,6 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
 
-                    b.Property<Guid>("LandlordId")
-                        .HasColumnType("uuid");
-
                     b.Property<decimal>("MonthlyRent")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)");
@@ -229,8 +229,6 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EndDate");
-
-                    b.HasIndex("LandlordId", "Status");
 
                     b.HasIndex("PropertyId", "Status");
 
@@ -447,12 +445,6 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("MyProperty.Domain.Entities.Lease", b =>
                 {
-                    b.HasOne("MyProperty.Domain.Entities.User", "Landlord")
-                        .WithMany()
-                        .HasForeignKey("LandlordId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("MyProperty.Domain.Entities.Property", "Property")
                         .WithMany("Leases")
                         .HasForeignKey("PropertyId")
@@ -464,8 +456,6 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("Landlord");
 
                     b.Navigation("Property");
 

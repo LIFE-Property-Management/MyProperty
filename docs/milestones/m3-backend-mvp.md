@@ -154,6 +154,25 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 - File storage decision (offline + online split) — pending instructor confirmation
 - Begin M3.1 (.NET API scaffold), M3.3 (Postgres + EF Core), and M3.11 setup (Testcontainers + Keycloak — start early)
 
+### May 4, 2026
+
+#### Completed (M3.4 — SQL optimization proof)
+- Three workload queries timed with `EXPLAIN (ANALYZE, BUFFERS)` against a
+  200k-payment seeded dataset; warm-cache results:
+  - **Q1** Landlord upcoming-payments dashboard: 16.363 → 0.739 ms (~22×)
+    via existing `IX_payments_LeaseId_Status` + `IX_properties_LandlordId`
+  - **Q2** Mark-overdue-payments Hangfire job: 4.616 → 0.045 ms (~103×) via
+    a new partial index `IX_payments_DueDate_Outstanding`. The original
+    full-column `IX_payments_DueDate` was *worse* than no index for this
+    workload (8.981 ms) because `DueDate < today` matches ~74% of rows.
+  - **Q3** Invite-by-token: 0.492 → 0.038 ms (~13×) via existing unique
+    `IX_invites_Token`
+- Seed + benchmark scripts committed under
+  `docs/performance/m3-sql-optimization/` with raw `results.txt` for audit.
+- Migration `20260504095019_AddOverduePaymentsPartialIndex` ships the partial
+  index. `PaymentConfiguration.cs` updated with the filter +
+  `HasDatabaseName` so the partial scope is self-documenting.
+
 ### April 29, 2026
 
 #### Completed
@@ -228,10 +247,17 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 
 | ID | Status | Notes |
 |---|---|---|
+<<<<<<< HEAD
 | M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). Progress log entry to be added. |
 | M3.2 | ✅ done | Keycloak + JWT + RBAC. Progress log entry to be added. |
 | M3.3 | ✅ done | PostgreSQL + EF Core + migrations. Progress log entry to be added. |
 | M3.4 | ✅ done | N+1 prevention + EXPLAIN ANALYZE. Progress log entry to be added. |
+=======
+| M3.1 | ⏳ open | |
+| M3.2 | ⏳ open | |
+| M3.3 | ⏳ open | |
+| M3.4 | ✅ done | 3 queries with `EXPLAIN (ANALYZE, BUFFERS)`, ~22× / ~103× / ~13× speedups; partial index for overdue scan replaces a counter-productive full-column index. See `docs/performance/m3-sql-optimization/`. |
+>>>>>>> origin/develop
 | M3.5 | ⏳ open | |
 | M3.6 | ⏳ open | Scope: NotificationsHub, payment + invite events, no Redis backplane |
 | M3.7 | ✅ done | Hangfire email job + retry + DLQ. Progress log entry to be added. |
