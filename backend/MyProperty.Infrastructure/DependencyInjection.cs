@@ -5,6 +5,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MyProperty.Application.Common.Email;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Options;
+using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Email;
 using MyProperty.Infrastructure.Jobs;
 using MyProperty.Infrastructure.Persistence;
@@ -36,8 +38,33 @@ public static class DependencyInjection
         services.AddScoped<IInviteRepository, InviteRepository>();
         services.AddScoped<ILeaseRepository, LeaseRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
+        services.AddScoped<ILandlordDashboardRepository, LandlordDashboardRepository>();
 
+        services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
+
+        return services;
+    }
+
+    private static IServiceCollection AddCaching(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<CacheOptions>()
+            .Bind(configuration.GetSection(CacheOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        var cacheOptions = configuration.GetSection(CacheOptions.SectionName).Get<CacheOptions>()
+            ?? throw new InvalidOperationException(
+                $"Missing '{CacheOptions.SectionName}' section in configuration.");
+
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = cacheOptions.RedisConnection;
+            options.InstanceName  = cacheOptions.InstancePrefix;
+        });
+
+        services.AddScoped<ILandlordDashboardCache, RedisLandlordDashboardCache>();
 
         return services;
     }
