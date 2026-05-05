@@ -173,6 +173,41 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
   index. `PaymentConfiguration.cs` updated with the filter +
   `HasDatabaseName` so the partial scope is self-documenting.
 
+### May 5, 2026
+
+#### Completed (M3.5 — Redis cache-aside, code complete)
+- Redis 7-alpine added to `docker-compose.yml` (no persistence — `--save ""`,
+  AOF off — it's a cache, not a store).
+- `Microsoft.Extensions.Caching.StackExchangeRedis 10.0.0` added to
+  `MyProperty.Infrastructure`. `IDistributedCache` registered via
+  `AddStackExchangeRedisCache`; instance prefix `myproperty:dev:` separates
+  dev keys from any future shared Redis.
+- New endpoint `GET /api/v1/landlord/dashboard` aggregates 5 counters
+  (properties, active leases, active tenants, pending payments, overdue
+  payments). Cache-aside via `ILandlordDashboardCache` (Application interface,
+  `RedisLandlordDashboardCache` implementation in Infrastructure). TTL 60 s,
+  key `landlord:{landlordId}:dashboard`.
+- `AcceptInviteHandler` now invalidates the dashboard cache after a lease is
+  created — the only existing landlord-relevant write. Future payment
+  handlers (M3.8) plug into the same interface.
+- Cache faults (Redis unreachable, serialization error) are swallowed and
+  logged at `Warning`. Endpoint degrades to DB-backed query — never fails
+  closed on a cache outage.
+- Standalone bench harness committed at
+  `docs/performance/m3-redis-caching/bench/` — slim DI graph, runs the
+  handler directly, reports min/median/p95/max for miss vs hit. Builds
+  green; numbers pending an actual run against the M3.4 bench dataset.
+- Settings: new `Cache` section in `appsettings.json` and
+  `appsettings.Development.json` with `RedisConnection`, `InstancePrefix`
+  and `LandlordDashboardTtlSeconds`. Validated on startup via
+  `ValidateDataAnnotations().ValidateOnStart()`.
+
+#### Up Next
+- Run the bench against a live stack and replace the placeholder numbers
+  in `docs/performance/m3-redis-caching/README.md`.
+- M3.6 (SignalR) — unblocks frontend SignalR wiring already on the M3
+  follow-up list.
+
 ### April 29, 2026
 
 #### Completed
@@ -258,7 +293,7 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 | M3.3 | ⏳ open | |
 | M3.4 | ✅ done | 3 queries with `EXPLAIN (ANALYZE, BUFFERS)`, ~22× / ~103× / ~13× speedups; partial index for overdue scan replaces a counter-productive full-column index. See `docs/performance/m3-sql-optimization/`. |
 >>>>>>> origin/develop
-| M3.5 | ⏳ open | |
+| M3.5 | 🟡 code complete | Redis cache-aside on `GET /api/v1/landlord/dashboard` (60 s TTL, key `landlord:{id}:dashboard`). Bench harness committed under `docs/performance/m3-redis-caching/bench/`; perf capture pending real run. |
 | M3.6 | ⏳ open | Scope: NotificationsHub, payment + invite events, no Redis backplane |
 | M3.7 | ✅ done | Hangfire email job + retry + DLQ. Progress log entry to be added. |
 | M3.8 | ⏳ open | Scope: 5 events (`PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected`, `InviteAccepted`, `InviteRejected`) |
