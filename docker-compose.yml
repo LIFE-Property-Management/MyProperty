@@ -53,6 +53,21 @@ services:
     networks:
       - myproperty-net
 
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: myproperty-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   # ── MailHog (dev SMTP catcher) ──────────────────────────────────────────────
   mailhog:
     image: mailhog/mailhog:latest
