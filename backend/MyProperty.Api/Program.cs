@@ -17,6 +17,7 @@ using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
+using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Infrastructure;
 
 
@@ -69,6 +70,9 @@ builder.Services.AddScoped<CreateInviteHandler>();
 builder.Services.AddScoped<GetInviteByTokenHandler>();
 builder.Services.AddScoped<AcceptInviteHandler>();
 builder.Services.AddScoped<RejectInviteHandler>();
+
+// Landlord handlers
+builder.Services.AddScoped<GetLandlordDashboardHandler>();
 
 // Invite options
 builder.Services.AddOptions<InviteOptions>()
