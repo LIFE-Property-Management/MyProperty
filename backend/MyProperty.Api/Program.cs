@@ -12,6 +12,11 @@ using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
 using MyProperty.Api.Swagger;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Options;
+using MyProperty.Application.Invites.Commands.AcceptInvite;
+using MyProperty.Application.Invites.Commands.CreateInvite;
+using MyProperty.Application.Invites.Commands.RejectInvite;
+using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Infrastructure;
 
 
@@ -58,6 +63,18 @@ builder.Services.AddTransient<IClaimsTransformation, KeycloakRolesTransformer>()
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Invite handlers
+builder.Services.AddScoped<CreateInviteHandler>();
+builder.Services.AddScoped<GetInviteByTokenHandler>();
+builder.Services.AddScoped<AcceptInviteHandler>();
+builder.Services.AddScoped<RejectInviteHandler>();
+
+// Invite options
+builder.Services.AddOptions<InviteOptions>()
+    .Bind(builder.Configuration.GetSection("Invites"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 // ── Authorization ─────────────────────────────────────────────────────────────
 builder.Services.AddAuthorization(options =>

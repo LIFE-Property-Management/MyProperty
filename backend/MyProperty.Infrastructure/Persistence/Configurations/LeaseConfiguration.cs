@@ -16,6 +16,11 @@ internal sealed class LeaseConfiguration : IEntityTypeConfiguration<Lease>
         builder.Property(l => l.Currency).HasMaxLength(3).IsFixedLength().IsRequired();
         builder.Property(l => l.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
 
+        builder.HasOne(l => l.Landlord)
+            .WithMany()
+            .HasForeignKey(l => l.LandlordId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(l => l.Property)
             .WithMany(p => p.Leases)
             .HasForeignKey(l => l.PropertyId)
@@ -26,6 +31,7 @@ internal sealed class LeaseConfiguration : IEntityTypeConfiguration<Lease>
             .HasForeignKey(l => l.TenantId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasIndex(l => new { l.LandlordId, l.Status });
         builder.HasIndex(l => new { l.TenantId, l.Status });
         builder.HasIndex(l => new { l.PropertyId, l.Status });
         builder.HasIndex(l => l.EndDate);

@@ -260,6 +260,32 @@ Each technology has a distinct role; do not blur them.
 - AI client wrapper: `IReceiptOcrService` in `Application/Common/Interfaces/`, implemented in `Infrastructure/Ai/AnthropicReceiptOcrService.cs`. Do not call the SDK directly from handlers.
 - API key from `Anthropic:ApiKey` config (env var in production, user secrets in dev).
 
+## Invites
+
+- **Token model.** Opaque random URL token (32 random bytes, URL-safe base64, ~43 chars). DB stores SHA256 hex (`TokenHash`, 64 chars, unique index). Plain token only ever lives in the invite email body, the Hangfire job arg, and the request URL — never in DB, never in logs.
+- **Endpoints** (all under `/api/v1/invites`):
+    - `POST /` — landlord-only. Creates invite, hashes token, persists, enqueues email via `IBackgroundJobQueue.EnqueueEmail`.
+    - `GET /by-token/{token}` — anonymous preview. Returns 404 for null / non-Pending / expired.
+    - `POST /{token}/accept` — authenticated. JWT email must match invite email — mismatch is 403 with `"This invite was sent to a different email address."`. Creates the `Lease` and marks invite `Accepted` in a single unit of work.
+    - `POST /{token}/reject` — anonymous. Marks invite `Rejected`. Returns 204.
+- **No 410 Gone.** Any invite that is not `Pending` or is past `ExpiresAt` returns 404 from preview/accept/reject. Frontend distinguishes UX from the 404 context.
+- **Lease creation at acceptance**, not at invite creation. Multiple active leases per tenant are allowed (no constraint).
+- **Unit-of-work owner.** `IInviteRepository.SaveChangesAsync` flushes the unit of work for accept. `ILeaseRepository.AddAsync` does not save. Both repos share the same scoped `AppDbContext`.
+- **Email construction is inline in `CreateInviteHandler`.** No dedicated job class. Send is dispatched via existing `IBackgroundJobQueue.EnqueueEmail(EmailMessage)`.
+- **Config:** `Invites:PortalBaseUrl`, `Invites:ExpiryDays` (default 7). Bound via `IOptions<InviteOptions>` with `ValidateDataAnnotations().ValidateOnStart()` — missing/malformed config crashes startup.
+
+### Post-M3 follow-ups
+
+- Keycloak admin client for fresh-tenant role assignment. Currently only seeded users (with Tenant role pre-assigned in `realm-export.json`) can accept invites end-to-end. Self-registered users get a JWT without the Tenant role and can't reach tenant endpoints after accepting.
+- Mapperly retrofit. Handlers currently construct DTOs by hand. Single retrofit batch post-M3.
+- Remove `ClaimsPrincipal? Principal` from `ICurrentUser`. Acknowledged abstraction leak — only exists because `IUserRepository.GetOrSyncFromClaimsAsync` takes a `ClaimsPrincipal`. Cleanup once role assignment moves server-side.
+- FluentValidation validators on commands (M3.12).
+- Invite audit fields (`AcceptedByUserId`, `ResultingLeaseId`, `RejectionReason`) — skipped this batch.
+- RabbitMQ `InviteAccepted` / `InviteRejected` event publishing (M3.8).
+- SignalR push to landlord on accept/reject (M3.6).
+- **Per-IP rate limiting on anonymous invite endpoints** (`GET /by-token/{token}`, `POST /{token}/reject`). Without it, an attacker can enumerate token validity via the 404-vs-200/204 distinction. Owned by **M3.12** — limit per IP, not per user.
+- `HashToken` duplication — identical private static in `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, `GetInviteByTokenHandler`. Extract to `Application/Invites/InviteTokenHasher.cs` post-M3.
+
 ## Testing (M3.11)
 
 - **xUnit** for the test framework.

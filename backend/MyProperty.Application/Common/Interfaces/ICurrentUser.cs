@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 namespace MyProperty.Application.Common.Interfaces;
 
 /// <summary>
@@ -34,4 +36,10 @@ public interface ICurrentUser
 
     /// <summary>True if the current user has the given role.</summary>
     bool IsInRole(string role);
+
+    // TODO post-M3: remove this leak. Handlers need ClaimsPrincipal only because
+    // IUserRepository.GetOrSyncFromClaimsAsync takes one. Once Keycloak admin
+    // client lands and role assignment moves server-side, sync can run from
+    // the user ID alone and this property goes away.
+    ClaimsPrincipal? Principal { get; }
 }
