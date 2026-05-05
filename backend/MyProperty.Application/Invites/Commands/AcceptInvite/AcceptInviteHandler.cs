@@ -11,7 +11,8 @@ public sealed class AcceptInviteHandler(
     IInviteRepository invites,
     ILeaseRepository leases,
     IUserRepository users,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    ILandlordDashboardCache dashboardCache)
 {
     public async Task<InviteAcceptedDto> Handle(AcceptInviteCommand cmd, CancellationToken ct)
     {
@@ -49,6 +50,10 @@ public sealed class AcceptInviteHandler(
         invite.AcceptedAt = DateTime.UtcNow;
 
         await invites.SaveChangesAsync(ct);
+
+        // The new lease changes the landlord's "active leases / tenants"
+        // counters; drop the cached dashboard so the next read repopulates.
+        await dashboardCache.InvalidateAsync(invite.LandlordId, ct);
 
         return new InviteAcceptedDto(invite.Id, lease.Id);
     }
