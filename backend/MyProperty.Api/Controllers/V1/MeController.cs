@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Users.Queries.GetMe;
 using Swashbuckle.AspNetCore.Annotations;
@@ -16,6 +17,7 @@ namespace MyProperty.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/me")]
+[EnableRateLimiting("authenticated")]
 public sealed class MeController(
     IUserRepository userRepository,
     ICurrentUser currentUser) : ControllerBase
