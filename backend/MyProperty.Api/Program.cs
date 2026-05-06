@@ -84,6 +84,14 @@ try
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             options.TokenValidationParameters = new()
             {
+                // TODO(M3.2 follow-up, before May 6): enable audience validation.
+                //   Requires (1) adding an audience mapper to a `myproperty-api` client
+                //   in infrastructure/keycloak/realm-export.json so the `aud` claim
+                //   contains "myproperty-api", and (2) setting
+                //     ValidateAudience = true,
+                //     ValidAudience   = "myproperty-api"
+                //   here. Without this, any token signed by the realm — including tokens
+                //   minted for unrelated clients — will be accepted by this API.
                 ValidateAudience = false,
                 NameClaimType = "preferred_username",
             };
