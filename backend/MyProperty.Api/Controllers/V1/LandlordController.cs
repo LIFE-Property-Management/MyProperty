@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using Swashbuckle.AspNetCore.Annotations;
@@ -12,6 +13,7 @@ namespace MyProperty.Api.Controllers.V1;
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/landlord")]
 [Authorize(Policy = "RequireLandlord")]
+[EnableRateLimiting("authenticated")]
 public sealed class LandlordController(
     GetLandlordDashboardHandler getDashboard,
     IUserRepository users,
