@@ -75,6 +75,8 @@ services:
     command: -config.file=/etc/loki/local-config.yaml
     ports:
       - "3100:3100"
+    volumes:
+      - loki_data:/loki
     networks:
       - myproperty-net
     healthcheck:
@@ -112,6 +114,7 @@ services:
 volumes:
   postgres_data:
   grafana_data:
+  loki_data:
 
 networks:
   myproperty-net:
