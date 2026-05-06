@@ -22,6 +22,8 @@ using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
+using MyProperty.Application.Payments.Commands.CreatePayment;
+using MyProperty.Application.Payments.Commands.SubmitPayment;
 using MyProperty.Infrastructure;
 using Serilog;
 using Serilog.Events;
@@ -64,7 +66,7 @@ try
         {
             cfg.WriteTo.GrafanaLoki(
                 lokiUrl,
-                labels: new[] { new LokiLabel { Key = "app", Value = "myproperty-api" } },
+                labels: [new LokiLabel { Key = "app", Value = "myproperty-api" }],
                 batchPostingLimit: builder.Environment.IsDevelopment() ? 1 : 100
             );
         }
@@ -115,6 +117,10 @@ try
 
     // Landlord handlers
     builder.Services.AddScoped<GetLandlordDashboardHandler>();
+
+    // Payment handlers
+    builder.Services.AddScoped<CreatePaymentHandler>();
+    builder.Services.AddScoped<SubmitPaymentHandler>();
 
 // FluentValidation — auto-register every IValidator<T> in the Application assembly.
 builder.Services.AddValidatorsFromAssemblyContaining<CreateInviteCommand>();
@@ -270,7 +276,7 @@ app.UseAuthorization();
 
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
-    Authorization = new[] { new AdminOnlyDashboardFilter() },
+    Authorization = [new AdminOnlyDashboardFilter()],
     DashboardTitle = "MyProperty — Background Jobs",
 });
 

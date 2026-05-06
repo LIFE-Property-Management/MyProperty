@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<ILeaseRepository, LeaseRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
         services.AddScoped<ILandlordDashboardRepository, LandlordDashboardRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
