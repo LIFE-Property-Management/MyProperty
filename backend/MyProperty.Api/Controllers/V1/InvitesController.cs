@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
@@ -21,10 +22,13 @@ public sealed class InvitesController(
     /// <summary>Creates an invite for a tenant. Email/FirstName/LastName are the invitee's fields.</summary>
     [HttpPost]
     [Authorize(Policy = "RequireLandlord")]
+    [EnableRateLimiting("authenticated")]
     [ProducesResponseType(typeof(InviteCreatedDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<InviteCreatedDto>> Create(
         CreateInviteCommand cmd, CancellationToken ct)
         => Ok(await create.Handle(cmd, ct));
@@ -32,8 +36,11 @@ public sealed class InvitesController(
     /// <summary>Returns an invite preview for anonymous display. Returns 404 for non-Pending or expired invites.</summary>
     [HttpGet("by-token/{token}")]
     [AllowAnonymous]
+    [EnableRateLimiting("anon-invite")]
     [ProducesResponseType(typeof(InvitePreviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<InvitePreviewDto>> Preview(
         string token, CancellationToken ct)
         => Ok(await getByToken.Handle(new GetInviteByTokenQuery(token), ct));
@@ -41,10 +48,13 @@ public sealed class InvitesController(
     /// <summary>Accepts an invite. The authenticated user's email must match the invite email.</summary>
     [HttpPost("{token}/accept")]
     [Authorize]
+    [EnableRateLimiting("authenticated")]
     [ProducesResponseType(typeof(InviteAcceptedDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<InviteAcceptedDto>> Accept(
         string token, CancellationToken ct)
         => Ok(await accept.Handle(new AcceptInviteCommand(token), ct));
@@ -52,8 +62,11 @@ public sealed class InvitesController(
     /// <summary>Rejects an invite. Anonymous — no authentication required.</summary>
     [HttpPost("{token}/reject")]
     [AllowAnonymous]
+    [EnableRateLimiting("anon-invite")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Reject(
         string token, CancellationToken ct)
     {

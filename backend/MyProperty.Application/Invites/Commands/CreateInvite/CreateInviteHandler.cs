@@ -1,17 +1,20 @@
 using System.Security.Cryptography;
 using System.Text;
+using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyProperty.Application.Common.Email;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Options;
+using MyProperty.Application.Common.Validation;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 
 namespace MyProperty.Application.Invites.Commands.CreateInvite;
 
 public sealed class CreateInviteHandler(
+    IValidator<CreateInviteCommand> validator,
     IUserRepository users,
     IPropertyRepository properties,
     IInviteRepository invites,
@@ -22,6 +25,8 @@ public sealed class CreateInviteHandler(
 {
     public async Task<InviteCreatedDto> Handle(CreateInviteCommand cmd, CancellationToken ct)
     {
+        await validator.EnsureValidAsync(cmd, ct);
+
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
         var property = await properties.GetByIdAsync(cmd.PropertyId, ct)

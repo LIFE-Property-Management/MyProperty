@@ -1,9 +1,12 @@
+using System.Threading.RateLimiting;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
+using FluentValidation;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using MyProperty.Api.Auth;
 using MyProperty.Api.Errors;
@@ -113,18 +116,66 @@ try
     // Landlord handlers
     builder.Services.AddScoped<GetLandlordDashboardHandler>();
 
-    // Invite options
-    builder.Services.AddOptions<InviteOptions>()
-        .Bind(builder.Configuration.GetSection("Invites"))
-        .ValidateDataAnnotations()
-        .ValidateOnStart();
+// FluentValidation — auto-register every IValidator<T> in the Application assembly.
+builder.Services.AddValidatorsFromAssemblyContaining<CreateInviteCommand>();
 
-    // ── Authorization ─────────────────────────────────────────────────────────────
-    builder.Services.AddAuthorization(options =>
+// Invite options
+builder.Services.AddOptions<InviteOptions>()
+    .Bind(builder.Configuration.GetSection("Invites"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Two policies:
+//  • "anon-invite"   per-IP, tight — applied to anonymous invite endpoints to
+//                    deter token enumeration attacks (the 404-vs-200 distinction
+//                    on `GET /invites/by-token/{token}` and the 404-vs-204 on
+//                    `POST /invites/{token}/reject` is otherwise an oracle).
+//  • "authenticated" per-user (sub claim, falls back to IP), looser — covers
+//                    every JWT-protected endpoint.
+// Limits are deliberately conservative for the milestone; tune from telemetry.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("anon-invite", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true,
+            }));
+
+    options.AddPolicy("authenticated", httpContext =>
     {
-        options.FallbackPolicy = new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser()
-            .Build();
+        var sub = httpContext.User.FindFirst("sub")?.Value;
+        var key = sub ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: key,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true,
+            });
+    });
+});
+
+// ── Authorization ─────────────────────────────────────────────────────────────
+builder.Services.AddAuthorization(options =>
+{
+    // Default-deny: every endpoint requires authentication unless it opts out
+    // with [AllowAnonymous]. Per-role authorization remains an explicit choice
+    // via the named policies below.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
 
         options.AddPolicy("RequireTenant",   p => p.RequireRole("Tenant"));
         options.AddPolicy("RequireLandlord", p => p.RequireRole("Landlord"));
@@ -212,15 +263,16 @@ try
         });
     }
 
-    app.UseHttpsRedirection();
-    app.UseAuthentication();
-    app.UseAuthorization();
+app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseRateLimiter();
+app.UseAuthorization();
 
-    app.UseHangfireDashboard("/hangfire", new DashboardOptions
-    {
-        Authorization = new[] { new AdminOnlyDashboardFilter() },
-        DashboardTitle = "MyProperty — Background Jobs",
-    });
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new AdminOnlyDashboardFilter() },
+    DashboardTitle = "MyProperty — Background Jobs",
+});
 
     app.MapControllers();
 

@@ -278,29 +278,51 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 #### Up Next
 - M3.5 (Redis dashboard cache) or M3.6 (SignalR hub). M3.6 unblocks frontend SignalR wiring already tracked under follow-ups.
 
+### May 6, 2026
+
+#### Completed (M3.12 — Input validation + rate limiting)
+- FluentValidation 11.11.0 added to `MyProperty.Application`,
+  `FluentValidation.DependencyInjectionExtensions` 11.11.0 to
+  `MyProperty.Api`. Auto-registered in DI via
+  `AddValidatorsFromAssemblyContaining<CreateInviteCommand>()`.
+- One validator per command/query, co-located with each
+  command/query/handler: `CreateInviteValidator`, `AcceptInviteValidator`,
+  `RejectInviteValidator`, `GetInviteByTokenValidator`,
+  `GetLandlordDashboardValidator`.
+- `Application/Common/Validation/ValidatorExtensions.EnsureValidAsync`
+  runs the validator and rethrows failures as the existing
+  `Application.Common.Exceptions.ValidationException` so the existing
+  `GlobalExceptionHandler` maps to RFC 7807 `ValidationProblemDetails` (400)
+  with no plumbing changes. Each handler calls it on the first line.
+- Rate limiting via `Microsoft.AspNetCore.RateLimiting` (built-in .NET).
+  Two named policies on fixed-window partitions:
+  - `anon-invite` — per-IP, 30 req/min. Applied to
+    `GET /api/v1/invites/by-token/{token}` and
+    `POST /api/v1/invites/{token}/reject`. Mitigates the token-enumeration
+    oracle (404-vs-200 / 404-vs-204) flagged in the post-M3 follow-up list.
+  - `authenticated` — per-user (`sub` claim), 120 req/min, with IP
+    fallback when the claim is missing. Applied to `LandlordController`,
+    `MeController`, `POST /api/v1/invites`, `POST /api/v1/invites/{token}/accept`.
+  - 429 on rejection. `app.UseRateLimiter()` placed after authn/authz so
+    the `sub` claim is available for partitioning.
+- `[ProducesResponseType]` attributes updated to advertise 400 and 429.
+
 ## Deliverable Status
 
 | ID | Status | Notes |
 |---|---|---|
-<<<<<<< HEAD
-| M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). Progress log entry to be added. |
-| M3.2 | ✅ done | Keycloak + JWT + RBAC. Progress log entry to be added. |
-| M3.3 | ✅ done | PostgreSQL + EF Core + migrations. Progress log entry to be added. |
-| M3.4 | ✅ done | N+1 prevention + EXPLAIN ANALYZE. Progress log entry to be added. |
-=======
-| M3.1 | ⏳ open | |
-| M3.2 | ⏳ open | |
-| M3.3 | ⏳ open | |
+| M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). |
+| M3.2 | ✅ done | Keycloak + JWT + RBAC. Audience validation still TODO. |
+| M3.3 | ✅ done | PostgreSQL + EF Core + migrations. |
 | M3.4 | ✅ done | 3 queries with `EXPLAIN (ANALYZE, BUFFERS)`, ~22× / ~103× / ~13× speedups; partial index for overdue scan replaces a counter-productive full-column index. See `docs/performance/m3-sql-optimization/`. |
->>>>>>> origin/develop
 | M3.5 | 🟡 code complete | Redis cache-aside on `GET /api/v1/landlord/dashboard` (60 s TTL, key `landlord:{id}:dashboard`). Bench harness committed under `docs/performance/m3-redis-caching/bench/`; perf capture pending real run. |
 | M3.6 | ⏳ open | Scope: NotificationsHub, payment + invite events, no Redis backplane |
-| M3.7 | ✅ done | Hangfire email job + retry + DLQ. Progress log entry to be added. |
+| M3.7 | ✅ done | Hangfire email job + retry + DLQ. |
 | M3.8 | ⏳ open | Scope: 5 events (`PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected`, `InviteAccepted`, `InviteRejected`) |
 | M3.9 | ⏳ open | |
 | M3.10 | ⏳ open | Scope: receipt OCR (replaces RAG) |
 | M3.11 | ⏳ open | Start early — Testcontainers + Keycloak is the hard part |
-| M3.12 | ⏳ open | |
+| M3.12 | ✅ done | FluentValidation on every command/query (5 validators, handler-side `EnsureValidAsync` rethrows as the app's `ValidationException` → existing global handler maps to RFC 7807 `ValidationProblemDetails`). `Microsoft.AspNetCore.RateLimiting` with two policies: `anon-invite` (per-IP, 30/min) on the anonymous invite endpoints to deter token enumeration, `authenticated` (per-user, 120/min) on JWT-protected endpoints. |
 | M3.13 | ⏳ open | Scope: local Docker Compose |
 | M3.14 | ⏳ open | |
 | M3.15 | ⏳ open | |

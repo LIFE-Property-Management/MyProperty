@@ -1,15 +1,21 @@
 using System.Security.Cryptography;
 using System.Text;
+using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Validation;
 using MyProperty.Domain.Enums;
 
 namespace MyProperty.Application.Invites.Queries.GetInviteByToken;
 
-public sealed class GetInviteByTokenHandler(IInviteRepository invites)
+public sealed class GetInviteByTokenHandler(
+    IValidator<GetInviteByTokenQuery> validator,
+    IInviteRepository invites)
 {
     public async Task<InvitePreviewDto> Handle(GetInviteByTokenQuery query, CancellationToken ct)
     {
+        await validator.EnsureValidAsync(query, ct);
+
         var tokenHash = HashToken(query.Token);
 
         var invite = await invites.GetByTokenHashAsync(tokenHash, ct)

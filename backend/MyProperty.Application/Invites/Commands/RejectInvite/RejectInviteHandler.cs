@@ -1,15 +1,21 @@
 using System.Security.Cryptography;
 using System.Text;
+using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Validation;
 using MyProperty.Domain.Enums;
 
 namespace MyProperty.Application.Invites.Commands.RejectInvite;
 
-public sealed class RejectInviteHandler(IInviteRepository invites)
+public sealed class RejectInviteHandler(
+    IValidator<RejectInviteCommand> validator,
+    IInviteRepository invites)
 {
     public async Task Handle(RejectInviteCommand cmd, CancellationToken ct)
     {
+        await validator.EnsureValidAsync(cmd, ct);
+
         var tokenHash = HashToken(cmd.Token);
 
         var invite = await invites.GetByTokenHashAsync(tokenHash, ct)

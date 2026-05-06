@@ -1,4 +1,6 @@
+using FluentValidation;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Validation;
 
 namespace MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 
@@ -12,12 +14,15 @@ namespace MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 /// the handler is unaware of Redis.
 /// </summary>
 public sealed class GetLandlordDashboardHandler(
+    IValidator<GetLandlordDashboardQuery> validator,
     ILandlordDashboardCache cache,
     ILandlordDashboardRepository repository)
 {
     public async Task<LandlordDashboardDto> Handle(
         GetLandlordDashboardQuery query, CancellationToken ct)
     {
+        await validator.EnsureValidAsync(query, ct);
+
         var cached = await cache.GetAsync(query.LandlordId, ct);
         if (cached is not null)
             return cached;
