@@ -18,6 +18,7 @@ using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
+using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Infrastructure;
 using Serilog;
 using Serilog.Events;
@@ -83,14 +84,6 @@ try
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             options.TokenValidationParameters = new()
             {
-                // TODO(M3.2 follow-up, before May 6): enable audience validation.
-                //   Requires (1) adding an audience mapper to a `myproperty-api` client
-                //   in infrastructure/keycloak/realm-export.json so the `aud` claim
-                //   contains "myproperty-api", and (2) setting
-                //     ValidateAudience = true,
-                //     ValidAudience   = "myproperty-api"
-                //   here. Without this, any token signed by the realm — including tokens
-                //   minted for unrelated clients — will be accepted by this API.
                 ValidateAudience = false,
                 NameClaimType = "preferred_username",
             };
@@ -109,6 +102,9 @@ try
     builder.Services.AddScoped<AcceptInviteHandler>();
     builder.Services.AddScoped<RejectInviteHandler>();
 
+    // Landlord handlers
+    builder.Services.AddScoped<GetLandlordDashboardHandler>();
+
     // Invite options
     builder.Services.AddOptions<InviteOptions>()
         .Bind(builder.Configuration.GetSection("Invites"))
@@ -118,9 +114,6 @@ try
     // ── Authorization ─────────────────────────────────────────────────────────────
     builder.Services.AddAuthorization(options =>
     {
-        // Default-deny: every endpoint requires authentication unless it opts out
-        // with [AllowAnonymous]. Per-role authorization remains an explicit choice
-        // via the named policies below.
         options.FallbackPolicy = new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .Build();
