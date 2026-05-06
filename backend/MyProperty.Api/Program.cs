@@ -55,13 +55,13 @@ try
            .Enrich.FromLogContext()
            .WriteTo.Console(new CompactJsonFormatter());
 
-        var lokiUrl = ctx.Configuration["Logging:LokiUrl"];
+        var lokiUrl = ctx.Configuration["LokiUrl"];
         if (!string.IsNullOrWhiteSpace(lokiUrl))
         {
             cfg.WriteTo.GrafanaLoki(
                 lokiUrl,
                 labels: new[] { new LokiLabel { Key = "app", Value = "myproperty-api" } },
-                batchPostingLimit: 1
+                batchPostingLimit: builder.Environment.IsDevelopment() ? 1 : 100
             );
         }
     });
