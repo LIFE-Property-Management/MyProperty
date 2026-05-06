@@ -1,13 +1,16 @@
 using System.Security.Cryptography;
 using System.Text;
+using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Validation;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 
 namespace MyProperty.Application.Invites.Commands.AcceptInvite;
 
 public sealed class AcceptInviteHandler(
+    IValidator<AcceptInviteCommand> validator,
     IInviteRepository invites,
     ILeaseRepository leases,
     IUserRepository users,
@@ -16,6 +19,8 @@ public sealed class AcceptInviteHandler(
 {
     public async Task<InviteAcceptedDto> Handle(AcceptInviteCommand cmd, CancellationToken ct)
     {
+        await validator.EnsureValidAsync(cmd, ct);
+
         var tokenHash = HashToken(cmd.Token);
 
         var invite = await invites.GetByTokenHashAsync(tokenHash, ct)
