@@ -17,6 +17,7 @@ namespace MyProperty.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/me")]
+[Authorize]
 [EnableRateLimiting("authenticated")]
 public sealed class MeController(
     IUserRepository userRepository,
