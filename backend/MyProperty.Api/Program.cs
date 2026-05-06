@@ -221,8 +221,8 @@ if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
-app.UseAuthorization();
 app.UseRateLimiter();
+app.UseAuthorization();
 
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
