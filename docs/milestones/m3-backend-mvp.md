@@ -243,7 +243,7 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 #### Known gaps (carried forward)
 - **Audience validation disabled** — JWT bearer config has `ValidateAudience = false`. Loud TODO in `Program.cs`. Requires audience mapper on a Keycloak `myproperty-api` client. Target close: before May 6 demo.
 - **Per-portal `KeycloakInit` duplication**: bypass logic now identical across `(tenant)` and `dashboard` versions. Worth extracting to a shared `useKeycloakInit({ portal })` hook in a future batch.
-- Testcontainers integration test for Keycloak → JWT → policy flow deferred to M3.11.
+- ~~Testcontainers integration test for Keycloak → JWT → policy flow deferred to M3.11.~~ **Closed by M3.11** — see `AuthorizationTests.cs`: anonymous → 401, garbage bearer → 401, tenant token → 200 with role claim, tenant on `/me/tenant-only` → 200, landlord on same → 403, landlord on `/landlord/dashboard` → 200, tenant on same → 403.
 - **`HashToken` duplication in invite handlers** — `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, and `GetInviteByTokenHandler` each carry an identical private static `HashToken` method (SHA256 hex, lowercase). Extract to `Application/Invites/InviteTokenHasher.cs` (internal static class) in a post-M3 cleanup pass.
 
 #### M3.2 deliverable status
@@ -321,7 +321,7 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 | M3.8 | ⏳ open | Scope: 5 events (`PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected`, `InviteAccepted`, `InviteRejected`) |
 | M3.9 | ⏳ open | |
 | M3.10 | ⏳ open | Scope: receipt OCR (replaces RAG) |
-| M3.11 | ⏳ open | Start early — Testcontainers + Keycloak is the hard part |
+| M3.11 | ✅ done | xUnit test project under `backend/MyProperty.Tests/`. **79 unit tests** (validators, handlers with Moq, Keycloak roles transformer, correlation-ID middleware) + **22 integration tests** running against live Postgres + Keycloak via Testcontainers. Auth tested end-to-end: real password-grant tokens minted by the Keycloak container, validated by the API's JWT bearer middleware against the realm's JWKS. Substitutes `IDistributedCache` (in-memory) and `IBackgroundJobQueue` (recording fake) so tests don't depend on Redis or trigger Hangfire/SMTP retries. Full suite runs in ~30 s after image pull. |
 | M3.12 | ✅ done | FluentValidation on every command/query (5 validators, handler-side `EnsureValidAsync` rethrows as the app's `ValidationException` → existing global handler maps to RFC 7807 `ValidationProblemDetails`). `Microsoft.AspNetCore.RateLimiting` with two policies: `anon-invite` (per-IP, 30/min) on the anonymous invite endpoints to deter token enumeration, `authenticated` (per-user, 120/min) on JWT-protected endpoints. |
 | M3.13 | ⏳ open | Scope: local Docker Compose |
 | M3.14 | ⏳ open | |

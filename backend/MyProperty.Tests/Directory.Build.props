@@ -1,0 +1,14 @@
+<Project>
+
+  <Import Project="..\Directory.Build.props" />
+
+  <PropertyGroup>
+    <!-- xUnit theory data and Moq generic call patterns produce nullable / unused
+         warnings that aren't worth fixing in test code. Inherit everything else
+         from backend/Directory.Build.props (TargetFramework, Nullable, etc.). -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

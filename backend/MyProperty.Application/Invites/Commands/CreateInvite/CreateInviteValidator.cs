@@ -7,7 +7,7 @@ public sealed class CreateInviteValidator : AbstractValidator<CreateInviteComman
     public CreateInviteValidator()
     {
         RuleFor(x => x.PropertyId)
-            .NotEmpty().WithMessage("PropertyId is required.");;
+            .NotEmpty().WithMessage("PropertyId is required.");
 
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")

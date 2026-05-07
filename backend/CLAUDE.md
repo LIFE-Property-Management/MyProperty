@@ -284,16 +284,22 @@ Each technology has a distinct role; do not blur them.
 - RabbitMQ `InviteAccepted` / `InviteRejected` event publishing (M3.8).
 - SignalR push to landlord on accept/reject (M3.6).
 - **Per-IP rate limiting on anonymous invite endpoints** (`GET /by-token/{token}`, `POST /{token}/reject`). Without it, an attacker can enumerate token validity via the 404-vs-200/204 distinction. Owned by **M3.12** — limit per IP, not per user.
-- `HashToken` duplication — identical private static in `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, `GetInviteByTokenHandler`. Extract to `Application/Invites/InviteTokenHasher.cs` post-M3.
+- `HashToken` duplication — identical private static in `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, `GetInviteByTokenHandler`, `InvitePreviewAndRejectTests` . Extract to `Application/Invites/InviteTokenHasher.cs` post-M3. Also delete MyProperty.Tests/Unit/Handlers/TestUtils/TokenHasher.cs and replace its usages with the extracted class.
+- The hardcoded cache key string landlord:{landlordId}:dashboard in EvictDashboardCacheAsync — should reference a shared constant post-M3.
 
 ## Testing (M3.11)
 
-- **xUnit** for the test framework.
-- **Unit tests** — pure logic in `Application` and `Domain`. Mock repositories with `Moq` or hand-rolled fakes.
-- **Integration tests** — `WebApplicationFactory<Program>` against the full API, with **Testcontainers** spinning up real Postgres, Redis, RabbitMQ, and Keycloak per test class. No in-memory database, no mocked Keycloak.
-- **Coverlet** for coverage. Target: meaningful coverage on `Application` handlers; don't chase 100%.
-- Test project: `MyProperty.Tests/` with subdirectories `Unit/` and `Integration/`.
-- **Start integration test setup early.** Testcontainers + Keycloak is the slowest part of M3.11 to get green.
+- **xUnit** for the test framework. Project: `MyProperty.Tests/` (added at M3.11), split into `Unit/` and `Integration/`.
+- **Moq** for hand-substitutions of repositories and `ICurrentUser`. Validators are instantiated directly — they're pure and cheap, no point mocking them.
+- **Unit tests** cover validators, the four invite handlers + landlord-dashboard handler, the `KeycloakRolesTransformer`, the `HttpContextCurrentUser`, and the `CorrelationIdMiddleware`.
+- **Integration tests** use `WebApplicationFactory<Program>` with **Testcontainers** spinning up real Postgres + Keycloak per test run (a single `ApiCollection` shares the fixture across classes — container start + Keycloak realm seed runs once). EF Core migrations are applied to the container at fixture init.
+- **Auth is tested against live Keycloak**, not a stub. The fixture provisions a hermetic realm (`MyPropertyTest`), three realm roles, a public client with `directAccessGrants`, and four seed users (landlord×2, tenant×2). Tests mint real access tokens via the OAuth2 password grant; the API validates them via Keycloak's JWKS endpoint just like in production.
+- **Two narrow substitutions** in the test factory:
+    - `IDistributedCache` → `MemoryDistributedCache` (avoids depending on Redis; the cache code path through `RedisLandlordDashboardCache`/`ILandlordDashboardCache` is identical).
+    - `IBackgroundJobQueue` → `RecordingBackgroundJobQueue` (captures `EmailMessage`s for assertions; prevents Hangfire from enqueueing real jobs that would hammer the unreachable test SMTP).
+- **The test environment is `Development`** so `RequireHttpsMetadata=false` on the JWT bearer scheme — Testcontainers' Keycloak only exposes HTTP. The production gate in `Program.cs` deliberately permits HTTP only in Development.
+- **Coverlet** wired via `coverlet.collector` for coverage runs (`dotnet test --collect:"XPlat Code Coverage"`). Target: meaningful coverage on handlers and validators; don't chase 100%.
+- Full suite (101 tests: 79 unit + 22 integration) runs in ~30 s once Postgres + Keycloak images are cached locally.
 
 ## Logging & Observability
 
