@@ -80,6 +80,13 @@ public sealed class CreateInviteValidatorTests
     }
 
     [Fact]
+    public void StartDateToday_passes()
+    {
+        _sut.TestValidate(Valid(start: DateOnly.FromDateTime(DateTime.UtcNow.Date)))
+            .ShouldNotHaveValidationErrorFor(x => x.ProposedStartDate);
+    }
+    
+    [Fact]
     public void EndDateNotAfterStart_fails()
     {
         var start = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(10);
