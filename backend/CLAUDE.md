@@ -284,7 +284,7 @@ Each technology has a distinct role; do not blur them.
 - RabbitMQ `InviteAccepted` / `InviteRejected` event publishing (M3.8).
 - SignalR push to landlord on accept/reject (M3.6).
 - **Per-IP rate limiting on anonymous invite endpoints** (`GET /by-token/{token}`, `POST /{token}/reject`). Without it, an attacker can enumerate token validity via the 404-vs-200/204 distinction. Owned by **M3.12** — limit per IP, not per user.
-- `HashToken` duplication — identical private static in `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, `GetInviteByTokenHandler`. Extract to `Application/Invites/InviteTokenHasher.cs` post-M3.
+- `HashToken` duplication — identical private static in `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, `GetInviteByTokenHandler`. Extract to `Application/Invites/InviteTokenHasher.cs` post-M3. Also delete MyProperty.Tests/Unit/Handlers/TestUtils/TokenHasher.cs and replace its usages with the extracted class.
 
 ## Testing (M3.11)
 
