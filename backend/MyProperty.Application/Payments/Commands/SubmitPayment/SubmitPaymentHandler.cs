@@ -11,7 +11,8 @@ public sealed class SubmitPaymentHandler(
     IValidator<SubmitPaymentCommand> validator,
     ICurrentUser currentUser,
     IUserRepository userRepo,
-    IPaymentRepository paymentRepo)
+    IPaymentRepository paymentRepo,
+    ILandlordDashboardCache dashboardCache)
 {
     public async Task<PaymentSubmittedDto> Handle(SubmitPaymentCommand cmd, CancellationToken ct)
     {
@@ -31,10 +32,12 @@ public sealed class SubmitPaymentHandler(
         if (payment.Lease!.TenantId != tenant.Id)
             throw new ForbiddenException("You cannot submit against a payment that is not on your lease.");
 
-        // State machine guard: only Outstanding payments can be submitted.
-        // Resubmission after rejection works because RejectPaymentHandler loops
-        // the row back to Outstanding (see Reject handler in Batch P2).
-        if (payment.Status != PaymentStatus.Outstanding)
+        // State machine guard: tenant can submit against an Outstanding payment
+        // (initial submission) or a Rejected payment (resubmission after the
+        // landlord rejected the previous attempt). Pending and Confirmed are
+        // both 409 — the tenant cannot re-submit while a previous attempt is
+        // awaiting landlord review, and Confirmed is terminal.
+        if (payment.Status != PaymentStatus.Outstanding && payment.Status != PaymentStatus.Rejected)
             throw new ConflictException($"Payment is in state {payment.Status} and cannot be submitted.");
 
         // TODO M3.9: receipt file handling.
@@ -60,6 +63,11 @@ public sealed class SubmitPaymentHandler(
         payment.RejectionReason = null;
 
         await paymentRepo.SaveChangesAsync(ct);
+
+        // Submitting a payment shifts the landlord's pending counter (Outstanding
+        // → Pending; see M3.5 cached aggregate `landlord:{id}:dashboard`); drop
+        // the cached dashboard so the next read repopulates from the DB.
+        await dashboardCache.InvalidateAsync(payment.Lease!.LandlordId, ct);
 
         // TODO M3.8: publish via IEventPublisher when wired up.
         // Event shape:

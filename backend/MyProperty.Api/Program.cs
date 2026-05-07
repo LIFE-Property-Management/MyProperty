@@ -22,7 +22,9 @@ using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
+using MyProperty.Application.Payments.Commands.ConfirmPayment;
 using MyProperty.Application.Payments.Commands.CreatePayment;
+using MyProperty.Application.Payments.Commands.RejectPayment;
 using MyProperty.Application.Payments.Commands.SubmitPayment;
 using MyProperty.Infrastructure;
 using Serilog;
@@ -121,6 +123,8 @@ try
     // Payment handlers
     builder.Services.AddScoped<CreatePaymentHandler>();
     builder.Services.AddScoped<SubmitPaymentHandler>();
+    builder.Services.AddScoped<ConfirmPaymentHandler>();
+    builder.Services.AddScoped<RejectPaymentHandler>();
 
 // FluentValidation — auto-register every IValidator<T> in the Application assembly.
 builder.Services.AddValidatorsFromAssemblyContaining<CreateInviteCommand>();

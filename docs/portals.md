@@ -42,6 +42,14 @@
 - Receipt upload (digital payment)
 - Manual request (cash payment)
 
+> **M3 status (May 2026):** the payment submit endpoint
+> (`POST /api/v1/payments/{id}/submit`) currently accepts `application/json`
+> only. The receipt file itself is not yet uploaded — `Method = ReceiptUpload`
+> submissions persist with `ReceiptFileKey`/`ReceiptFileName` as null. File
+> upload (multipart/form-data, validation, storage) lands in M3.9. The tenant
+> frontend can build the file picker UX against the eventual shape; the wire
+> format is JSON-only until M3.9 ships.
+
 **⚠️ Landlord has final authority over payment confirmation — tenants cannot self-confirm. Tenant UI reflects state only.**
 
 **Payment History table**

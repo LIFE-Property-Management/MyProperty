@@ -13,7 +13,8 @@ public sealed class CreatePaymentHandler(
     ICurrentUser currentUser,
     IUserRepository userRepo,
     ILeaseRepository leaseRepo,
-    IPaymentRepository paymentRepo)
+    IPaymentRepository paymentRepo,
+    ILandlordDashboardCache dashboardCache)
 {
     public async Task<PaymentCreatedDto> Handle(CreatePaymentCommand cmd, CancellationToken ct)
     {
@@ -45,6 +46,11 @@ public sealed class CreatePaymentHandler(
 
         await paymentRepo.AddAsync(payment, ct);
         await paymentRepo.SaveChangesAsync(ct);
+
+        // Creating a new Outstanding payment shifts the landlord's pending/overdue
+        // counters (see M3.5 cached aggregate `landlord:{id}:dashboard`); drop the
+        // cached dashboard so the next read repopulates from the DB.
+        await dashboardCache.InvalidateAsync(lease.LandlordId, ct);
 
         // TODO M3.8: publish via IEventPublisher when wired up.
         // Event shape:
