@@ -386,7 +386,7 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 ## Deliverable Status
 
 | ID | Status | Notes |
-|---|---|---|
+|---|--|---|
 | M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). Payments state machine — Batches P1 + P2 (May 6, 2026): Create / Submit / Confirm / Reject handlers, controller, validators, event record types, dashboard cache invalidation. M3.8 event publishing, M3.9 file upload, M3.6 SignalR push, M3.11 tests deferred to their own deliverables. |
 | M3.2 | ✅ done | Keycloak + JWT + RBAC. Audience validation still TODO. |
 | M3.3 | ✅ done | PostgreSQL + EF Core + migrations. |
@@ -394,7 +394,7 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 | M3.5 | 🟡 code complete | Redis cache-aside on `GET /api/v1/landlord/dashboard` (60 s TTL, key `landlord:{id}:dashboard`). Bench harness committed under `docs/performance/m3-redis-caching/bench/`; perf capture pending real run. |
 | M3.6 | ⏳ open | Scope: NotificationsHub, payment + invite events, no Redis backplane |
 | M3.7 | ✅ done | Hangfire email job + retry + DLQ. |
-| M3.8 | ⏳ open | Scope: 5 events (`PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected`, `InviteAccepted`, `InviteRejected`) |
+| M3.8 | ✅ done | Completed PaymentConfirmed Event flow. Others are for post M#
 | M3.9 | ⏳ open | |
 | M3.10 | ⏳ open | Scope: receipt OCR (replaces RAG) |
 | M3.11 | ✅ done | xUnit test project under `backend/MyProperty.Tests/`. **79 unit tests** (validators, handlers with Moq, Keycloak roles transformer, correlation-ID middleware) + **22 integration tests** running against live Postgres + Keycloak via Testcontainers. Auth tested end-to-end: real password-grant tokens minted by the Keycloak container, validated by the API's JWT bearer middleware against the realm's JWKS. Substitutes `IDistributedCache` (in-memory) and `IBackgroundJobQueue` (recording fake) so tests don't depend on Redis or trigger Hangfire/SMTP retries. Full suite runs in ~30 s after image pull. |
