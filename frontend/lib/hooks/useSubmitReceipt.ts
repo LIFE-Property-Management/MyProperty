@@ -10,16 +10,16 @@ import { ENDPOINTS } from "@/lib/api/endpoints";
 import { queryKeys } from "./queryKeys";
 
 export function useSubmitReceipt() {
-  const queryClient = useQueryClient();
+    const queryClient = useQueryClient();
 
-  return useMutation<void, Error, FormData>({
-    mutationFn: async (formData: FormData) => {
-      await apiClient.post(ENDPOINTS.submitReceipt, formData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.tenant.payment.current(),
-      });
-    },
-  });
+    return useMutation<void, Error, FormData>({
+        mutationFn: async (formData: FormData) => {
+            await apiClient.post(ENDPOINTS.submitReceipt, formData);
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({
+                queryKey: queryKeys.tenant.payment.current(),
+            });
+        },
+    });
 }

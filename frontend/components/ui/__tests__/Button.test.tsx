@@ -20,15 +20,15 @@ describe("<Button />", () => {
   });
 
   it.each(["primary", "secondary", "ghost", "danger"] as const)(
-    "applies variant=%s with a background class",
-    (variant) => {
-      render(
-        <Button variant={variant} data-testid="btn">
-          X
-        </Button>,
-      );
-      expect(screen.getByTestId("btn").className).toMatch(/bg-/);
-    },
+      "applies variant=%s with a background class",
+      (variant) => {
+        render(
+            <Button variant={variant} data-testid="btn">
+              X
+            </Button>,
+        );
+        expect(screen.getByTestId("btn").className).toMatch(/bg-/);
+      },
   );
 
   it.each([
@@ -37,9 +37,9 @@ describe("<Button />", () => {
     ["lg", "h-12"],
   ] as const)("applies size=%s height class %s", (size, clazz) => {
     render(
-      <Button size={size} data-testid="btn">
-        X
-      </Button>,
+        <Button size={size} data-testid="btn">
+          X
+        </Button>,
     );
     expect(screen.getByTestId("btn")).toHaveClass(clazz);
   });
@@ -53,9 +53,9 @@ describe("<Button />", () => {
   it("disables interaction when disabled is set", async () => {
     const onClick = jest.fn();
     render(
-      <Button disabled onClick={onClick}>
-        Off
-      </Button>,
+        <Button disabled onClick={onClick}>
+          Off
+        </Button>,
     );
     await userEvent.click(screen.getByRole("button"));
     expect(onClick).not.toHaveBeenCalled();
@@ -90,27 +90,27 @@ describe("<Button />", () => {
 
   it("hides rightIcon while loading", () => {
     render(
-      <Button isLoading rightIcon={<span data-testid="right">→</span>}>
-        X
-      </Button>,
+        <Button isLoading rightIcon={<span data-testid="right">→</span>}>
+          X
+        </Button>,
     );
     expect(screen.queryByTestId("right")).not.toBeInTheDocument();
   });
 
   it("applies the w-full class when fullWidth is set", () => {
     render(
-      <Button fullWidth data-testid="btn">
-        X
-      </Button>,
+        <Button fullWidth data-testid="btn">
+          X
+        </Button>,
     );
     expect(screen.getByTestId("btn")).toHaveClass("w-full");
   });
 
   it("wraps children in an invisible container while isLoading (overlay pattern)", () => {
     render(
-      <Button isLoading>
-        <span data-testid="label">Working</span>
-      </Button>,
+        <Button isLoading>
+          <span data-testid="label">Working</span>
+        </Button>,
     );
     const label = screen.getByTestId("label");
     expect(label.parentElement?.className).toContain("invisible");

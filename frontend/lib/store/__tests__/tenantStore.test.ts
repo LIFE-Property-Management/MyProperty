@@ -88,7 +88,7 @@ describe("NotificationSlice", () => {
 
   it("dismissNotification is idempotent (no throw on unknown id)", () => {
     expect(() =>
-      useTenantStore.getState().dismissNotification("does-not-exist"),
+        useTenantStore.getState().dismissNotification("does-not-exist"),
     ).not.toThrow();
   });
 

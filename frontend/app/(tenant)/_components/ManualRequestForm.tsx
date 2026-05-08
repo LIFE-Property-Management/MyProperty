@@ -53,27 +53,27 @@ export function ManualRequestForm(props: ManualRequestFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onValid)} className="space-y-5">
-      <input type="hidden" {...register('paymentId')} />
+      <form onSubmit={handleSubmit(onValid)} className="space-y-5">
+        <input type="hidden" {...register('paymentId')} />
 
-      <p className="font-sans text-sm text-[#6b7280] dark:text-[#8b949e]">
-        Use this form to request confirmation for a cash payment made directly to your landlord.
-        Your landlord will confirm or reject the request.
-      </p>
+        <p className="font-sans text-sm text-[#6b7280] dark:text-[#8b949e]">
+          Use this form to request confirmation for a cash payment made directly to your landlord.
+          Your landlord will confirm or reject the request.
+        </p>
 
-      <Textarea
-        label="Payment details"
-        {...register('notes')}
-        error={errors.notes?.message}
-        helperText="Describe the payment (date, amount, context). Required."
-        rows={5}
-      />
+        <Textarea
+            label="Payment details"
+            {...register('notes')}
+            error={errors.notes?.message}
+            helperText="Describe the payment (date, amount, context). Required."
+            rows={5}
+        />
 
-      <div className="flex justify-end">
-        <Button type="submit" variant="primary" size="md" isLoading={isPending}>
-          Send request
-        </Button>
-      </div>
-    </form>
+        <div className="flex justify-end">
+          <Button type="submit" variant="primary" size="md" isLoading={isPending}>
+            Send request
+          </Button>
+        </div>
+      </form>
   );
 }
