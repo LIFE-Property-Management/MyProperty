@@ -233,12 +233,13 @@ Each technology has a distinct role; do not blur them.
 
 ### Push mechanics
 - Notifications are pushed from RabbitMQ consumers, **not** directly from command handlers. Handlers publish events to RabbitMQ; consumers translate events into SignalR pushes. This keeps the API request path fast and decouples push delivery from the synchronous request lifecycle.
-- Use `IHubContext<NotificationsHub>` injected into consumers; do not hold hub references in handlers.
+- Consumers depend on the **`INotificationDispatcher` abstraction** (in `Application/Common/Notifications/`), not directly on `IHubContext<NotificationsHub>`. The Api layer registers a `SignalRNotificationDispatcher` that wraps `IHubContext`; this keeps Infrastructure's consumers free of an Api project reference and lets unit tests fake out push delivery.
 - Payloads are minimal — IDs and a few key fields. Clients use the payload as a signal to invalidate their TanStack Query cache and refetch authoritative data from the API.
 
 ### Backplane
-- **No Redis backplane for the milestone.** Single API instance, documented as a deliberate scoping decision. SignalR's built-in in-memory backplane is sufficient.
-- Scaling to multiple instances later is a configuration change (`AddStackExchangeRedis`), not a refactor. The hub code is unchanged.
+- **Redis backplane wired** via `Microsoft.AspNetCore.SignalR.StackExchangeRedis`, configured in `Program.cs` against the same Redis instance used for the cache (channel prefix `myproperty.signalr` so SignalR pub/sub keys are isolated from cache entries).
+- Toggleable via `SignalR:UseRedisBackplane` (default `true`). The integration suite flips this to `false` because Testcontainers does not run a Redis service — SignalR still resolves and `IHubContext<NotificationsHub>` is usable, deliveries just fan out via the in-process transport.
+- Hub code is unchanged whether the backplane is on or off; all groups and group keys are the same.
 
 ### Frontend contract
 - Frontend uses `@microsoft/signalr` to connect to `/hubs/notifications`.
@@ -346,7 +347,6 @@ Each technology has a distinct role; do not blur them.
 - **MediatR: not adopted.** CQRS folder structure used without the library — see Architecture Patterns.
 - **AutoMapper: not adopted.** Mapperly used instead.
 - **MassTransit: not adopted.** Direct `RabbitMQ.Client` for event publishing.
-- **SignalR Redis backplane: not adopted.** Single instance only for the milestone — see Real-time section.
 
 ## Further Specs
 
