@@ -22,7 +22,7 @@ public class IntegrationEventNamingTests
     }
 
     [Fact]
-    public void RoutingKey_TypeWithoutEventSuffix_StillCamelSplit()
+    public void RoutingKey_MultiWordPrefix_DottedLowerCase()
     {
         Assert.Equal("invite.accepted", IntegrationEventNaming.RoutingKey(typeof(InviteAcceptedEvent)));
     }
