@@ -20,12 +20,12 @@ export function decodePayload(token: string): DecodedPayload {
   const parsed = JSON.parse(json) as Record<string, unknown>;
 
   const roles: string[] = Array.isArray(
-    (parsed.realm_access as Record<string, unknown> | undefined)?.roles,
+      (parsed.realm_access as Record<string, unknown> | undefined)?.roles,
   )
-    ? ((parsed.realm_access as Record<string, unknown>).roles as string[]).map(
-        (r) => r.toLowerCase(),
+      ? ((parsed.realm_access as Record<string, unknown>).roles as string[]).map(
+          (r) => r.toLowerCase(),
       )
-    : [];
+      : [];
 
   const matched = roles.filter(isPortalRole);
 

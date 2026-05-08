@@ -21,23 +21,23 @@ export function PaymentSubmissionModal() {
   if (!isOpen || !activePaymentId) return null;
 
   const title =
-    activeModal === 'receiptUpload' ? 'Upload Receipt' : 'Request Manual Confirmation';
+      activeModal === 'receiptUpload' ? 'Upload Receipt' : 'Request Manual Confirmation';
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={closeModal}
-      title={title}
-      size="md"
-      dismissOnBackdrop
-      dismissOnEsc
-      showCloseButton
-    >
-      {activeModal === 'receiptUpload' ? (
-        <ReceiptUploadForm paymentId={activePaymentId} onSuccess={closeModal} />
-      ) : (
-        <ManualRequestForm paymentId={activePaymentId} onSuccess={closeModal} />
-      )}
-    </Modal>
+      <Modal
+          isOpen={isOpen}
+          onClose={closeModal}
+          title={title}
+          size="md"
+          dismissOnBackdrop
+          dismissOnEsc
+          showCloseButton
+      >
+        {activeModal === 'receiptUpload' ? (
+            <ReceiptUploadForm paymentId={activePaymentId} onSuccess={closeModal} />
+        ) : (
+            <ManualRequestForm paymentId={activePaymentId} onSuccess={closeModal} />
+        )}
+      </Modal>
   );
 }

@@ -7,20 +7,20 @@ import { create } from "zustand"
 import { devtools } from "zustand/middleware"
 import { createUiSlice, type UiSlice } from "./tenant/uiSlice"
 import {
-  createNotificationSlice,
-  type NotificationSlice,
+    createNotificationSlice,
+    type NotificationSlice,
 } from "./tenant/notificationSlice"
 
 export type TenantStore = UiSlice & NotificationSlice
 
 const useTenantStore = create<TenantStore>()(
-  devtools(
-    (...args) => ({
-      ...createUiSlice(...args),
-      ...createNotificationSlice(...args),
-    }),
-    { name: "TenantStore" },
-  ),
+    devtools(
+        (...args) => ({
+            ...createUiSlice(...args),
+            ...createNotificationSlice(...args),
+        }),
+        { name: "TenantStore" },
+    ),
 )
 
 export default useTenantStore

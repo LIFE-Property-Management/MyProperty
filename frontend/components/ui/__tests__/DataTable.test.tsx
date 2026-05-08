@@ -46,12 +46,12 @@ describe("<DataTable />", () => {
 
   it("renders a custom emptyMessage", () => {
     render(
-      <DataTable
-        columns={columns}
-        data={[]}
-        getRowKey={(r) => r.id}
-        emptyMessage="No payments yet."
-      />,
+        <DataTable
+            columns={columns}
+            data={[]}
+            getRowKey={(r) => r.id}
+            emptyMessage="No payments yet."
+        />,
     );
     expect(screen.getByText("No payments yet.")).toBeInTheDocument();
   });
@@ -59,12 +59,12 @@ describe("<DataTable />", () => {
   it("rows become role='button' and are keyboard-activatable when onRowClick is provided", async () => {
     const onRowClick = jest.fn();
     render(
-      <DataTable
-        columns={columns}
-        data={rows}
-        getRowKey={(r) => r.id}
-        onRowClick={onRowClick}
-      />,
+        <DataTable
+            columns={columns}
+            data={rows}
+            getRowKey={(r) => r.id}
+            onRowClick={onRowClick}
+        />,
     );
     const clickableRows = screen.getAllByRole("button");
     expect(clickableRows).toHaveLength(rows.length);
@@ -89,12 +89,12 @@ describe("<DataTable />", () => {
 
   it("renders a caption in sr-only class for a11y", () => {
     const { container } = render(
-      <DataTable
-        columns={columns}
-        data={rows}
-        getRowKey={(r) => r.id}
-        caption="Payment history"
-      />,
+        <DataTable
+            columns={columns}
+            data={rows}
+            getRowKey={(r) => r.id}
+            caption="Payment history"
+        />,
     );
     const caption = container.querySelector("caption");
     expect(caption).toBeTruthy();

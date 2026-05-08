@@ -5,12 +5,12 @@ import { PaymentSubmissionModal } from "./_components/PaymentSubmissionModal";
 import { MockProvider } from "@/mocks/MockProvider";
 
 export default function TenantLayout({ children }: { children: ReactNode }) {
-  return (
-    <MockProvider>
-      <KeycloakInit />
-      {children}
-      <TenantNotifications />
-      <PaymentSubmissionModal />
-    </MockProvider>
-  );
+    return (
+        <MockProvider>
+            <KeycloakInit />
+            {children}
+            <TenantNotifications />
+            <PaymentSubmissionModal />
+        </MockProvider>
+    );
 }

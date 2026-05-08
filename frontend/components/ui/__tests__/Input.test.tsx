@@ -19,8 +19,8 @@ describe("<Input /> (shared)", () => {
     render(<Input label="City" hint="Where you live" />);
     expect(screen.getByText("Where you live")).toBeInTheDocument();
     expect(screen.getByLabelText("City")).toHaveAttribute(
-      "aria-describedby",
-      expect.stringContaining("description"),
+        "aria-describedby",
+        expect.stringContaining("description"),
     );
   });
 
@@ -30,8 +30,8 @@ describe("<Input /> (shared)", () => {
     expect(screen.getByText("Required")).toBeInTheDocument();
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAttribute(
-      "aria-describedby",
-      expect.stringContaining("description"),
+        "aria-describedby",
+        expect.stringContaining("description"),
     );
   });
 
@@ -56,11 +56,11 @@ describe("<Input /> (shared)", () => {
 
   it("renders left and right addons when provided", () => {
     render(
-      <Input
-        label="Amount"
-        leftAddon={<span data-testid="left">€</span>}
-        rightAddon={<span data-testid="right">/mo</span>}
-      />,
+        <Input
+            label="Amount"
+            leftAddon={<span data-testid="left">€</span>}
+            rightAddon={<span data-testid="right">/mo</span>}
+        />,
     );
     expect(screen.getByTestId("left")).toBeInTheDocument();
     expect(screen.getByTestId("right")).toBeInTheDocument();

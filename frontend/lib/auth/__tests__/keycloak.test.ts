@@ -9,19 +9,19 @@ beforeEach(() => {
 // Helpers to build minimal JWTs for testing decodePayload.
 function makeJwt(roles: string[]): string {
   const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }))
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
   const payload = btoa(
-    JSON.stringify({
-      sub: "test-sub",
-      email: "test@dev.local",
-      realm_access: { roles },
-    }),
+      JSON.stringify({
+        sub: "test-sub",
+        email: "test@dev.local",
+        realm_access: { roles },
+      }),
   )
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
   return `${header}.${payload}.sig`;
 }
 
@@ -29,19 +29,19 @@ function makeJwt(roles: string[]): string {
 // jest.resetModules(), so each test gets a fresh Keycloak instance.
 jest.mock("keycloak-js", () => {
   const header = btoa(JSON.stringify({ alg: "none", typ: "JWT" }))
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
   const payload = btoa(
-    JSON.stringify({
-      sub: "test-sub",
-      email: "test@dev.local",
-      realm_access: { roles: ["tenant"] },
-    }),
+      JSON.stringify({
+        sub: "test-sub",
+        email: "test@dev.local",
+        realm_access: { roles: ["tenant"] },
+      }),
   )
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
   const mockToken = `${header}.${payload}.sig`;
 
   return {
@@ -74,14 +74,14 @@ describe("keycloak", () => {
   it("decodePayload with no matching role throws", async () => {
     const { decodePayload } = await import("../keycloak");
     expect(() => decodePayload(makeJwt(["unknown-role"]))).toThrow(
-      "JWT has no recognized portal role",
+        "JWT has no recognized portal role",
     );
   });
 
   it("decodePayload with two matching roles throws", async () => {
     const { decodePayload } = await import("../keycloak");
     expect(() => decodePayload(makeJwt(["tenant", "landlord"]))).toThrow(
-      "JWT has multiple portal roles",
+        "JWT has multiple portal roles",
     );
   });
 
