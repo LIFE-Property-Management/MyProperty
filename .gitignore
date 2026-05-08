@@ -189,8 +189,8 @@ prometheus-data/
 elasticsearch-data/
 kibana-data/
 
-# Local log files
-logs/
+# Local log files (anchored — must not match docs/logs/ which holds AI logs)
+/logs/
 *.log
 
 
