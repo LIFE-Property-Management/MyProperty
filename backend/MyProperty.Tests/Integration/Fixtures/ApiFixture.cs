@@ -42,6 +42,7 @@ public sealed class ApiFixture : IAsyncLifetime
 
     internal MyPropertyApiFactory Factory { get; private set; } = null!;
     internal RecordingBackgroundJobQueue Queue => Factory.Queue;
+    internal RecordingEventPublisher Events => Factory.Events;
 
     public async Task InitializeAsync()
     {
