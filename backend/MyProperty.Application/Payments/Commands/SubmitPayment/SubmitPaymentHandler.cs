@@ -1,6 +1,7 @@
 using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Validation;
 using MyProperty.Application.Payments.Events;
 using MyProperty.Domain.Enums;
@@ -12,7 +13,8 @@ public sealed class SubmitPaymentHandler(
     ICurrentUser currentUser,
     IUserRepository userRepo,
     IPaymentRepository paymentRepo,
-    ILandlordDashboardCache dashboardCache)
+    ILandlordDashboardCache dashboardCache,
+    IEventPublisher events)
 {
     public async Task<PaymentSubmittedDto> Handle(SubmitPaymentCommand cmd, CancellationToken ct)
     {
@@ -69,14 +71,16 @@ public sealed class SubmitPaymentHandler(
         // the cached dashboard so the next read repopulates from the DB.
         await dashboardCache.InvalidateAsync(payment.Lease!.LandlordId, ct);
 
-        // TODO M3.8: publish via IEventPublisher when wired up.
-        // Event shape:
-        //   new PaymentSubmittedEvent(
-        //       payment.Id, payment.LeaseId, payment.Lease!.TenantId,
-        //       payment.Lease.LandlordId, payment.Amount, payment.Currency, now);
-        // M3.6 SignalR consumer pushes this to landlord:{LandlordId}.
-        // M3.10 OCR consumer also subscribes (only PaymentId matters for OCR).
-        _ = typeof(PaymentSubmittedEvent); // keep the using directive live until M3.8 wires it.
+        await events.PublishAsync(
+            new PaymentSubmittedEvent(
+                payment.Id,
+                payment.LeaseId,
+                payment.Lease!.TenantId,
+                payment.Lease.LandlordId,
+                payment.Amount,
+                payment.Currency,
+                now),
+            ct);
 
         return new PaymentSubmittedDto(payment.Id, now);
     }
