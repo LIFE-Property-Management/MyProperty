@@ -1,6 +1,7 @@
 using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Validation;
 using MyProperty.Application.Payments.Events;
 using MyProperty.Domain.Enums;
@@ -12,7 +13,8 @@ public sealed class ConfirmPaymentHandler(
     ICurrentUser currentUser,
     IUserRepository userRepo,
     IPaymentRepository paymentRepo,
-    ILandlordDashboardCache dashboardCache)
+    ILandlordDashboardCache dashboardCache,
+    IEventPublisher events)
 {
     public async Task<PaymentConfirmedDto> Handle(ConfirmPaymentCommand cmd, CancellationToken ct)
     {
@@ -50,14 +52,16 @@ public sealed class ConfirmPaymentHandler(
         // dashboard so the next read repopulates from the DB.
         await dashboardCache.InvalidateAsync(payment.Lease.LandlordId, ct);
 
-        // TODO M3.8: publish via IEventPublisher when wired up.
-        // Event shape:
-        //   new PaymentConfirmedEvent(
-        //       payment.Id, payment.LeaseId, payment.Lease!.TenantId,
-        //       payment.Lease.LandlordId, payment.Amount, payment.Currency, now);
-        // M3.6 SignalR consumer pushes this to tenant:{TenantId}.
-        // M3.7 the same consumer also enqueues a confirmation email Hangfire job.
-        _ = typeof(PaymentConfirmedEvent); // keep the using directive live until M3.8 wires it.
+        await events.PublishAsync(
+            new PaymentConfirmedEvent(
+                payment.Id,
+                payment.LeaseId,
+                payment.Lease!.TenantId,
+                payment.Lease.LandlordId,
+                payment.Amount,
+                payment.Currency,
+                now),
+            ct);
 
         return new PaymentConfirmedDto(payment.Id, now);
     }

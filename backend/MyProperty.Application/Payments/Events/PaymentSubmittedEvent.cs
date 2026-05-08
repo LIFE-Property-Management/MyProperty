@@ -1,15 +1,11 @@
+using MyProperty.Application.Common.Messaging;
+
 namespace MyProperty.Application.Payments.Events;
 
 /// <summary>
 /// Published by <c>SubmitPaymentHandler</c> after the Outstanding → Pending transition.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>M3.8 deliverable:</b> publisher wiring is pending. Until M3.8 lands, this
-/// type is referenced only by the handler's TODO comment — no code path actually
-/// publishes it. The contract is defined here so M3.8 (RabbitMQ) and M3.6
-/// (SignalR consumer) can be built against a stable payload shape.
-/// </para>
 /// <para>
 /// <b>M3.6 (SignalR):</b> a consumer will translate this event into an
 /// <c>IHubContext&lt;NotificationsHub&gt;</c> push to <c>landlord:{LandlordId}</c>
@@ -28,4 +24,4 @@ public sealed record PaymentSubmittedEvent(
     Guid LandlordId,
     decimal Amount,
     string Currency,
-    DateTime SubmittedAt);
+    DateTime SubmittedAt) : IIntegrationEvent;
