@@ -304,7 +304,7 @@ Each technology has a distinct role; do not blur them.
 ## Logging & Observability
 
 - **Serilog** as the logging provider, configured in `Program.cs` via `builder.Host.UseSerilog()`.
-- Sinks: console (always) + Loki (via `Serilog.Sinks.Grafana.Loki`) when `Logging:LokiUrl` is configured.
+- Sinks: console (always) + Loki (via `Serilog.Sinks.Grafana.Loki`) when `LokiUrl` is configured.
 - **Correlation IDs:** `Serilog.AspNetCore` + `RequestLoggingMiddleware`. Every request gets a correlation ID, propagated to background jobs via Hangfire job arguments.
 - Log levels: `Information` for request/response, `Warning` for handled domain exceptions, `Error` for unhandled.
 - **Loki + Grafana scope:** local Docker Compose only for the milestone (per M3 Decisions). Not deployed to production infrastructure for the demo window.
