@@ -4,6 +4,7 @@ using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Validation;
+using MyProperty.Application.Invites.Events;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 
@@ -15,7 +16,8 @@ public sealed class AcceptInviteHandler(
     ILeaseRepository leases,
     IUserRepository users,
     ICurrentUser currentUser,
-    ILandlordDashboardCache dashboardCache)
+    ILandlordDashboardCache dashboardCache,
+    IEventPublisher publisher)
 {
     public async Task<InviteAcceptedDto> Handle(AcceptInviteCommand cmd, CancellationToken ct)
     {
@@ -59,6 +61,11 @@ public sealed class AcceptInviteHandler(
         // The new lease changes the landlord's "active leases / tenants"
         // counters; drop the cached dashboard so the next read repopulates.
         await dashboardCache.InvalidateAsync(invite.LandlordId, ct);
+
+        await publisher.PublishAsync(
+            new InviteAcceptedEvent(
+                invite.Id, lease.Id, user.Id, invite.LandlordId, invite.AcceptedAt!.Value),
+            ct);
 
         return new InviteAcceptedDto(invite.Id, lease.Id);
     }

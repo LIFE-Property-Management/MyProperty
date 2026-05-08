@@ -15,6 +15,7 @@ public sealed class AcceptInviteHandlerTests
     private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
     private readonly Mock<ICurrentUser> _currentUser = new();
     private readonly Mock<ILandlordDashboardCache> _cache = new(MockBehavior.Strict);
+    private readonly Mock<IEventPublisher> _publisher = new();
 
     private const string PlainToken = "valid-token-1234567890ABCDE";
     private static readonly string TokenHashHex = TokenHasher.Hash(PlainToken);
@@ -26,7 +27,8 @@ public sealed class AcceptInviteHandlerTests
             _leases.Object,
             _users.Object,
             _currentUser.Object,
-            _cache.Object);
+            _cache.Object,
+            _publisher.Object);
 
     private static Invite SeedInvite(
         InviteStatus status = InviteStatus.Pending,

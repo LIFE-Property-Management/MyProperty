@@ -9,6 +9,8 @@ using MyProperty.Application.Common.Options;
 using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Email;
 using MyProperty.Infrastructure.Jobs;
+using MyProperty.Infrastructure.Messaging;
+using MyProperty.Infrastructure.Messaging.Consumers;
 using MyProperty.Infrastructure.Persistence;
 using MyProperty.Infrastructure.Persistence.Interceptors;
 using MyProperty.Infrastructure.Persistence.Repositories;
@@ -43,6 +45,22 @@ public static class DependencyInjection
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
+        services.AddMessaging();
+
+        return services;
+    }
+
+    private static IServiceCollection AddMessaging(this IServiceCollection services)
+    {
+        services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+
+        services.AddScoped<OcrStubJob>();
+
+        services.AddHostedService<PaymentSubmittedConsumer>();
+        services.AddHostedService<PaymentConfirmedConsumer>();
+        services.AddHostedService<PaymentRejectedConsumer>();
+        services.AddHostedService<InviteAcceptedConsumer>();
+        services.AddHostedService<InviteRejectedConsumer>();
 
         return services;
     }

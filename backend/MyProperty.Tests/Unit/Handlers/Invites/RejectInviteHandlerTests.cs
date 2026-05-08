@@ -11,12 +11,13 @@ namespace MyProperty.Tests.Unit.Handlers.Invites;
 public sealed class RejectInviteHandlerTests
 {
     private readonly Mock<IInviteRepository> _invites = new(MockBehavior.Strict);
+    private readonly Mock<IEventPublisher>   _publisher = new();
 
     private const string PlainToken = "valid-token-1234567890ABCDE";
     private static readonly string TokenHashHex = TokenHasher.Hash(PlainToken);
 
     private RejectInviteHandler BuildSut() =>
-        new(new RejectInviteValidator(), _invites.Object);
+        new(new RejectInviteValidator(), _invites.Object, _publisher.Object);
 
     private static Invite SeedInvite(
         InviteStatus status = InviteStatus.Pending,

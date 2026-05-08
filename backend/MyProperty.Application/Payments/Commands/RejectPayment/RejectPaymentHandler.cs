@@ -12,7 +12,8 @@ public sealed class RejectPaymentHandler(
     ICurrentUser currentUser,
     IUserRepository userRepo,
     IPaymentRepository paymentRepo,
-    ILandlordDashboardCache dashboardCache)
+    ILandlordDashboardCache dashboardCache,
+    IEventPublisher publisher)
 {
     public async Task<PaymentRejectedDto> Handle(RejectPaymentCommand cmd, CancellationToken ct)
     {
@@ -53,14 +54,12 @@ public sealed class RejectPaymentHandler(
         // dashboard so the next read repopulates from the DB.
         await dashboardCache.InvalidateAsync(payment.Lease.LandlordId, ct);
 
-        // TODO M3.8: publish via IEventPublisher when wired up.
-        // Event shape:
-        //   new PaymentRejectedEvent(
-        //       payment.Id, payment.LeaseId, payment.Lease!.TenantId,
-        //       payment.Lease.LandlordId, payment.Amount, payment.Currency,
-        //       payment.RejectionReason!, now);
-        // M3.6 SignalR consumer pushes this to tenant:{TenantId}.
-        _ = typeof(PaymentRejectedEvent); // keep the using directive live until M3.8 wires it.
+        await publisher.PublishAsync(
+            new PaymentRejectedEvent(
+                payment.Id, payment.LeaseId, payment.Lease!.TenantId,
+                payment.Lease.LandlordId, payment.Amount, payment.Currency,
+                payment.RejectionReason!, now),
+            ct);
 
         return new PaymentRejectedDto(payment.Id, now);
     }

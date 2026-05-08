@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using RabbitMQ.Client;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using FluentValidation;
@@ -72,6 +73,20 @@ try
                 batchPostingLimit: builder.Environment.IsDevelopment() ? 1 : 100
             );
         }
+    });
+
+    // ── RabbitMQ options + connection factory ─────────────────────────────────────
+    builder.Services.AddOptions<RabbitMqOptions>()
+        .Bind(builder.Configuration.GetSection(RabbitMqOptions.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
+    builder.Services.AddSingleton<IConnectionFactory>(_ => new ConnectionFactory
+    {
+        HostName = builder.Configuration[$"{RabbitMqOptions.SectionName}:Host"]     ?? "localhost",
+        Port     = builder.Configuration.GetValue<int>($"{RabbitMqOptions.SectionName}:Port", 5672),
+        UserName = builder.Configuration[$"{RabbitMqOptions.SectionName}:Username"] ?? "guest",
+        Password = builder.Configuration[$"{RabbitMqOptions.SectionName}:Password"] ?? "guest",
     });
 
     // ── Keycloak options ──────────────────────────────────────────────────────────

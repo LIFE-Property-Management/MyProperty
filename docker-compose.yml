@@ -83,6 +83,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── RabbitMQ (message broker) ────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: myproperty-rabbitmq
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI  →  http://localhost:15672 (guest/guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   # ── Loki (log aggregation) ───────────────────────────────────────────────────
   loki:
     image: grafana/loki:3.2.0
@@ -130,6 +148,7 @@ volumes:
   postgres_data:
   grafana_data:
   loki_data:
+  rabbitmq_data:
 
 networks:
   myproperty-net:
