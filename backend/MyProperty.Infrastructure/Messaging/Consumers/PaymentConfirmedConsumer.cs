@@ -90,6 +90,14 @@ public sealed class PaymentConfirmedConsumer(
 
     private async Task StartConsumingAsync(CancellationToken ct)
     {
+        
+        if (_channel is not null)
+        {
+            try { await _channel.CloseAsync(ct); } catch { }
+            await _channel.DisposeAsync();
+            _channel = null;
+        }
+        
         var connection = await connections.GetConnectionAsync(ct);
         _channel = await connection.CreateChannelAsync(cancellationToken: ct);
 
