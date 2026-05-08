@@ -22,5 +22,5 @@ namespace MyProperty.Application.Common.Messaging;
 /// </remarks>
 public interface IEventPublisher
 {
-    Task PublishAsync<T>(T @event, CancellationToken ct) where T : class, IIntegrationEvent;
+    Task PublishAsync<T>(T @event, CancellationToken ct) where T : IIntegrationEvent;
 }
