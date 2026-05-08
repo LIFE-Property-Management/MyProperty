@@ -4,6 +4,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 
 namespace MyProperty.Tests.Integration.Fixtures;
 
@@ -19,6 +20,7 @@ internal sealed class MyPropertyApiFactory(
     string keycloakAuthority) : WebApplicationFactory<Program>
 {
     public RecordingBackgroundJobQueue Queue { get; } = new();
+    public RecordingEventPublisher Events { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -49,6 +51,13 @@ internal sealed class MyPropertyApiFactory(
         builder.UseSetting("Invites:PortalBaseUrl", "http://test.local");
         builder.UseSetting("Invites:ExpiryDays", "7");
 
+        // Disable RabbitMQ wiring for the suite — the Enabled flag short-circuits
+        // both the connection provider and the consumer hosted service in
+        // AddMessaging. The IEventPublisher we substitute below records calls
+        // for assertions instead of the no-op publisher AddMessaging would
+        // otherwise register.
+        builder.UseSetting("RabbitMq:Enabled", "false");
+
         builder.ConfigureServices(services =>
         {
             // ── Cache ──────────────────────────────────────────────────────
@@ -64,6 +73,13 @@ internal sealed class MyPropertyApiFactory(
             // which would touch Postgres and trigger SMTP retry storms — never runs).
             services.RemoveAll<IBackgroundJobQueue>();
             services.AddSingleton<IBackgroundJobQueue>(Queue);
+
+            // ── Event bus ──────────────────────────────────────────────────
+            // RabbitMq:Enabled=false above caused AddMessaging to register the
+            // NullEventPublisher; swap it for the recording fake so payment
+            // handler tests can assert on published events.
+            services.RemoveAll<IEventPublisher>();
+            services.AddSingleton<IEventPublisher>(Events);
         });
     }
 }
