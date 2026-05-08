@@ -22,6 +22,9 @@ internal sealed class RecordingBackgroundJobQueue : IBackgroundJobQueue
         return Guid.NewGuid().ToString("N");
     }
 
+    public string EnqueueReceiptOcr(Guid paymentId)
+        => Guid.NewGuid().ToString("N");
+
     public void Clear()
     {
         while (_emails.TryDequeue(out _)) { }

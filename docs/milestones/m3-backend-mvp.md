@@ -441,6 +441,18 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 #### M3.9 deliverable status
 - M3.9 / BE-11: ✅ done.
 
+#### Post-M3 follow-ups
+- **OCR result storage — extract to `PaymentReceiptOcr` table.** OCR
+  results currently live as five nullable columns on `Payment`
+  (`OcrAmount`, `OcrDate`, `OcrMerchant`, `OcrProcessedAt`,
+  `OcrRawResponse`). Pragmatic for the M3.10 deadline, but `Payment`
+  already carries 14 properties and `OcrRawResponse` is unbounded text
+  on a query-hot entity. Migrate to a dedicated `PaymentReceiptOcr`
+  table with FK to `Payment` (unique today; drop uniqueness if multiple
+  OCR attempts per payment are ever wanted). One-batch refactor: new
+  table, copy data, drop columns, update `ReceiptOcrJob` write path.
+  No external consumers today, so the cutover is internal-only.
+
 ## Deliverable Status
 
 | ID | Status | Notes |
