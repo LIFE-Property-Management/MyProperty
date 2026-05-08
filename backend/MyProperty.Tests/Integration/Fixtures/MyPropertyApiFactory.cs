@@ -58,6 +58,13 @@ internal sealed class MyPropertyApiFactory(
         // otherwise register.
         builder.UseSetting("RabbitMq:Enabled", "false");
 
+        // Skip the StackExchange.Redis SignalR backplane — Cache:RedisConnection
+        // points at a non-existent host in tests, and connection attempts would
+        // throw on host startup. SignalR itself is still registered so the hub
+        // and IHubContext are resolvable; deliveries just fan out via the
+        // in-process backplane.
+        builder.UseSetting("SignalR:UseRedisBackplane", "false");
+
         builder.ConfigureServices(services =>
         {
             // ── Cache ──────────────────────────────────────────────────────

@@ -11,11 +11,13 @@ using Microsoft.OpenApi;
 using MyProperty.Api.Auth;
 using MyProperty.Api.Errors;
 using MyProperty.Api.Hangfire;
+using MyProperty.Api.Hubs;
 using MyProperty.Api.Logging;
 using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
 using MyProperty.Api.Swagger;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Notifications;
 using MyProperty.Application.Common.Options;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
@@ -101,6 +103,25 @@ try
                 //   minted for unrelated clients — will be accepted by this API.
                 ValidateAudience = false,
                 NameClaimType = "preferred_username",
+            };
+
+            // SignalR's WebSocket handshake cannot carry an Authorization
+            // header on browsers, so the standard pattern is to pass the JWT
+            // via the ?access_token= query string and lift it into the bearer
+            // pipeline here. Restricted to /hubs/* so the query-string token
+            // never affects REST endpoints (where the header is the contract).
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = ctx =>
+                {
+                    var accessToken = ctx.Request.Query["access_token"];
+                    var path = ctx.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                    {
+                        ctx.Token = accessToken;
+                    }
+                    return Task.CompletedTask;
+                },
             };
         });
 
@@ -219,6 +240,27 @@ builder.Services.AddAuthorization(options =>
             options.SubstituteApiVersionInUrl = true;
         });
 
+    // ── SignalR (M3.6) ────────────────────────────────────────────────────────────
+    // Single hub for server-push notifications. Redis backplane is the default
+    // so multiple API instances can fan messages out across all connected
+    // clients; the test suite flips SignalR:UseRedisBackplane=false to skip
+    // the StackExchange.Redis wiring (no Redis is reachable from the test host).
+    builder.Services.AddSingleton<INotificationDispatcher, SignalRNotificationDispatcher>();
+    var signalRBuilder = builder.Services.AddSignalR();
+    var useRedisBackplane = builder.Configuration.GetValue("SignalR:UseRedisBackplane", defaultValue: true);
+    if (useRedisBackplane)
+    {
+        var redisConnection = builder.Configuration["Cache:RedisConnection"]
+            ?? throw new InvalidOperationException(
+                "SignalR Redis backplane is enabled but Cache:RedisConnection is missing.");
+        signalRBuilder.AddStackExchangeRedis(redisConnection, options =>
+        {
+            // Channel prefix isolates SignalR pub/sub keys from the cache
+            // entries living in the same Redis instance.
+            options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("myproperty.signalr");
+        });
+    }
+
     // ── API + Swagger ─────────────────────────────────────────────────────────────
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
@@ -285,6 +327,7 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 });
 
     app.MapControllers();
+    app.MapHub<NotificationsHub>(NotificationsHub.Path);
 
     app.Run();
     return 0;
