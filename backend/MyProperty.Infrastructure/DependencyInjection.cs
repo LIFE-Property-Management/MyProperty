@@ -10,6 +10,7 @@ using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Options;
 using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Email;
+using MyProperty.Infrastructure.Storage;
 using MyProperty.Infrastructure.Jobs;
 using MyProperty.Infrastructure.Messaging;
 using MyProperty.Infrastructure.Messaging.Consumers;
@@ -48,6 +49,20 @@ public static class DependencyInjection
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
         services.AddMessaging(configuration);
+        services.AddStorage(configuration);
+
+        return services;
+    }
+
+    private static IServiceCollection AddStorage(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<FileStorageOptions>()
+            .Bind(configuration.GetSection(FileStorageOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         return services;
     }

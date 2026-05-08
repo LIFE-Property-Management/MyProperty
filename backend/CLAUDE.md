@@ -249,10 +249,14 @@ Each technology has a distinct role; do not blur them.
 ## File Storage
 
 - **Interface:** `IFileStorage` in `Application/Common/Interfaces/`.
-- Methods: `UploadAsync(stream, fileName, contentType, ct) → fileKey`, `DownloadAsync(fileKey, ct) → stream`, `DeleteAsync(fileKey, ct)`, `GetSignedUrlAsync(fileKey, expiry, ct) → url`.
-- Used for: receipt uploads (M3.9).
-- **Implementation: TBD pending instructor confirmation.** Likely both an offline implementation and an online/cloud implementation, swappable via configuration. Until decided, code against the interface; do not couple any handler or service to a specific provider.
-- Validation: 5 MB max, allowed MIME types `image/jpeg`, `image/png`, `application/pdf`. Validate before upload.
+- Methods (M3.9 MVP): `UploadAsync(stream, fileName, contentType, ct) → fileKey`, `DownloadAsync(fileKey, ct) → stream`, `DeleteAsync(fileKey, ct)`.
+- **`GetSignedUrlAsync` deliberately omitted** for the MVP. Local filesystem storage has no signed-URL equivalent, and no current consumer needs it. Re-added when a cloud implementation lands.
+- Used for: receipt uploads (M3.9). Single consumer today; the `Files` table / two-step upload abstraction is post-M3 — see `docs/m3-backend-mvp.md` follow-ups.
+- **Implementation:** `LocalFileStorage` in `Infrastructure/Storage/`. Stores files under `{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}`; the storage key is the relative path beneath `LocalRoot`. Path traversal is rejected at resolve time.
+- **Configuration:** `FileStorage:LocalRoot` (relative or absolute path). Auto-created at startup. Dev default: `../../storage` (resolves to `<repo-root>/storage`, which is gitignored).
+- **Validation:** 5 MB business cap (FluentValidation in `SubmitPaymentValidator` → 400 ValidationProblemDetails), 6 MB Kestrel cap via `[RequestSizeLimit]` on the action (→ 413). Allowed MIME types: `image/jpeg`, `image/png`, `application/pdf`. `Method == ReceiptUpload` requires a file; `Method == ManualRequest` forbids one.
+- **Endpoint shape:** single-step multipart on `POST /api/v1/payments/{id}/submit`. Two-step (`POST /api/v1/files` returning a key) is a post-M3 change once a second consumer appears.
+- **Download:** `GET /api/v1/payments/{id}/receipt` streams the file with `Content-Disposition: inline`. Authorization is lease-scoped: tenant on the payment's lease OR landlord that owns it.
 
 ## AI Integration
 
@@ -347,6 +351,8 @@ Each technology has a distinct role; do not blur them.
 - **MediatR: not adopted.** CQRS folder structure used without the library — see Architecture Patterns.
 - **AutoMapper: not adopted.** Mapperly used instead.
 - **MassTransit: not adopted.** Direct `RabbitMQ.Client` for event publishing.
+- **Cloud file storage: not adopted.** Local filesystem only for M3 — see File Storage. Re-introduces `IFileStorage.GetSignedUrlAsync` when a cloud impl lands.
+- **Two-step file upload: not adopted.** Single-step multipart on the submit endpoint for M3 — see File Storage. Splits into a dedicated upload endpoint when a second file consumer appears.
 
 ## Further Specs
 

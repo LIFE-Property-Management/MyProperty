@@ -14,7 +14,8 @@ public sealed class SubmitPaymentHandler(
     IUserRepository userRepo,
     IPaymentRepository paymentRepo,
     ILandlordDashboardCache dashboardCache,
-    IEventPublisher events)
+    IEventPublisher events,
+    IFileStorage fileStorage)
 {
     public async Task<PaymentSubmittedDto> Handle(SubmitPaymentCommand cmd, CancellationToken ct)
     {
@@ -42,15 +43,24 @@ public sealed class SubmitPaymentHandler(
         if (payment.Status != PaymentStatus.Outstanding && payment.Status != PaymentStatus.Rejected)
             throw new ConflictException($"Payment is in state {payment.Status} and cannot be submitted.");
 
-        // TODO M3.9: receipt file handling.
-        // When Method == ReceiptUpload, this handler currently persists no file.
-        // M3.9 batch must:
-        //   - Accept IFormFile on the command (or split into AttachReceipt).
-        //   - Validate MIME (image/jpeg, image/png, application/pdf) and size (5MB max).
-        //   - Persist via IFileStorage.UploadAsync, store the returned key in ReceiptFileKey.
-        //   - Store the original filename in ReceiptFileName.
-        //   - Reject ReceiptUpload submissions that arrive with no file.
-        // See docs/portals.md "Payment submission methods".
+        // M3.9 file handling. Validation has already enforced
+        // (Method == ReceiptUpload) ⇒ all four file fields non-null, and
+        // (Method == ManualRequest) ⇒ all four file fields null. Both
+        // misuses surface as 400 ValidationProblemDetails before reaching here.
+        string? receiptFileKey = null;
+        string? receiptFileName = null;
+        string? receiptContentType = null;
+        long? receiptSizeBytes = null;
+
+        if (cmd.Method == PaymentMethod.ReceiptUpload)
+        {
+            // Validator guarantees these are non-null when Method == ReceiptUpload.
+            receiptFileKey = await fileStorage.UploadAsync(
+                cmd.FileStream!, cmd.FileName!, cmd.ContentType!, ct);
+            receiptFileName = cmd.FileName;
+            receiptContentType = cmd.ContentType;
+            receiptSizeBytes = cmd.FileSizeBytes;
+        }
 
         var now = DateTime.UtcNow;
 
@@ -58,6 +68,11 @@ public sealed class SubmitPaymentHandler(
         payment.Method = cmd.Method;
         payment.SubmittedAt = now;
         payment.Notes = cmd.Notes;
+
+        payment.ReceiptFileKey = receiptFileKey;
+        payment.ReceiptFileName = receiptFileName;
+        payment.ReceiptContentType = receiptContentType;
+        payment.ReceiptSizeBytes = receiptSizeBytes;
 
         // Clear residue from any previous rejection — the tenant has now resubmitted,
         // so the "your last submission was rejected because X" banner should disappear.
@@ -79,7 +94,8 @@ public sealed class SubmitPaymentHandler(
                 payment.Lease.LandlordId,
                 payment.Amount,
                 payment.Currency,
-                now),
+                now,
+                receiptFileKey),
             ct);
 
         return new PaymentSubmittedDto(payment.Id, now);

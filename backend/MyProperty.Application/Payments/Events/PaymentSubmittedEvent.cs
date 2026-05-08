@@ -13,8 +13,11 @@ namespace MyProperty.Application.Payments.Events;
 /// </para>
 /// <para>
 /// <b>M3.10 (OCR):</b> a separate consumer will subscribe to extract receipt
-/// data once M3.9 stores files. The OCR consumer will need <c>PaymentId</c> only
-/// to look up the receipt; the rest of the payload is for the SignalR consumer.
+/// data. <c>ReceiptFileKey</c> is on the payload so the consumer can fetch the
+/// file via <c>IFileStorage.DownloadAsync</c> without a DB round-trip;
+/// <c>PaymentId</c> is needed for the write-back of OCR results. The consumer
+/// must skip events whose <c>ReceiptFileKey</c> is null
+/// (<c>Method == ManualRequest</c> submissions).
 /// </para>
 /// </remarks>
 public sealed record PaymentSubmittedEvent(
@@ -24,4 +27,5 @@ public sealed record PaymentSubmittedEvent(
     Guid LandlordId,
     decimal Amount,
     string Currency,
-    DateTime SubmittedAt) : IIntegrationEvent;
+    DateTime SubmittedAt,
+    string? ReceiptFileKey) : IIntegrationEvent;

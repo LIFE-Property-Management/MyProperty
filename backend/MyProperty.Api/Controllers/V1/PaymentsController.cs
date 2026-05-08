@@ -6,6 +6,7 @@ using MyProperty.Application.Payments.Commands.ConfirmPayment;
 using MyProperty.Application.Payments.Commands.CreatePayment;
 using MyProperty.Application.Payments.Commands.RejectPayment;
 using MyProperty.Application.Payments.Commands.SubmitPayment;
+using MyProperty.Application.Payments.Queries.DownloadReceipt;
 using MyProperty.Domain.Enums;
 
 namespace MyProperty.Api.Controllers.V1;
@@ -18,7 +19,8 @@ public sealed class PaymentsController(
     CreatePaymentHandler create,
     SubmitPaymentHandler submit,
     ConfirmPaymentHandler confirm,
-    RejectPaymentHandler reject) : ControllerBase
+    RejectPaymentHandler reject,
+    DownloadReceiptHandler download) : ControllerBase
 {
     /// <summary>
     /// Landlord creates an Outstanding payment row against one of their leases.
@@ -42,13 +44,25 @@ public sealed class PaymentsController(
 
     /// <summary>
     /// Tenant submits payment proof against an Outstanding payment.
-    /// Transitions Outstanding → Pending.
+    /// Transitions Outstanding → Pending. Accepts <c>multipart/form-data</c>
+    /// so a receipt image/PDF can be attached when <c>Method == ReceiptUpload</c>.
     /// </summary>
     /// <remarks>
-    /// Currently accepts <c>application/json</c> only. M3.9 will extend to
-    /// <c>multipart/form-data</c> for receipt file uploads.
+    /// <para>
+    /// <b>Form fields</b>: <c>Method</c> (required, enum), <c>Notes</c> (optional),
+    /// and <c>File</c> (required when <c>Method == ReceiptUpload</c>, forbidden
+    /// when <c>Method == ManualRequest</c>; rules enforced by the validator).
+    /// </para>
+    /// <para>
+    /// <b>Limits</b>: <see cref="RequestSizeLimitAttribute"/> caps the request
+    /// at 6 MB so Kestrel rejects oversized uploads with 413 before any of our
+    /// code runs. The validator additionally enforces the 5 MB business limit
+    /// to produce a 400 with the standard ValidationProblemDetails envelope.
+    /// </para>
     /// </remarks>
     [HttpPost("{id:guid}/submit")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(6L * 1024 * 1024)]
     [Authorize(Policy = "RequireTenant")]
     [EnableRateLimiting("authenticated")]
     [ProducesResponseType(typeof(PaymentSubmittedDto), StatusCodes.Status200OK)]
@@ -57,12 +71,35 @@ public sealed class PaymentsController(
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<PaymentSubmittedDto>> Submit(
         Guid id,
-        [FromBody] SubmitPaymentRequestBody body,
+        [FromForm] PaymentMethod method,
+        [FromForm] string? notes,
+        IFormFile? file,
         CancellationToken ct)
-        => Ok(await submit.Handle(new SubmitPaymentCommand(id, body.Method, body.Notes), ct));
+    {
+        Stream? fileStream = file?.OpenReadStream();
+        try
+        {
+            var cmd = new SubmitPaymentCommand(
+                PaymentId:     id,
+                Method:        method,
+                Notes:         notes,
+                FileStream:    fileStream,
+                FileName:      file?.FileName,
+                ContentType:   file?.ContentType,
+                FileSizeBytes: file?.Length);
+
+            return Ok(await submit.Handle(cmd, ct));
+        }
+        finally
+        {
+            if (fileStream is not null)
+                await fileStream.DisposeAsync();
+        }
+    }
 
     /// <summary>
     /// Landlord confirms a Pending payment. Transitions Pending → Confirmed.
@@ -105,11 +142,39 @@ public sealed class PaymentsController(
         CancellationToken ct)
         => Ok(await reject.Handle(new RejectPaymentCommand(id, body.Reason), ct));
 
-    // Inline request body so the route param `id` is the source of truth for PaymentId,
-    // not the body. Matches the convention used in InvitesController for /accept and /reject.
-    public sealed record SubmitPaymentRequestBody(PaymentMethod Method, string? Notes);
+    /// <summary>
+    /// Download the receipt attached to a payment. Streams inline so the
+    /// browser renders images/PDFs in-tab.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Authorization</b>: caller must be the tenant on the payment's lease
+    /// or the landlord that owns the lease's property. Anyone else: 403.
+    /// </para>
+    /// <para>
+    /// <b>Resolution</b>: 404 when the payment does not exist or has no
+    /// receipt attached (<c>ManualRequest</c> submissions).
+    /// </para>
+    /// </remarks>
+    [HttpGet("{id:guid}/receipt")]
+    [Authorize]
+    [EnableRateLimiting("authenticated")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> DownloadReceipt(
+        Guid id,
+        CancellationToken ct)
+    {
+        var result = await download.Handle(id, ct);
+        Response.Headers.ContentDisposition =
+            $"inline; filename=\"{Uri.EscapeDataString(result.FileName)}\"";
+        return File(result.Content, result.ContentType);
+    }
 
-    // Inline request body — same convention as SubmitPaymentRequestBody:
-    // route param `id` is the source of truth for PaymentId, body carries the rest.
+    // Inline request body — route param `id` is the source of truth for PaymentId,
+    // body carries the rest. (Submit uses [FromForm] for multipart and has no body record.)
     public sealed record RejectPaymentRequestBody(string Reason);
 }

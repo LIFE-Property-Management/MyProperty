@@ -8,17 +8,21 @@ namespace MyProperty.Application.Payments.Commands.SubmitPayment;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>M3.9 (file upload) — receipt is NOT accepted in this batch.</b>
-/// When <c>Method == ReceiptUpload</c>, no file is currently persisted —
-/// <c>ReceiptFileKey</c> and <c>ReceiptFileName</c> remain null. M3.9 batch must
-/// either (a) extend this command to accept <c>IFormFile</c> and plumb through
-/// <c>IFileStorage</c>, or (b) add a separate <c>AttachReceiptCommand</c>
-/// invoked after submit. Decision deferred to M3.9.
+/// <b>File handling (M3.9):</b> when <c>Method == ReceiptUpload</c> the command
+/// MUST carry a non-null <see cref="FileStream"/> together with
+/// <see cref="FileName"/>, <see cref="ContentType"/> and
+/// <see cref="FileSizeBytes"/>; the validator rejects mismatches with 400.
+/// When <c>Method == ManualRequest</c> the file fields MUST be null —
+/// manual cash submissions are fileless by definition. The handler streams
+/// <see cref="FileStream"/> through <see cref="MyProperty.Application.Common.Interfaces.IFileStorage"/>
+/// and persists the returned key on the <c>Payment</c> row.
 /// </para>
 /// <para>
-/// <b>M3.9 must also enforce</b>: <c>ReceiptUpload</c> submissions with no file
-/// are currently allowed; M3.9 must reject them. <c>ManualRequest</c> remains
-/// fileless by definition.
+/// <b>Future change (post-M3, two-step upload):</b> the long-term plan is to
+/// split file upload into a dedicated endpoint that returns a key, then have
+/// submit accept the key alone. This batch ships the single-step multipart
+/// flow because there is only one file consumer in M3 and the abstraction
+/// cost isn't justified yet.
 /// </para>
 /// <para>
 /// <b>State semantics on resubmission after a previous rejection:</b>
@@ -31,7 +35,11 @@ namespace MyProperty.Application.Payments.Commands.SubmitPayment;
 public sealed record SubmitPaymentCommand(
     Guid PaymentId,
     PaymentMethod Method,
-    string? Notes);
+    string? Notes,
+    Stream? FileStream,
+    string? FileName,
+    string? ContentType,
+    long? FileSizeBytes);
 
 // Co-located: returned by the handler.
 public sealed record PaymentSubmittedDto(Guid PaymentId, DateTime SubmittedAt);

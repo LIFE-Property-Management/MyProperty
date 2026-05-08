@@ -28,6 +28,7 @@ using MyProperty.Application.Payments.Commands.ConfirmPayment;
 using MyProperty.Application.Payments.Commands.CreatePayment;
 using MyProperty.Application.Payments.Commands.RejectPayment;
 using MyProperty.Application.Payments.Commands.SubmitPayment;
+using MyProperty.Application.Payments.Queries.DownloadReceipt;
 using MyProperty.Infrastructure;
 using Serilog;
 using Serilog.Events;
@@ -146,6 +147,7 @@ try
     builder.Services.AddScoped<SubmitPaymentHandler>();
     builder.Services.AddScoped<ConfirmPaymentHandler>();
     builder.Services.AddScoped<RejectPaymentHandler>();
+    builder.Services.AddScoped<DownloadReceiptHandler>();
 
 // FluentValidation — auto-register every IValidator<T> in the Application assembly.
 builder.Services.AddValidatorsFromAssemblyContaining<CreateInviteCommand>();
@@ -290,6 +292,18 @@ builder.Services.AddAuthorization(options =>
     });
 
     var app = builder.Build();
+
+    // Ensure the configured file-storage root exists. Resolved here (after Build)
+    // so the IOptions binding has run and validation has passed. Local impl only —
+    // when cloud storage lands this block moves into the impl's startup hook.
+    {
+        var storageOptions = app.Services
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<FileStorageOptions>>()
+            .Value;
+        var fullRoot = Path.GetFullPath(storageOptions.LocalRoot);
+        Directory.CreateDirectory(fullRoot);
+        Log.Information("File storage root: {Root}", fullRoot);
+    }
 
     app.UseExceptionHandler();
     app.UseStatusCodePages();
