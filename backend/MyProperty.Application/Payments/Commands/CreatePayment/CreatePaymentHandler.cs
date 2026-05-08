@@ -1,6 +1,7 @@
 using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Validation;
 using MyProperty.Application.Payments.Events;
 using MyProperty.Domain.Entities;
@@ -14,7 +15,8 @@ public sealed class CreatePaymentHandler(
     IUserRepository userRepo,
     ILeaseRepository leaseRepo,
     IPaymentRepository paymentRepo,
-    ILandlordDashboardCache dashboardCache)
+    ILandlordDashboardCache dashboardCache,
+    IEventPublisher events)
 {
     public async Task<PaymentCreatedDto> Handle(CreatePaymentCommand cmd, CancellationToken ct)
     {
@@ -52,18 +54,21 @@ public sealed class CreatePaymentHandler(
         // cached dashboard so the next read repopulates from the DB.
         await dashboardCache.InvalidateAsync(lease.LandlordId, ct);
 
-        // TODO M3.8: publish via IEventPublisher when wired up.
-        // Event shape:
-        //   new PaymentCreatedEvent(
-        //       payment.Id, lease.Id, lease.TenantId, lease.LandlordId,
-        //       payment.Amount, payment.Currency, payment.DueDate,
-        //       payment.CreatedAt);
-        // Note: payment.CreatedAt is populated by the audit interceptor during
-        // SaveChangesAsync, so it is valid by the time this publish would run.
-        // If it ever reads as default(DateTime), the interceptor is not wired
-        // for Payment — investigate before publishing.
-        // M3.6 SignalR consumer pushes this to tenant:{TenantId}.
-        _ = typeof(PaymentCreatedEvent); // keep the using directive live until M3.8 wires it.
+        // payment.CreatedAt is populated by the audit interceptor during
+        // SaveChangesAsync above, so it is valid here. If it ever reads as
+        // default(DateTime), the interceptor is not wired for Payment —
+        // investigate before debugging the consumer.
+        await events.PublishAsync(
+            new PaymentCreatedEvent(
+                payment.Id,
+                lease.Id,
+                lease.TenantId,
+                lease.LandlordId,
+                payment.Amount,
+                payment.Currency,
+                payment.DueDate,
+                payment.CreatedAt),
+            ct);
 
         return new PaymentCreatedDto(payment.Id);
     }
