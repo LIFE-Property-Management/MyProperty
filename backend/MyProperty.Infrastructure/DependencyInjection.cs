@@ -74,7 +74,15 @@ public static class DependencyInjection
 
         services.AddSingleton<RabbitMqConnectionProvider>();
         services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+
+        // Each consumer subscribes to a single routing key on the shared
+        // myproperty.events exchange. PaymentConfirmed → email + SignalR; the
+        // rest → SignalR only (their CLAUDE.md push spec doesn't include a
+        // mail leg yet).
         services.AddHostedService<PaymentConfirmedConsumer>();
+        services.AddHostedService<PaymentSubmittedConsumer>();
+        services.AddHostedService<PaymentRejectedConsumer>();
+        services.AddHostedService<PaymentCreatedConsumer>();
 
         return services;
     }
