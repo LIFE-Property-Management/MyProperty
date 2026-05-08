@@ -1,3 +1,5 @@
+using MyProperty.Application.Common.Messaging;
+
 namespace MyProperty.Application.Payments.Events;
 
 /// <summary>
@@ -21,10 +23,6 @@ namespace MyProperty.Application.Payments.Events;
 /// See <c>m3-backend-mvp.md</c> post-M3 follow-ups.
 /// </para>
 /// <para>
-/// <b>M3.8 deliverable:</b> publisher wiring is pending. Until M3.8 lands, this
-/// type is referenced only by the handler's TODO comment.
-/// </para>
-/// <para>
 /// <b>M3.6 (SignalR):</b> a consumer will translate this event into an
 /// <c>IHubContext&lt;NotificationsHub&gt;</c> push to <c>tenant:{TenantId}</c>
 /// so the tenant sees the rejection — and reason — without a manual refresh.
@@ -38,4 +36,4 @@ public sealed record PaymentRejectedEvent(
     decimal Amount,
     string Currency,
     string Reason,
-    DateTime RejectedAt);
+    DateTime RejectedAt) : IIntegrationEvent;
