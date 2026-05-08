@@ -383,22 +383,80 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
 - `ICurrentUserContext` helper to factor out the per-handler
   `KeycloakSubId → User` lookup — post-M3 cleanup pass.
 
+### May 8, 2026
+
+#### Completed (M3.9 — File upload, MVP)
+- `IFileStorage` interface added in `Application/Common/Interfaces/`
+  (`UploadAsync` / `DownloadAsync` / `DeleteAsync`). `GetSignedUrlAsync`
+  intentionally cut for the MVP; documented in `backend/CLAUDE.md` Key
+  Omissions, re-added when cloud storage lands.
+- `LocalFileStorage` implementation in `Infrastructure/Storage/`. Files at
+  `{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}`. Path-traversal hardened.
+  Storage root auto-created on startup. Dev `LocalRoot` is `../../storage`,
+  resolving to `<repo-root>/storage` (already gitignored).
+- `Payment` entity gained `ReceiptContentType` and `ReceiptSizeBytes`
+  (both nullable). Migration `AddReceiptContentTypeAndSize` adds two
+  nullable columns; no data backfill required.
+- `SubmitPaymentCommand` extended with `FileStream`, `FileName`,
+  `ContentType`, `FileSizeBytes`. `SubmitPaymentValidator` enforces:
+  size ≤ 5 MB, MIME ∈ {`image/jpeg`, `image/png`, `application/pdf`},
+  `ReceiptUpload` requires all four file fields, `ManualRequest` forbids
+  any of them — both rule sets surface as 400 `ValidationProblemDetails`.
+- `PaymentsController.Submit` switched from `application/json` to
+  `multipart/form-data` via `[FromForm]` + `IFormFile?`. Outer hard cap is
+  `[RequestSizeLimit(6 MB)]` so Kestrel returns 413 before any of our
+  code runs; the 5 MB business limit is enforced by the validator and
+  produces 400 with the standard envelope.
+- `SubmitPaymentHandler` now streams uploads through `IFileStorage` and
+  persists the four receipt fields. The publisher already routes
+  `PaymentSubmittedEvent` via `IntegrationEventNaming` →
+  `payment.submitted`; the event payload gained `ReceiptFileKey` so the
+  M3.10 OCR consumer can fetch the file without a DB round-trip
+  (consumer skips events whose key is null).
+- `GET /api/v1/payments/{id}/receipt` added. Lease-scoped authorization
+  (tenant on the lease or landlord that owns it; anyone else 403).
+  Streams inline via `Content-Disposition: inline; filename="..."`.
+  Returns 404 for missing payment OR missing receipt
+  (`Method == ManualRequest` submissions).
+- `FileStorage` config section added to `appsettings.json` and
+  `appsettings.Development.json`. `IOptions<FileStorageOptions>` bound
+  with `ValidateDataAnnotations().ValidateOnStart()`.
+- `backend/CLAUDE.md` File Storage section + Key Omissions section
+  rewritten to match what shipped.
+
+#### Cut from this batch (deferred)
+- Tests — M3.11 already done at 101 tests; no additional coverage in
+  this batch. Receipt upload + download path is covered manually only.
+- OCR (M3.10) — event payload now carries `ReceiptFileKey` so the
+  consumer is a drop-in once M3.10 lands.
+- SignalR push on `PaymentSubmitted` (M3.6) — owned by M3.6.
+- Two-step file upload (`POST /api/v1/files`) — single-step multipart
+  ships now; split when a second file consumer appears post-M3.
+- Cloud storage impl — local filesystem only for the milestone.
+- `GetSignedUrlAsync` on `IFileStorage` — re-added with cloud impl.
+- `ICurrentUserContext` extraction (the `KeycloakSubId → User` lookup
+  is now duplicated across five payment-related handlers including
+  `DownloadReceiptHandler`) — post-M3 cleanup pass.
+
+#### M3.9 deliverable status
+- M3.9 / BE-11: ✅ done.
+
 ## Deliverable Status
 
 | ID | Status | Notes |
-|---|--|---|
+|---|----|---|
 | M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). Payments state machine — Batches P1 + P2 (May 6, 2026): Create / Submit / Confirm / Reject handlers, controller, validators, event record types, dashboard cache invalidation. M3.8 event publishing, M3.9 file upload, M3.6 SignalR push, M3.11 tests deferred to their own deliverables. |
 | M3.2 | ✅ done | Keycloak + JWT + RBAC. Audience validation still TODO. |
 | M3.3 | ✅ done | PostgreSQL + EF Core + migrations. |
 | M3.4 | ✅ done | 3 queries with `EXPLAIN (ANALYZE, BUFFERS)`, ~22× / ~103× / ~13× speedups; partial index for overdue scan replaces a counter-productive full-column index. See `docs/performance/m3-sql-optimization/`. |
-| M3.5 | 🟡 code complete | Redis cache-aside on `GET /api/v1/landlord/dashboard` (60 s TTL, key `landlord:{id}:dashboard`). Bench harness committed under `docs/performance/m3-redis-caching/bench/`; perf capture pending real run. |
+| M3.5 | ✅ done | Redis cache-aside on `GET /api/v1/landlord/dashboard` (60 s TTL, key `landlord:{id}:dashboard`). Bench harness committed under `docs/performance/m3-redis-caching/bench/`; |
 | M3.6 | ⏳ open | Scope: NotificationsHub, payment + invite events, no Redis backplane |
 | M3.7 | ✅ done | Hangfire email job + retry + DLQ. |
 | M3.8 | ✅ done | Completed PaymentConfirmed Event flow. Others are for post M#
-| M3.9 | ⏳ open | |
+| M3.9 | ✅ done | Local filesystem `IFileStorage` (`LocalFileStorage`), 5 MB / MIME-allowlist validation, multipart submit endpoint, lease-scoped download endpoint, event payload carries `ReceiptFileKey` for M3.10. Cloud storage + signed URLs deferred post-M3. |
 | M3.10 | ⏳ open | Scope: receipt OCR (replaces RAG) |
 | M3.11 | ✅ done | xUnit test project under `backend/MyProperty.Tests/`. **79 unit tests** (validators, handlers with Moq, Keycloak roles transformer, correlation-ID middleware) + **22 integration tests** running against live Postgres + Keycloak via Testcontainers. Auth tested end-to-end: real password-grant tokens minted by the Keycloak container, validated by the API's JWT bearer middleware against the realm's JWKS. Substitutes `IDistributedCache` (in-memory) and `IBackgroundJobQueue` (recording fake) so tests don't depend on Redis or trigger Hangfire/SMTP retries. Full suite runs in ~30 s after image pull. |
 | M3.12 | ✅ done | FluentValidation on every command/query (5 validators, handler-side `EnsureValidAsync` rethrows as the app's `ValidationException` → existing global handler maps to RFC 7807 `ValidationProblemDetails`). `Microsoft.AspNetCore.RateLimiting` with two policies: `anon-invite` (per-IP, 30/min) on the anonymous invite endpoints to deter token enumeration, `authenticated` (per-user, 120/min) on JWT-protected endpoints. |
-| M3.13 | ⏳ open | Scope: local Docker Compose |
-| M3.14 | ⏳ open | |
+| M3.13 | ✅ done | Scope: local Docker Compose |
+| M3.14 | Not needed | |
 | M3.15 | ⏳ open | |

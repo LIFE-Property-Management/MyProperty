@@ -21,6 +21,8 @@ public class Payment : BaseEntity
 
     public string? ReceiptFileKey { get; set; }
     public string? ReceiptFileName { get; set; }
+    public string? ReceiptContentType { get; set; }
+    public long? ReceiptSizeBytes { get; set; }
 
     public string? Notes { get; set; }
 }
