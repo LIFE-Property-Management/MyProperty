@@ -1,3 +1,5 @@
+using MyProperty.Application.Common.Messaging;
+
 namespace MyProperty.Application.Payments.Events;
 
 /// <summary>
@@ -6,20 +8,17 @@ namespace MyProperty.Application.Payments.Events;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>M3.8 deliverable:</b> publisher wiring is pending. Until M3.8 lands, this
-/// type is referenced only by the handler's TODO comment — no code path actually
-/// publishes it.
+/// <b>M3.7 (Hangfire) — wired in M3.8:</b> <c>PaymentConfirmedConsumer</c>
+/// translates this event into a Hangfire <c>SendEmailJob</c> that delivers the
+/// confirmation receipt to the tenant. Retry + DLQ behaviour is owned by the
+/// existing email job; the consumer's only job is to enqueue and ack.
 /// </para>
 /// <para>
-/// <b>M3.6 (SignalR):</b> a consumer will translate this event into an
-/// <c>IHubContext&lt;NotificationsHub&gt;</c> push to <c>tenant:{TenantId}</c>
+/// <b>M3.6 (SignalR):</b> a future consumer will also translate this event into
+/// an <c>IHubContext&lt;NotificationsHub&gt;</c> push to <c>tenant:{TenantId}</c>
 /// telling the tenant their payment was accepted. The frontend handler
 /// invalidates the tenant dashboard query and the current-payment query so the
 /// status flips to Confirmed without a manual refresh.
-/// </para>
-/// <para>
-/// <b>M3.7 (Hangfire):</b> the same M3.8 consumer also enqueues a confirmation
-/// email job (see backend/CLAUDE.md "Worked example — landlord confirms a payment").
 /// </para>
 /// </remarks>
 public sealed record PaymentConfirmedEvent(
@@ -29,4 +28,4 @@ public sealed record PaymentConfirmedEvent(
     Guid LandlordId,
     decimal Amount,
     string Currency,
-    DateTime ConfirmedAt);
+    DateTime ConfirmedAt) : IIntegrationEvent;
