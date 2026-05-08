@@ -98,6 +98,22 @@ Not blocking M3 backend, but tracked here so they don't get lost.
 - Per-section error handling on LandlordDashboard. Currently shows a whole-page error if either the dashboard query or the upcoming-payments query fails. Should be replaced with per-section error states. Tracked as M3 frontend work.
 - SignalR wiring for landlord queries. `useLandlordDashboard` and `useLandlordUpcomingPayments` need to call `queryClient.invalidateQueries` on `PaymentSubmitted`, `PaymentConfirmed`, `PaymentRejected` events from `NotificationsHub`. Blocked on M3.6 (SignalR hub). Tracked as M3 frontend work.
 - **NEXT_PUBLIC_API_BASE_URL + MSW interaction**: when the base URL is set, axios builds absolute URLs that MSW's relative-path handlers don't match, so requests escape to the real network. For dev and E2E we leave the var unset so MSW can intercept. Production wiring (Next.js rewrites vs direct absolute calls) is a follow-up — TBD per CLAUDE.md.
+- **Payment rejection model — migrate from Model 1 (loop) to Model 2 (terminal + supersession).**
+  Today, rejecting a Pending payment sets the row to `Rejected` and persists
+  `RejectionReason`/`RejectedAt`; the tenant's next `Submit` call transitions
+  the same row back to `Pending` (the `Submit` state guard accepts both
+  `Outstanding` and `Rejected`) and clears the rejection metadata. The
+  long-term model is to make `Rejected` terminal and create a new
+  `Outstanding` row linked via a supersession FK (`SupersededByPaymentId` or
+  a `PaymentSeries` grouping ID). This gives a clean per-attempt audit trail
+  but requires: schema migration (new FK column + backfill, trivial in dev),
+  query rewrites everywhere "current payment for lease X period Y" is asked
+  (the dominant case is `useCurrentPayment` on the tenant frontend),
+  `RejectPaymentHandler` change to insert-and-link instead of mutate-in-place,
+  and a `PaymentHistory` display decision (collapse to current-per-period or
+  show every attempt). Estimated 1–2 focused days when prioritized.
+  Tracked here so it isn't lost — the trade-offs are documented in the
+  P1 planning conversation.
 
 ## Decisions
 
@@ -307,11 +323,71 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
     the `sub` claim is available for partitioning.
 - `[ProducesResponseType]` attributes updated to advertise 400 and 429.
 
+#### Completed (M3.1 continuation — Payments handlers, Batches P1 + P2)
+- Full payment state machine implemented end-to-end:
+  `Outstanding → Pending → Confirmed (terminal)`, with `Pending → Rejected`
+  and the tenant's next `Submit` call accepting either `Outstanding` or
+  `Rejected` to transition back to `Pending`. `RejectionReason`/`RejectedAt`
+  are persisted on rejection and cleared on the next submit, so the tenant
+  UI shows "your last submission was rejected because X" while
+  `status == 'Rejected'` and the banner disappears the moment the row
+  transitions back to `Pending`.
+- Four handlers shipped: `CreatePaymentHandler` (landlord, Outstanding seed),
+  `SubmitPaymentHandler` (tenant, Outstanding → Pending),
+  `ConfirmPaymentHandler` (landlord, Pending → Confirmed),
+  `RejectPaymentHandler` (landlord, Pending → Rejected, required reason min 10 / max 500 chars, trimmed).
+- `IPaymentRepository` (`GetByIdWithLeaseAsync`, `AddAsync`, `SaveChangesAsync`) +
+  `ILeaseRepository.GetByIdAsync` extension. Repository style matches existing
+  per-aggregate convention (no generic base, methods named for use cases).
+- Resource-scoped authorization on every handler: tenant ownership check on
+  Submit, landlord ownership check on Create / Confirm / Reject. Pattern is
+  inline `KeycloakSubId → IUserRepository.GetByKeycloakSubIdAsync` lookup +
+  `Lease.LandlordId` / `Lease.TenantId` comparison. TODO post-M3: extract to
+  `ICurrentUserContext` to remove the per-handler duplication.
+- 4 FluentValidation validators co-located with each command, registered via
+  the existing assembly scan in `Application` (no new DI plumbing needed).
+- 4 event record types defined (`PaymentCreatedEvent`, `PaymentSubmittedEvent`,
+  `PaymentConfirmedEvent`, `PaymentRejectedEvent`) under
+  `Application/Payments/Events/`. **Not yet published** — handlers carry
+  `// TODO M3.8` blocks at the publish point with the exact event payload to
+  emit. Each handler also keeps the events `using` directive live via a
+  `_ = typeof(EventName)` line so M3.8 is a delete-and-replace rather than a
+  fix-the-imports exercise.
+- `PaymentsController` (`backend/MyProperty.Api/Controllers/V1/PaymentsController.cs`)
+  wires four endpoints under `/api/v1/payments`:
+  `POST /` (landlord, Create), `POST /{id}/submit` (tenant),
+  `POST /{id}/confirm` (landlord), `POST /{id}/reject` (landlord).
+  Per-action `[Authorize(Policy = "RequireLandlord" | "RequireTenant")]` and
+  `[EnableRateLimiting("authenticated")]`.
+- `ILandlordDashboardCache.InvalidateAsync(landlordId, ct)` called from all
+  four handlers after `SaveChangesAsync`. Mirrors the pattern set by
+  `AcceptInviteHandler`. Every payment write shifts the M3.5 dashboard's
+  pending/overdue counters, so the cached `landlord:{id}:dashboard` aggregate
+  must be dropped on each transition.
+
+#### Cut from this batch (deferred)
+- File upload for receipt submissions — owned by **M3.9**. `SubmitPaymentHandler`
+  carries an explicit `// TODO M3.9` block listing the exact validation, storage
+  call, and error-handling work required. Tenant frontend can build the file
+  picker UX against the eventual shape; submit endpoint is JSON-only until M3.9
+  (also called out in `docs/portals.md`).
+- Event publishing — owned by **M3.8**. Event records are defined; publisher
+  wiring is mechanical when M3.8 lands.
+- SignalR push to tenant/landlord on state transitions — owned by **M3.6**.
+  Triggered by M3.8 RabbitMQ consumers, not by handlers directly.
+- OCR consumer for `PaymentSubmittedEvent` — owned by **M3.10**.
+- Tests (handler unit tests, controller integration tests) — owned by **M3.11**.
+- Recurring rent generation (Hangfire job that creates Outstanding payment
+  rows on a schedule) — post-M3 follow-up. M3 ships with manual `CreatePayment`
+  for testing.
+- `ICurrentUserContext` helper to factor out the per-handler
+  `KeycloakSubId → User` lookup — post-M3 cleanup pass.
+
 ## Deliverable Status
 
 | ID | Status | Notes |
 |---|---|---|
-| M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). |
+| M3.1 | ✅ done | Invite flow MVP — Batch I (May 4, 2026). Payments state machine — Batches P1 + P2 (May 6, 2026): Create / Submit / Confirm / Reject handlers, controller, validators, event record types, dashboard cache invalidation. M3.8 event publishing, M3.9 file upload, M3.6 SignalR push, M3.11 tests deferred to their own deliverables. |
 | M3.2 | ✅ done | Keycloak + JWT + RBAC. Audience validation still TODO. |
 | M3.3 | ✅ done | PostgreSQL + EF Core + migrations. |
 | M3.4 | ✅ done | 3 queries with `EXPLAIN (ANALYZE, BUFFERS)`, ~22× / ~103× / ~13× speedups; partial index for overdue scan replaces a counter-productive full-column index. See `docs/performance/m3-sql-optimization/`. |
