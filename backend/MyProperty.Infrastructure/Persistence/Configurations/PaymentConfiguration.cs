@@ -21,6 +21,8 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.Property(p => p.ReceiptFileName).HasMaxLength(256);
         builder.Property(p => p.ReceiptContentType).HasMaxLength(128);
         builder.Property(p => p.Notes).HasMaxLength(500);
+        builder.Property(p => p.OcrMerchant).HasMaxLength(200);
+        builder.Property(p => p.OcrRawResponse).HasColumnType("text");
 
         builder.HasOne(p => p.Lease)
             .WithMany(l => l.Payments)

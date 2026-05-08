@@ -25,4 +25,10 @@ public class Payment : BaseEntity
     public long? ReceiptSizeBytes { get; set; }
 
     public string? Notes { get; set; }
+
+    public decimal? OcrAmount { get; set; }
+    public DateOnly? OcrDate { get; set; }
+    public string? OcrMerchant { get; set; }
+    public DateTime? OcrProcessedAt { get; set; }
+    public string? OcrRawResponse { get; set; }
 }

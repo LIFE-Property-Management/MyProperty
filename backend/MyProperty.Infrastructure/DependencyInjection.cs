@@ -7,7 +7,9 @@ using Microsoft.Extensions.Hosting;
 using MyProperty.Application.Common.Email;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Messaging;
+using MyProperty.Application.Common.Ocr;
 using MyProperty.Application.Common.Options;
+using MyProperty.Infrastructure.Ai;
 using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Email;
 using MyProperty.Infrastructure.Storage;
@@ -50,6 +52,7 @@ public static class DependencyInjection
         services.AddBackgroundJobs(configuration, connectionString);
         services.AddMessaging(configuration);
         services.AddStorage(configuration);
+        services.AddAiServices(configuration);
 
         return services;
     }
@@ -96,6 +99,7 @@ public static class DependencyInjection
         // mail leg yet).
         services.AddHostedService<PaymentConfirmedConsumer>();
         services.AddHostedService<PaymentSubmittedConsumer>();
+        services.AddHostedService<PaymentSubmittedOcrConsumer>();
         services.AddHostedService<PaymentRejectedConsumer>();
         services.AddHostedService<PaymentCreatedConsumer>();
 
@@ -125,6 +129,25 @@ public static class DependencyInjection
         return services;
     }
 
+    private static IServiceCollection AddAiServices(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<AnthropicOcrOptions>()
+            .Bind(configuration.GetSection(AnthropicOcrOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        var timeoutSeconds = configuration
+            .GetValue<int?>($"{AnthropicOcrOptions.SectionName}:TimeoutSeconds") ?? 30;
+
+        services.AddHttpClient<IReceiptOcrService, AnthropicReceiptOcrService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+        });
+
+        return services;
+    }
+
     private static IServiceCollection AddBackgroundJobs(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -137,6 +160,7 @@ public static class DependencyInjection
 
         services.AddScoped<IEmailSender, MailKitEmailSender>();
         services.AddScoped<SendEmailJob>();
+        services.AddScoped<ReceiptOcrJob>();
         services.AddSingleton<EmailDeadLetterFilter>();
 
         services.AddHangfire((sp, config) =>

@@ -14,4 +14,9 @@ public interface IBackgroundJobQueue
     /// job id assigned by the runner, useful for correlation and logs.
     /// </summary>
     string EnqueueEmail(EmailMessage message);
+
+    /// <summary>
+    /// Enqueue a receipt OCR job for the given payment. Returns the Hangfire job id.
+    /// </summary>
+    string EnqueueReceiptOcr(Guid paymentId);
 }
