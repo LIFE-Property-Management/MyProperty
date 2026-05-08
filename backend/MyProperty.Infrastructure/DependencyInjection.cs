@@ -3,12 +3,16 @@ using Hangfire.PostgreSql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using MyProperty.Application.Common.Email;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Options;
 using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Email;
 using MyProperty.Infrastructure.Jobs;
+using MyProperty.Infrastructure.Messaging;
+using MyProperty.Infrastructure.Messaging.Consumers;
 using MyProperty.Infrastructure.Persistence;
 using MyProperty.Infrastructure.Persistence.Interceptors;
 using MyProperty.Infrastructure.Persistence.Repositories;
@@ -43,6 +47,34 @@ public static class DependencyInjection
 
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration, connectionString);
+        services.AddMessaging(configuration);
+
+        return services;
+    }
+
+    private static IServiceCollection AddMessaging(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection(RabbitMqOptions.SectionName);
+        var enabled = section.GetValue("Enabled", defaultValue: true);
+
+        if (!enabled)
+        {
+            // Tests (and any environment that explicitly opts out) get the
+            // no-op publisher and no consumer. The handler call sites stay
+            // identical to production.
+            services.AddSingleton<IEventPublisher, NullEventPublisher>();
+            return services;
+        }
+
+        services.AddOptions<RabbitMqOptions>()
+            .Bind(section)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<RabbitMqConnectionProvider>();
+        services.AddSingleton<IEventPublisher, RabbitMqEventPublisher>();
+        services.AddHostedService<PaymentConfirmedConsumer>();
 
         return services;
     }
