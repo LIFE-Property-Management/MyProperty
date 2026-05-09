@@ -1,59 +1,104 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { DataTable, type Column } from "../DataTable";
 
 interface Row {
-  id: string;
-  name: string;
-  amount: number;
+    id: string;
+    name: string;
+    amount: number;
 }
 
 const columns: Column<Row>[] = [
-  { header: "Name", cell: (r) => r.name },
-  { header: "Amount", cell: (r) => `€${r.amount}` },
+    { key: "name", header: "Name", accessor: (r) => r.name },
+    { key: "amount", header: "Amount", accessor: (r) => `€${r.amount}`, align: "right" },
 ];
 
 const rows: Row[] = [
-  { id: "1", name: "Rent", amount: 400 },
-  { id: "2", name: "Deposit", amount: 800 },
+    { id: "1", name: "Rent", amount: 400 },
+    { id: "2", name: "Deposit", amount: 800 },
 ];
 
-describe("<DataTable /> (shared)", () => {
-  it("renders column headers with scope='col'", () => {
-    render(<DataTable columns={columns} rows={rows} getRowKey={(r) => r.id} />);
-    const headers = screen.getAllByRole("columnheader");
-    expect(headers).toHaveLength(2);
-    headers.forEach((h) => expect(h).toHaveAttribute("scope", "col"));
-  });
+describe("<DataTable />", () => {
+    it("renders columns with scope='col'", () => {
+        render(<DataTable columns={columns} data={rows} getRowKey={(r) => r.id} />);
+        const headers = screen.getAllByRole("columnheader");
+        expect(headers).toHaveLength(2);
+        headers.forEach((h) => expect(h).toHaveAttribute("scope", "col"));
+    });
 
-  it("renders one row per entry", () => {
-    render(<DataTable columns={columns} rows={rows} getRowKey={(r) => r.id} />);
-    const dataRows = screen.getAllByRole("row").slice(1); // skip the header row
-    expect(dataRows).toHaveLength(2);
-    expect(within(dataRows[0]).getByText("Rent")).toBeInTheDocument();
-    expect(within(dataRows[1]).getByText("€800")).toBeInTheDocument();
-  });
+    it("renders rows and cells", () => {
+        render(<DataTable columns={columns} data={rows} getRowKey={(r) => r.id} />);
+        const body = screen.getAllByRole("row").slice(1);
+        expect(body).toHaveLength(2);
+        expect(within(body[0]).getByText("Rent")).toBeInTheDocument();
+        expect(within(body[1]).getByText("€800")).toBeInTheDocument();
+    });
 
-  it("shows the default empty message when rows=[]", () => {
-    render(<DataTable columns={columns} rows={[]} getRowKey={(r) => r.id} />);
-    expect(screen.getByText("No results.")).toBeInTheDocument();
-  });
+    it("shows a loading spinner when isLoading", () => {
+        render(<DataTable columns={columns} data={[]} isLoading getRowKey={(r) => r.id} />);
+        expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+    });
 
-  it("shows a custom empty message", () => {
-    render(
-      <DataTable
-        columns={columns}
-        rows={[]}
-        getRowKey={(r) => r.id}
-        empty="No payments yet"
-      />,
-    );
-    expect(screen.getByText("No payments yet")).toBeInTheDocument();
-  });
+    it("renders the default empty message when data=[]", () => {
+        render(<DataTable columns={columns} data={[]} getRowKey={(r) => r.id} />);
+        expect(screen.getByText("No data")).toBeInTheDocument();
+    });
 
-  it("uses getRowKey for react keys (indirectly: renders without warnings)", () => {
-    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
-    render(<DataTable columns={columns} rows={rows} getRowKey={(r) => r.id} />);
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
-  });
+    it("renders a custom emptyMessage", () => {
+        render(
+            <DataTable
+                columns={columns}
+                data={[]}
+                getRowKey={(r) => r.id}
+                emptyMessage="No payments yet."
+            />,
+        );
+        expect(screen.getByText("No payments yet.")).toBeInTheDocument();
+    });
+
+    it("rows become role='button' and are keyboard-activatable when onRowClick is provided", async () => {
+        const onRowClick = jest.fn();
+        render(
+            <DataTable
+                columns={columns}
+                data={rows}
+                getRowKey={(r) => r.id}
+                onRowClick={onRowClick}
+            />,
+        );
+        const clickableRows = screen.getAllByRole("button");
+        expect(clickableRows).toHaveLength(rows.length);
+        expect(clickableRows[0]).toHaveAttribute("tabindex", "0");
+
+        await userEvent.click(clickableRows[0]);
+        expect(onRowClick).toHaveBeenCalledWith(rows[0]);
+
+        clickableRows[1].focus();
+        await userEvent.keyboard("{Enter}");
+        expect(onRowClick).toHaveBeenCalledWith(rows[1]);
+
+        clickableRows[0].focus();
+        await userEvent.keyboard(" ");
+        expect(onRowClick).toHaveBeenCalledTimes(3);
+    });
+
+    it("rows are NOT keyboard-activatable when onRowClick is omitted", () => {
+        render(<DataTable columns={columns} data={rows} getRowKey={(r) => r.id} />);
+        expect(screen.queryAllByRole("button")).toHaveLength(0);
+    });
+
+    it("renders a caption in sr-only class for a11y", () => {
+        const { container } = render(
+            <DataTable
+                columns={columns}
+                data={rows}
+                getRowKey={(r) => r.id}
+                caption="Payment history"
+            />,
+        );
+        const caption = container.querySelector("caption");
+        expect(caption).toBeTruthy();
+        expect(caption).toHaveClass("sr-only");
+        expect(caption).toHaveTextContent("Payment history");
+    });
 });

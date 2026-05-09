@@ -42,6 +42,14 @@
 - Receipt upload (digital payment)
 - Manual request (cash payment)
 
+> **M3 status (May 2026):** the payment submit endpoint
+> (`POST /api/v1/payments/{id}/submit`) currently accepts `application/json`
+> only. The receipt file itself is not yet uploaded — `Method = ReceiptUpload`
+> submissions persist with `ReceiptFileKey`/`ReceiptFileName` as null. File
+> upload (multipart/form-data, validation, storage) lands in M3.9. The tenant
+> frontend can build the file picker UX against the eventual shape; the wire
+> format is JSON-only until M3.9 ships.
+
 **⚠️ Landlord has final authority over payment confirmation — tenants cannot self-confirm. Tenant UI reflects state only.**
 
 **Payment History table**
@@ -50,7 +58,7 @@
 
 ## Data & Access Rules
 
-- Tenants with any prior active lease are **never auto-deleted**. Post-lease accounts persist with **read-only access** — show as read-only, not inactive or deleted.
+- Tenants with any prior active lease are **never auto-deleted**. Post-lease accounts persist with **read-only access** — show as read-only, not inactive or deleted. "Read-only" means `tenantAccountStatus === 'ReadOnly'`, which is fetched from `GET /me` on each session — not derived from the JWT. The JWT carries only the portal role.
 - Orphaned records (invite never opened, no lease, Keycloak account never activated) are auto-deleted after 30 days. Do not surface this to users or imply data impermanence.
 - Access control is **status-based**, not role-deletion-based.
 
@@ -67,6 +75,11 @@ Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired`
 
 **Lease acceptance screen comes before account creation or password setup.**
 
+**Auth model:** Auth state lives in a shared `useAuthStore` (Zustand). Each user has exactly one
+portal role (`tenant`, `landlord`, or `admin`), derived from `realm_access.roles[]` in the JWT.
+Role-specific domain state (e.g. `tenantAccountStatus`) is fetched from `GET /me` — not stored
+in the JWT. Tenants who call `GET /me` when `portal !== 'tenant'` receive no data (query is disabled).
+
 ---
 
 ## What the Backend Handles (do not reimplement)
@@ -74,3 +87,4 @@ Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired`
 - Invite email sending & token validation → .NET backend
 - Scheduled jobs (orphan cleanup, expiry checks) → Hangfire
 - Payment confirmation authority → backend only
+- Tenant account status (`GET /me` → `tenantAccountStatus`) → backend only; frontend reads via `useMe()` hook

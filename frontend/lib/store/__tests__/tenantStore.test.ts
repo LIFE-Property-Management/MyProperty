@@ -5,52 +5,6 @@ beforeEach(() => {
   resetTenantStore();
 });
 
-describe("AuthSlice", () => {
-  it("has null-identity defaults and is not read-only initially", () => {
-    const state = useTenantStore.getState();
-    expect(state.userId).toBeNull();
-    expect(state.email).toBeNull();
-    expect(state.tenantAccountStatus).toBeNull();
-    expect(state.isReadOnly).toBe(false);
-  });
-
-  it("setAuth with Active status populates identity and leaves isReadOnly=false", () => {
-    useTenantStore.getState().setAuth({
-      userId: "user-1",
-      email: "tenant@example.com",
-      tenantAccountStatus: "Active",
-    });
-    const state = useTenantStore.getState();
-    expect(state.userId).toBe("user-1");
-    expect(state.email).toBe("tenant@example.com");
-    expect(state.tenantAccountStatus).toBe("Active");
-    expect(state.isReadOnly).toBe(false);
-  });
-
-  it("setAuth with ReadOnly status derives isReadOnly=true", () => {
-    useTenantStore.getState().setAuth({
-      userId: "user-1",
-      email: "tenant@example.com",
-      tenantAccountStatus: "ReadOnly",
-    });
-    expect(useTenantStore.getState().isReadOnly).toBe(true);
-  });
-
-  it("clearAuth resets identity fields and isReadOnly", () => {
-    useTenantStore.getState().setAuth({
-      userId: "user-1",
-      email: "tenant@example.com",
-      tenantAccountStatus: "ReadOnly",
-    });
-    useTenantStore.getState().clearAuth();
-    const state = useTenantStore.getState();
-    expect(state.userId).toBeNull();
-    expect(state.email).toBeNull();
-    expect(state.tenantAccountStatus).toBeNull();
-    expect(state.isReadOnly).toBe(false);
-  });
-});
-
 describe("UiSlice", () => {
   it("has no active modal by default", () => {
     const state = useTenantStore.getState();
@@ -134,7 +88,7 @@ describe("NotificationSlice", () => {
 
   it("dismissNotification is idempotent (no throw on unknown id)", () => {
     expect(() =>
-      useTenantStore.getState().dismissNotification("does-not-exist"),
+        useTenantStore.getState().dismissNotification("does-not-exist"),
     ).not.toThrow();
   });
 

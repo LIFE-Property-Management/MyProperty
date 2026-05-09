@@ -19,15 +19,20 @@ describe("<Input /> (shared)", () => {
     render(<Input label="City" hint="Where you live" />);
     expect(screen.getByText("Where you live")).toBeInTheDocument();
     expect(screen.getByLabelText("City")).toHaveAttribute(
-      "aria-describedby",
-      expect.stringContaining("hint"),
+        "aria-describedby",
+        expect.stringContaining("description"),
     );
   });
 
-  it("shows the error message and aria-invalid='true' when error is present", () => {
+  it("shows the error message, aria-invalid='true', and aria-describedby when error is present", () => {
     render(<Input label="Email" error="Required" />);
+    const input = screen.getByLabelText("Email");
     expect(screen.getByText("Required")).toBeInTheDocument();
-    expect(screen.getByLabelText("Email")).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute(
+        "aria-describedby",
+        expect.stringContaining("description"),
+    );
   });
 
   it("prefers the error message over the hint when both are supplied", () => {
@@ -47,5 +52,17 @@ describe("<Input /> (shared)", () => {
     const input = screen.getByLabelText("Email");
     await userEvent.type(input, "ada@example.com");
     expect(input).toHaveValue("ada@example.com");
+  });
+
+  it("renders left and right addons when provided", () => {
+    render(
+        <Input
+            label="Amount"
+            leftAddon={<span data-testid="left">€</span>}
+            rightAddon={<span data-testid="right">/mo</span>}
+        />,
+    );
+    expect(screen.getByTestId("left")).toBeInTheDocument();
+    expect(screen.getByTestId("right")).toBeInTheDocument();
   });
 });

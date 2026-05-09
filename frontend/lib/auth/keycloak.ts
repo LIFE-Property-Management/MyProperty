@@ -1,63 +1,96 @@
-// Mock Keycloak adapter. Replace with a real adapter by keeping the same
-// exported surface: getToken() and initKeycloak(). Callers must not
-// import anything else from this file.
-
 "use client";
 
-import type { TenantAccountStatus } from "@/lib/types";
-import useTenantStore from "@/lib/store/useTenantStore";
+import Keycloak from "keycloak-js";
+import useAuthStore, { type DecodedPayload } from "@/lib/store/auth/useAuthStore";
 
-const FAKE_JWT =
-  "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIwMTkzYjQyZC1kZjVhLTdmMmEtOGMzYi1lMmY4YTk3YzE0NTYiLCJlbWFpbCI6InRlbmFudEBkZXYubG9jYWwiLCJ0ZW5hbnRBY2NvdW50U3RhdHVzIjoiQWN0aXZlIn0.sig";
+const PORTAL_ROLES = ["tenant", "landlord", "admin"] as const;
+type PortalRole = (typeof PORTAL_ROLES)[number];
 
-let initialized = false;
-
-interface DecodedPayload {
-  sub: string;
-  email: string;
-  tenantAccountStatus: TenantAccountStatus;
+function isPortalRole(r: string): r is PortalRole {
+  return (PORTAL_ROLES as readonly string[]).includes(r);
 }
 
-function isDecodedPayload(x: unknown): x is DecodedPayload {
-  if (typeof x !== "object" || x === null) return false;
-  const obj = x as Record<string, unknown>;
-  return (
-    typeof obj.sub === "string" &&
-    typeof obj.email === "string" &&
-    (obj.tenantAccountStatus === "Active" ||
-      obj.tenantAccountStatus === "ReadOnly")
-  );
-}
-
-function decodePayload(token: string): DecodedPayload {
+export function decodePayload(token: string): DecodedPayload {
   const base64Url = token.split(".")[1];
   let base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
   while (base64.length % 4 !== 0) {
     base64 += "=";
   }
   const json = atob(base64);
-  const parsed: unknown = JSON.parse(json);
-  if (!isDecodedPayload(parsed)) {
-    throw new Error("Invalid JWT payload");
+  const parsed = JSON.parse(json) as Record<string, unknown>;
+
+  const roles: string[] = Array.isArray(
+      (parsed.realm_access as Record<string, unknown> | undefined)?.roles,
+  )
+      ? ((parsed.realm_access as Record<string, unknown>).roles as string[]).map(
+          (r) => r.toLowerCase(),
+      )
+      : [];
+
+  const matched = roles.filter(isPortalRole);
+
+  if (matched.length === 0) {
+    throw new Error("JWT has no recognized portal role");
   }
-  return parsed;
+  if (matched.length > 1) {
+    throw new Error("JWT has multiple portal roles");
+  }
+
+  return {
+    portal: matched[0],
+    sub: parsed.sub as string,
+    email: parsed.email as string,
+  };
+}
+
+let _keycloak: Keycloak | null = null;
+let initPromise: Promise<void> | null = null;
+
+function getInstance(): Keycloak {
+  if (!_keycloak) {
+    _keycloak = new Keycloak({
+      url: process.env.NEXT_PUBLIC_KEYCLOAK_URL!,
+      realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM!,
+      clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID!,
+    });
+  }
+  return _keycloak;
 }
 
 export function getToken(): string | null {
-  return FAKE_JWT;
+  return _keycloak?.token ?? null;
 }
 
-export function initKeycloak(): void {
-  if (initialized) return;
-  try {
-    const payload = decodePayload(FAKE_JWT);
-    useTenantStore.getState().setAuth({
-      userId: payload.sub,
-      email: payload.email,
-      tenantAccountStatus: payload.tenantAccountStatus,
+export function clearCachedToken(): void {
+  _keycloak = null;
+  initPromise = null;
+}
+
+export function initKeycloak(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    const kc = getInstance();
+    const authenticated = await kc.init({
+      onLoad: "login-required",
+      checkLoginIframe: false,
     });
-    initialized = true;
-  } catch (e) {
-    console.error("initKeycloak failed", e);
-  }
+    if (authenticated && kc.token) {
+      const payload = decodePayload(kc.token);
+      useAuthStore.getState().setAuth(payload);
+      kc.onTokenExpired = () => {
+        kc.updateToken(60).catch(() => {
+          useAuthStore.getState().clearAuth();
+        });
+      };
+    }
+  })();
+  return initPromise;
+}
+
+export async function logout(): Promise<void> {
+  const kc = _keycloak;
+  _keycloak = null;
+  initPromise = null;
+  useAuthStore.getState().clearAuth();
+  await kc?.logout({ redirectUri: window.location.origin });
 }

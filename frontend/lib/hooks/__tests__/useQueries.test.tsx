@@ -97,8 +97,8 @@ describe("useSubmitManualRequest", () => {
       notes: "paid cash",
     });
     expect(mockedPost).toHaveBeenCalledWith(
-      ENDPOINTS.submitManualRequest,
-      expect.objectContaining({ notes: "paid cash" }),
+        ENDPOINTS.submitManualRequest,
+        expect.objectContaining({ notes: "paid cash" }),
     );
   });
 });
@@ -111,11 +111,8 @@ describe("useSubmitReceipt", () => {
     fd.append("paymentId", "d6e2f9b4-3c7a-4f1e-8a92-1b5c8d4e7f30");
     await result.current.mutateAsync(fd);
     expect(mockedPost).toHaveBeenCalledWith(
-      ENDPOINTS.submitReceipt,
-      fd,
-      expect.objectContaining({
-        headers: expect.objectContaining({ "Content-Type": "multipart/form-data" }),
-      }),
+        ENDPOINTS.submitReceipt,
+        fd,
     );
   });
 });

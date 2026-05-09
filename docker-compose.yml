@@ -1,0 +1,158 @@
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: myproperty-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: myproperty
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # ── Keycloak ─────────────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: myproperty-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-GOOGLE_CLIENT_ID_PLACEHOLDER}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-GOOGLE_CLIENT_SECRET_PLACEHOLDER}
+    ports:
+      - "8080:8080"   # Admin console + OIDC  →  http://localhost:8080
+    volumes:
+      - ./infrastructure/keycloak:/opt/keycloak/data/import
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Realm endpoint returns 200 only after the import is complete.
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/realms/MyProperty/.well-known/openid-configuration > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks:
+      - myproperty-net
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: myproperty-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── RabbitMQ ────────────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: myproperty-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # Management UI →  http://localhost:15672 (guest/guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── MailHog (dev SMTP catcher) ──────────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: myproperty-mailhog
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI →  http://localhost:8025
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8025/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Loki (log aggregation) ───────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.2.0
+    container_name: myproperty-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Grafana (log visualisation) ──────────────────────────────────────────────
+  # NOTE: anonymous admin is enabled — local demo only, not suitable for production.
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: myproperty-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports:
+      - "3001:3000"   # Next.js owns 3000; Grafana exposed on 3001
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  grafana_data:
+  loki_data:
+  rabbitmq_data:
+
+networks:
+  myproperty-net:
+    driver: bridge

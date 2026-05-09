@@ -189,8 +189,8 @@ prometheus-data/
 elasticsearch-data/
 kibana-data/
 
-# Local log files
-logs/
+# Local log files (anchored — must not match docs/logs/ which holds AI logs)
+/logs/
 *.log
 
 
@@ -253,4 +253,4 @@ frontend/test-results/
 # ───────────────────────────────────────────────────────────
 #  CLAUDE CODE — per-developer local settings
 # ───────────────────────────────────────────────────────────
-.claude/settings.local.json
+**/.claude/settings.local.json

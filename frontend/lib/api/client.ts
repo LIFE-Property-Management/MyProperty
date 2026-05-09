@@ -5,18 +5,15 @@ import { getToken } from "@/lib/auth/keycloak";
 const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const apiClient = axios.create({
-  baseURL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+    baseURL,
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) {
-    config.headers.set("Authorization", `Bearer ${token}`);
-  }
-  return config;
+    const token = getToken();
+    if (token) {
+        config.headers.set("Authorization", `Bearer ${token}`);
+    }
+    return config;
 });
 
 export default apiClient;

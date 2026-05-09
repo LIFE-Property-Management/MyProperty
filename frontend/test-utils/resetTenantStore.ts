@@ -5,10 +5,6 @@
 import useTenantStore, { type TenantStore } from "@/lib/store/useTenantStore";
 
 const INITIAL_STATE: Partial<TenantStore> = {
-  userId: null,
-  email: null,
-  tenantAccountStatus: null,
-  isReadOnly: false,
   activeModal: null,
   activePaymentId: null,
   notifications: [],
