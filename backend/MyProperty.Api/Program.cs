@@ -94,16 +94,14 @@ try
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             options.TokenValidationParameters = new()
             {
-                // TODO(M3.2 follow-up, before May 6): enable audience validation.
-                //   Requires (1) adding an audience mapper to a `myproperty-api` client
-                //   in infrastructure/keycloak/realm-export.json so the `aud` claim
-                //   contains "myproperty-api", and (2) setting
-                //     ValidateAudience = true,
-                //     ValidAudience   = "myproperty-api"
-                //   here. Without this, any token signed by the realm — including tokens
-                //   minted for unrelated clients — will be accepted by this API.
-                ValidateAudience = false,
-                NameClaimType = "preferred_username",
+                // Audience validation: tokens must carry "myproperty-api" in the
+                // `aud` claim. The mapper that writes this claim lives on the
+                // `myproperty-frontend` client in realm-export.json, and the
+                // `myproperty-api` bearer-only client in the same file exists
+                // purely as the audience target.
+                ValidateAudience = true,
+                ValidAudience    = "myproperty-api",
+                NameClaimType    = "preferred_username",
             };
 
             // SignalR's WebSocket handshake cannot carry an Authorization
@@ -157,6 +155,30 @@ builder.Services.AddOptions<InviteOptions>()
     .Bind(builder.Configuration.GetSection("Invites"))
     .ValidateDataAnnotations()
     .ValidateOnStart();
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+// Allowed origins are configured per-environment. Strict allowlist (no
+// AllowAnyOrigin) because AllowCredentials is required for the SignalR
+// WebSocket handshake, and the CORS spec forbids `*` together with credentials.
+// Methods and headers default to "any" — restricting them is more maintenance
+// pain than security benefit; the origin allowlist is the real boundary.
+builder.Services.AddOptions<CorsOptions>()
+    .Bind(builder.Configuration.GetSection(CorsOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+var corsOrigins = builder.Configuration
+    .GetSection($"{CorsOptions.SectionName}:AllowedOrigins")
+    .Get<string[]>() ?? [];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("MyPropertyDefault", policy =>
+        policy.WithOrigins(corsOrigins)
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials());
+});
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 // Two policies:
@@ -329,10 +351,44 @@ builder.Services.AddAuthorization(options =>
         });
     }
 
-app.UseHttpsRedirection();
-app.UseAuthentication();
-app.UseRateLimiter();
-app.UseAuthorization();
+// Forwarded headers must run before everything that observes scheme/host/IP
+    // (HTTPS redirect, request logging, rate limiting). Behind Nginx/K8s ingress
+    // doing TLS termination, the pod receives plain HTTP with X-Forwarded-Proto:
+    // https — without this middleware, UseHttpsRedirection would issue a 301 to
+    // a broken URL and the request logs would show the proxy IP instead of the
+    // real client. KnownNetworks/KnownProxies are cleared because in Kubernetes
+    // the ingress pod IP is allocated dynamically from the cluster CIDR and is
+    // not known at config time. The trust boundary is the cluster network: the
+    // API pod is only reachable through the ingress, so anything that can set
+    // these headers is already a trusted proxy by construction.
+    var forwardedHeadersOptions = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                         | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                         | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost,
+    };
+    
+    forwardedHeadersOptions.KnownIPNetworks.Clear();
+    forwardedHeadersOptions.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwardedHeadersOptions);
+
+    // HTTPS redirect is gated: in Development Kestrel serves HTTP only and a
+    // redirect would break every request; in Production/Staging Nginx already
+    // terminates TLS and (with forwarded headers above) the middleware sees the
+    // request as already-HTTPS — kept on as a defense-in-depth no-op.
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseHttpsRedirection();
+    }
+
+    // CORS runs after scheme is correct (so preflight responses carry the right
+    // Location semantics) and before authentication (preflight OPTIONS requests
+    // carry no Authorization header and must short-circuit before auth runs).
+    app.UseCors("MyPropertyDefault");
+
+    app.UseAuthentication();
+    app.UseRateLimiter();
+    app.UseAuthorization();
 
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {

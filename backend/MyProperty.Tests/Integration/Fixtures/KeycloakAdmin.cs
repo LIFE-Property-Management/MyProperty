@@ -78,6 +78,22 @@ internal sealed class KeycloakAdmin(string baseAddress, string adminUser, string
             fullScopeAllowed = true,
             redirectUris = Array.Empty<string>(),
             webOrigins = Array.Empty<string>(),
+            protocolMappers = new[]
+            {
+                new
+                {
+                    name = "audience-myproperty-api",
+                    protocol = "openid-connect",
+                    protocolMapper = "oidc-audience-mapper",
+                    config = new Dictionary<string, string>
+                    {
+                        ["included.client.audience"] = "myproperty-api",
+                        ["id.token.claim"] = "false",
+                        ["access.token.claim"] = "true",
+                        ["introspection.token.claim"] = "true",
+                    },
+                },
+            },
         });
         EnsureSuccess(create, $"create client '{clientId}'");
     }
