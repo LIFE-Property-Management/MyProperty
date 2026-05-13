@@ -51,3 +51,30 @@ When all four pass, message DevOps teammate that app-code blockers are cleared a
 Each plan is scoped to be reviewable as a single commit and verifiable against a concrete curl / build / test command.
 
 ---
+
+### 2026-05-13 — M4 unblock sprint, Plan 2 (F1, F2, A2)
+
+**Scope.** Frontend build-time config for Docker deployment + Docker build context hygiene.
+
+**Changes.**
+- `frontend/lib/utils/env.ts` (new) — `requirePublicEnv()` helper using a typed lookup-table of literal `process.env.NEXT_PUBLIC_*` reads (turbopack/webpack only inline literal property accesses; dynamic `process.env[name]` defeats static analysis). Throws in production builds when a required var is missing; warns in dev.
+- `frontend/lib/api/client.ts` — replaced silent `process.env` fallback with `requirePublicEnv("NEXT_PUBLIC_API_BASE_URL")`. Updated comment to reflect prod-fatal behavior.
+- `frontend/lib/auth/keycloak.ts` — replaced three `process.env.NEXT_PUBLIC_*!` non-null assertions in `getInstance()` with `requirePublicEnv()` calls.
+- `frontend/.env.local.example` — added build-time vs runtime header, prod-shape placeholder URLs (`*.myproperty.PLACEHOLDER.example`), documented `NEXT_PUBLIC_API_BASE_URL` as dev-optional / prod-required.
+- `frontend/.dockerignore` (new) — excludes `.env*` (critically `.env.local` containing `NEXT_PUBLIC_DEV_AUTH_BYPASS=true`), `node_modules`, `.next`, test dirs, IDE configs. Does **not** exclude `mocks/` or `public/mockServiceWorker.js` because both tenant and dashboard layouts unconditionally import `@/mocks/MockProvider` (audit item F3); MSW remains a no-op in prod via the `NODE_ENV !== "development"` check inside `MockProvider`. Cleaner stripping deferred post-M4.
+- `backend/.dockerignore` (new) — excludes `bin/`, `obj/`, test project, `appsettings.Development.json`, IDE configs, `.env*`.
+- `frontend/Dockerfile` (new) — verification-grade multi-stage build. Header explicitly marks it as not production-ready; DevOps owner hardens (standalone output, non-root user, healthcheck, base image pinning) before deployment.
+
+**Verification.**
+- `npx tsc --noEmit` clean.
+- Docker build with `--build-arg NEXT_PUBLIC_API_BASE_URL=https://api.verify-test.example` succeeded. Bundle grep returned matches in three chunk files showing the URL inlined as a string literal: `NEXT_PUBLIC_API_BASE_URL:()=>"https://api.verify-test.example"`. Same for `NEXT_PUBLIC_KEYCLOAK_URL`. Confirms turbopack static replacement is reaching the client bundle.
+- Docker build WITHOUT build args failed during Next.js prerender of `/tenant/dashboard` with the exact `requirePublicEnv` error message — confirms the runtime guard works as defense-in-depth at SSG time.
+- First verification pass exposed a bug in the original `requirePublicEnv` implementation: dynamic `process.env[name]` access defeats Next.js's static replacement and leaves the var as an undefined runtime lookup in the client bundle. Restructured the helper to use a lookup table of literal accesses; re-verified.
+
+**Side note — npm audit fix.** Bumped axios, next.js, and postcss inside the same working branch to close 13 high-severity axios CVEs, 14 high-severity Next.js advisories, and 1 moderate postcss issue. `npm audit` now reports 0 vulnerabilities. Next.js bumped from 16.2.3 to 16.2.6 (unrelated to the env-inlining issue, which is intentional bundler behavior not a regression).
+
+**M3 grade impact.** None directly — these were M4 prep items. Removes the silent-failure mode that would have made any first Docker deploy land with broken API calls + Keycloak. Also closes a likely M5 security finding (axios CVEs).
+
+**Sprint progress.** 6 of 9 M4 blockers closed (Plan 1: C1, H7, A1 backend; Plan 2: F1, F2, A2).
+
+---

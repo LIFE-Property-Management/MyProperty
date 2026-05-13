@@ -1,0 +1,52 @@
+# =============================================================
+#  backend/.dockerignore
+#  Excludes files from the Docker build context.
+#  Read when `docker build` is run with backend/ as the context.
+# =============================================================
+
+# ── Environment files ───────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Build outputs ───────────────────────────────────────────
+**/bin/
+**/obj/
+**/publish/
+
+# ── Test results & coverage ─────────────────────────────────
+**/TestResults/
+*.trx
+*.coveragexml
+coverage.opencover.xml
+coverage.cobertura.xml
+
+# ── Test project (not needed in API runtime image) ──────────
+MyProperty.Tests/
+
+# ── User-specific IDE files ─────────────────────────────────
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.idea/
+*.DotSettings.user
+.claude/
+
+# ── NuGet ───────────────────────────────────────────────────
+*.nupkg
+*.snupkg
+**/packages/
+
+# ── Local dev settings (committed file is appsettings.json) ─
+appsettings.Development.json
+
+# ── OS / misc ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+
+# ── Git ─────────────────────────────────────────────────────
+.git/
+.gitignore

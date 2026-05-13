@@ -1,0 +1,66 @@
+# =============================================================
+#  frontend/.dockerignore
+#  Excludes files from the Docker build context.
+#  Read when `docker build` is run with frontend/ as the context.
+# =============================================================
+
+# ── Environment files (CRITICAL) ────────────────────────────
+# .env.local contains NEXT_PUBLIC_DEV_AUTH_BYPASS=true. If it enters the
+# build context, `next build` reads it and bakes the bypass into the
+# production bundle. Excluding all .env* files; only .env.local.example
+# stays (documentation, no values).
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# ── Dependencies (re-installed during build) ────────────────
+node_modules/
+
+# ── Next.js build artifacts ─────────────────────────────────
+.next/
+out/
+
+# ── Caches ──────────────────────────────────────────────────
+.turbo/
+.swc/
+.cache/
+.eslintcache
+.stylelintcache
+
+# ── TypeScript build info ───────────────────────────────────
+*.tsbuildinfo
+
+# ── Test artifacts ──────────────────────────────────────────
+coverage/
+playwright-report/
+test-results/
+playwright/.cache/
+
+# ── Test files (not needed in production image) ─────────────
+__tests__/
+e2e/
+test-utils/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+jest.config.mjs
+jest.setup.ts
+jest.polyfills.ts
+playwright.config.ts
+
+# ── IDE / editor ────────────────────────────────────────────
+.idea/
+.vscode/
+*.code-workspace
+.claude/
+
+# ── OS / misc ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+
+# ── Git ─────────────────────────────────────────────────────
+.git/
+.gitignore
