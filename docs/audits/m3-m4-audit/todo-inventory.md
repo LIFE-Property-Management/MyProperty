@@ -2,7 +2,7 @@
 
 **Audit date:** 2026-05-11  
 **Auditor:** Claude Code (claude-sonnet-4-6)  
-**Method:** full grep pass (TODO/FIXME/HACK/XXX/NOTE/Obsolete/deprecated/disabled-tests/hardcoded-dev-values/stubs/commented-out blocks) across `backend/`, `frontend/`, `infrastructure/`, `docs/`; validated against `docs/milestones/m3-backend-mvp.md`, `backend/CLAUDE.md`, `frontend/CLAUDE.md`, and `docs/audits/m3-reconciliation.md`.
+**Method:** full grep pass (TODO/FIXME/HACK/XXX/NOTE/Obsolete/deprecated/disabled-tests/hardcoded-dev-values/stubs/commented-out blocks) across `backend/`, `frontend/`, `infrastructure/`, `docs/`; validated against `docs/milestones/m3-backend-mvp.md`, `backend/CLAUDE.md`, `frontend/CLAUDE.md`, and `docs/audits/m3-m4-audit/m3-reconciliation.md`.
 
 ---
 

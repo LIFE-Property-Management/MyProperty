@@ -149,4 +149,4 @@ After Keycloak is deployed in prod:
 
 - Keycloak 26.2 reverse proxy docs: https://www.keycloak.org/server/reverseproxy
 - Keycloak 26.2 hostname (v2): https://www.keycloak.org/server/hostname
-- Audit § E5, A1, A6: `docs/audits/dev-prod-gaps.md`
+- Audit § E5, A1, A6: `docs/audits/m3-m4-audit/dev-prod-gaps.md`
