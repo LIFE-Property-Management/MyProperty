@@ -693,6 +693,49 @@
       ]
     },
     {
+      "id": "38f498e0-49a4-49a1-929b-ad158c14fcac",
+      "clientId": "myproperty-api",
+      "name": "MyProperty API",
+      "description": "Bearer-only client representing the .NET API. Used as an audience target so tokens issued to other clients (currently myproperty-frontend) carry aud='myproperty-api'. No login flows are enabled here.",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": true,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": false,
+      "nodeReRegistrationTimeout": 0,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "organization",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
       "id": "ccf9b1e3-6feb-4e07-8991-cbecdc208bbd",
       "clientId": "myproperty-frontend",
       "surrogateAuthRequired": false,
@@ -700,10 +743,12 @@
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "http://localhost:3000/*"
+        "http://localhost:3000/*",
+        "https://myproperty.PLACEHOLDER.example/*"
       ],
       "webOrigins": [
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://myproperty.PLACEHOLDER.example"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -723,6 +768,21 @@
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": true,
       "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+          "name": "audience-myproperty-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "myproperty-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
       "defaultClientScopes": [
         "web-origins",
         "acr",
@@ -847,6 +907,46 @@
         "organization",
         "offline_access",
         "microprofile-jwt"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "ac06ac3b-d649-4f04-bbea-808e6714a341",
+      "username": "landlord@dev.local",
+      "email": "landlord@dev.local",
+      "firstName": "Landlord",
+      "lastName": "Dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "landlord123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Landlord"
+      ]
+    },
+    {
+      "id": "some-new-uuid-for-tenant",
+      "username": "tenant@dev.local",
+      "email": "tenant@dev.local",
+      "firstName": "Tenant",
+      "lastName": "Dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "tenant123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Tenant"
       ]
     }
   ],
