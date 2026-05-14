@@ -133,7 +133,7 @@ Not blocking M3 backend, but tracked here so they don't get lost.
 ### April 22, 2026
 
 #### Completed
-- M2 → M3 audit (saved as `docs/audits/m2-m3-audit-part{1,2}-*.md`)
+- M2 → M3 audit (saved as `docs/audits/m2-m3-audit/part1-structural.md` and `docs/audits/m2-m3-audit/part2-readiness.md`)
 - Closed M2 with documented Known Gaps
 - Split milestones documentation per-file; created this M3 record
 - Decisions above ratified (SignalR cut, RAG → OCR, RabbitMQ thin, Loki local, 3 roles defined)

@@ -21,7 +21,10 @@ services:
       timeout: 5s
       retries: 5
 
-
+  # To force realm re-import after editing realm-export.json:
+  # docker compose down keycloak
+  # docker compose exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS keycloak; CREATE DATABASE keycloak;"
+  # docker compose up -d keycloak
   # ── Keycloak ─────────────────────────────────────────────────────────────────
   keycloak:
     image: quay.io/keycloak/keycloak:26.2

@@ -157,8 +157,8 @@
 - **Status:** lease-acceptance-before-account ordering correct, but only covers 1 of 3 invite-flow cases from `portals.md` (new user only; existing-user-not-logged-in and existing-user-already-logged-in not handled) and 0 of 4 invite statuses (no handling for Accepted/Rejected/Expired tokens). Schema and hook live under `_lib/` rather than `lib/types/` and `lib/hooks/` — bypasses the M2 data-layer convention. To be completed in the next milestone.
 
 #### Completed — M2 close
-- Created `docs/audits/m2-m3-audit-part1-structural.md` — duplicate UI primitives, CLAUDE.md compliance on landlord code, invite flow review, cross-portal import check
-- Created `docs/audits/m2-m3-audit-part2-readiness.md` — M3 readiness gaps, type-safety leaks, dead code, progress-log accuracy
+- Created `docs/audits/m2-m3-audit/part1-structural.md` — duplicate UI primitives, CLAUDE.md compliance on landlord code, invite flow review, cross-portal import check
+- Created `docs/audits/m2-m3-audit/part2-readiness.md` — M3 readiness gaps, type-safety leaks, dead code, progress-log accuracy
 - Corrected this milestone log to reflect actual M2 code state
 - Closed M2 with documented debt (see Known Gaps)
 
