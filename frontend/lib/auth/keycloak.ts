@@ -2,6 +2,7 @@
 
 import Keycloak from "keycloak-js";
 import useAuthStore, { type DecodedPayload } from "@/lib/store/auth/useAuthStore";
+import { requirePublicEnv } from "@/lib/utils/env";
 
 const PORTAL_ROLES = ["tenant", "landlord", "admin"] as const;
 type PortalRole = (typeof PORTAL_ROLES)[number];
@@ -49,9 +50,9 @@ let initPromise: Promise<void> | null = null;
 function getInstance(): Keycloak {
   if (!_keycloak) {
     _keycloak = new Keycloak({
-      url: process.env.NEXT_PUBLIC_KEYCLOAK_URL!,
-      realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM!,
-      clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID!,
+      url: requirePublicEnv("NEXT_PUBLIC_KEYCLOAK_URL"),
+      realm: requirePublicEnv("NEXT_PUBLIC_KEYCLOAK_REALM"),
+      clientId: requirePublicEnv("NEXT_PUBLIC_KEYCLOAK_CLIENT_ID"),
     });
   }
   return _keycloak;
