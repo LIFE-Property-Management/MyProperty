@@ -743,12 +743,10 @@
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
-        "http://localhost:3000/*",
-        "https://myproperty.PLACEHOLDER.example/*"
+        "${MYPROPERTY_FRONTEND_BASE_URL}/*"
       ],
       "webOrigins": [
-        "http://localhost:3000",
-        "https://myproperty.PLACEHOLDER.example"
+        "${MYPROPERTY_FRONTEND_BASE_URL}"
       ],
       "notBefore": 0,
       "bearerOnly": false,

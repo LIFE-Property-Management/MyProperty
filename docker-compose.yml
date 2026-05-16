@@ -21,16 +21,40 @@ services:
       timeout: 5s
       retries: 5
 
-  # To force realm re-import after editing realm-export.json:
-  # docker compose down keycloak
+  # To force realm re-import after editing realm-export.template.json:
+  # docker compose down keycloak keycloak-realm-init
   # docker compose exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS keycloak; CREATE DATABASE keycloak;"
+  # docker volume rm myproperty_keycloak_import 2>/dev/null || true
   # docker compose up -d keycloak
+
+  # ── Keycloak realm init (envsubst on the template) ──────────────────────────
+  # Renders infrastructure/keycloak/realm-export.template.json into a named
+  # volume by substituting ${MYPROPERTY_FRONTEND_BASE_URL}. The keycloak
+  # service mounts the same volume at /opt/keycloak/data/import/ and picks
+  # up the rendered file on startup. This pattern maps 1:1 to a Kubernetes
+  # initContainer; see infrastructure/keycloak/PRODUCTION.md.
+  keycloak-realm-init:
+    image: alpine:3.20
+    container_name: myproperty-keycloak-realm-init
+    command: >
+      sh -c "apk add --no-cache gettext > /dev/null &&
+      envsubst < /template/realm-export.template.json > /import/realm-export.json &&
+      echo 'Rendered realm-export.json into /import/'"
+    environment:
+      MYPROPERTY_FRONTEND_BASE_URL: ${MYPROPERTY_FRONTEND_BASE_URL:-http://localhost:3000}
+    volumes:
+      - ./infrastructure/keycloak:/template:ro
+      - keycloak_import:/import
+    networks:
+      - myproperty-net
+
   # ── Keycloak ─────────────────────────────────────────────────────────────────
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
     container_name: myproperty-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
+      MYPROPERTY_FRONTEND_BASE_URL: ${MYPROPERTY_FRONTEND_BASE_URL:-http://localhost:3000}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: postgres
@@ -42,13 +66,19 @@ services:
     ports:
       - "8080:8080"   # Admin console + OIDC  →  http://localhost:8080
     volumes:
-      - ./infrastructure/keycloak:/opt/keycloak/data/import
+      - keycloak_import:/opt/keycloak/data/import:ro
     depends_on:
       postgres:
         condition: service_healthy
+      keycloak-realm-init:
+        condition: service_completed_successfully
     healthcheck:
-      # Realm endpoint returns 200 only after the import is complete.
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/realms/MyProperty/.well-known/openid-configuration > /dev/null"]
+      # curl is not present in the Keycloak 26 image (stripped from UBI Micro
+      # base). We use the bundled JRE to compile and run a one-shot HTTP probe
+      # against the realm well-known endpoint. The /tmp file is cached after
+      # first compilation. Probes /realms/MyProperty/... so the check only
+      # passes after realm import completes.
+      test: ["CMD-SHELL", "[ -f /tmp/HealthCheck.java ] || echo 'public class HealthCheck { public static void main(String[] args) throws java.lang.Throwable { System.exit(java.net.HttpURLConnection.HTTP_OK == ((java.net.HttpURLConnection)new java.net.URL(args[0]).openConnection()).getResponseCode() ? 0 : 1); } }' > /tmp/HealthCheck.java && java /tmp/HealthCheck.java http://localhost:8080/realms/MyProperty/.well-known/openid-configuration"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -155,6 +185,7 @@ volumes:
   grafana_data:
   loki_data:
   rabbitmq_data:
+  keycloak_import:
 
 networks:
   myproperty-net:
