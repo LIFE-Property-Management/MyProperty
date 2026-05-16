@@ -1,5 +1,7 @@
 using System.Threading.RateLimiting;
 using Asp.Versioning;
+using MyProperty.Api.HealthChecks;
+using RabbitMQ.Client;
 using Asp.Versioning.ApiExplorer;
 using FluentValidation;
 using Hangfire;
@@ -222,6 +224,47 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
+// ── Health checks ─────────────────────────────────────────────────────────────
+// Two probe endpoints:
+//   /health/live  → process responsive. K8s livenessProbe target.
+//   /health/ready → Postgres reachable. K8s readinessProbe target.
+// Redis, RabbitMQ, and Keycloak JWKS are registered as diagnostic checks so they
+// appear in the response body for debugging but do not affect the /ready status
+// code — taking the whole API out of rotation because (e.g.) Redis hiccupped is
+// a worse outage than the degraded landlord dashboard.
+builder.Services.AddHttpClient("keycloak-jwks", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(2);
+});
+builder.Services.AddHealthChecks()
+    .AddNpgSql(
+        connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("Postgres")!,
+        name: "postgres",
+        tags: ["ready"])
+    .AddRedis(
+        connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>()["Cache:RedisConnection"]!,
+        name: "redis",
+        tags: ["diagnostic"])
+    .AddRabbitMQ(
+        factory: sp =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            return new ConnectionFactory
+            {
+                HostName    = cfg["RabbitMq:HostName"] ?? "localhost",
+                Port        = cfg.GetValue("RabbitMq:Port", 5672),
+                UserName    = cfg["RabbitMq:UserName"] ?? "guest",
+                Password    = cfg["RabbitMq:Password"] ?? "guest",
+                VirtualHost = cfg["RabbitMq:VirtualHost"] ?? "/",
+                AutomaticRecoveryEnabled = false,
+            }.CreateConnectionAsync(CancellationToken.None);
+        },
+        name: "rabbitmq",
+        tags: ["diagnostic"])
+    .AddCheck<KeycloakJwksHealthCheck>(
+        name: "keycloak-jwks",
+        tags: ["diagnostic"]);
+
 // ── Authorization ─────────────────────────────────────────────────────────────
 builder.Services.AddAuthorization(options =>
 {
@@ -398,6 +441,33 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 
     app.MapControllers();
     app.MapHub<NotificationsHub>(NotificationsHub.Path);
+
+    // Health endpoints — three endpoints, each with one job.
+    //
+    //   /live        → process responsive. No checks. K8s livenessProbe.
+    //   /ready       → Postgres only. K8s readinessProbe. 503 if Postgres is down.
+    //   /diagnostics → all registered checks. Human debugging endpoint; never used
+    //                  by K8s. Always 200 unless every check is failing.
+    //
+    // Diagnostic checks (Redis, RabbitMQ, Keycloak JWKS) deliberately do not gate
+    // /ready — see docs/operations/health-probes.md for the reasoning.
+    app.MapHealthChecks("/api/v1/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        Predicate = _ => false,
+        ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse,
+    }).AllowAnonymous();
+
+    app.MapHealthChecks("/api/v1/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready"),
+        ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse,
+    }).AllowAnonymous();
+
+    app.MapHealthChecks("/api/v1/health/diagnostics", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        Predicate = _ => true,
+        ResponseWriter = HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponse,
+    }).AllowAnonymous();
 
     app.Run();
     return 0;
