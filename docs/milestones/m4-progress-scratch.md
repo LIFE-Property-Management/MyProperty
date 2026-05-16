@@ -104,6 +104,6 @@ Each plan is scoped to be reviewable as a single commit and verifiable against a
 
 **M3 grade impact.** A6 was an M4 blocker per the audit; E5 was an M4 blocker for the K8s deployment specifically. Both close cleanly. The healthcheck fix isn't audit-graded but eliminates a "why is Keycloak stuck in starting" question if a grader inspects the local stack.
 
-**Sprint progress.** 8 of 9 M4 blockers closed. Remaining: H1 (readiness health probe — Plan 4) and D2 (EF migration bundle in CI/CD — Plan 5).
+**Sprint progress.** 7 of 9 M4 blockers closed. Remaining: H1 (readiness health probe — Plan 4) and D2 (EF migration bundle in CI/CD — Plan 5).
 
 ---
