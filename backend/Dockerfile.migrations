@@ -1,0 +1,36 @@
+# =============================================================
+#  backend/Dockerfile.migrations
+#
+#  Packages the EF Core migration bundle produced by
+#  `backend/scripts/build-migration-bundle.sh` into a runtime
+#  image consumed by the Helm pre-upgrade Job (DevOps-owned).
+#
+#  This image is intentionally separate from backend/Dockerfile
+#  (the API image) so migrations can be applied without rolling
+#  the API, and so the image surface area is minimal.
+#
+#  Build context: backend/   (same as the API image)
+#  Built by:      backend/scripts/build-migration-bundle.sh
+#  Consumed by:   Helm pre-upgrade Job (see docs/operations/migrations.md)
+# =============================================================
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+
+WORKDIR /app
+
+# The bundle is produced by the script before `docker build` runs.
+# Build context is backend/, so the path is relative to that.
+COPY artifacts/migration-bundle/efbundle /app/efbundle
+
+# Make sure it's executable. `dotnet ef migrations bundle` already
+# produces an executable file, but this is belt-and-braces in case
+# the build context strips perms (rare but possible on Windows hosts).
+RUN chmod +x /app/efbundle
+
+# The bundle reads its connection string from the
+# ConnectionStrings__Postgres environment variable, injected at
+# runtime by the K8s Job (see docs/operations/migrations.md).
+#
+# Exit code 0 = all pending migrations applied (or none needed).
+# Non-zero = abort the rollout.
+ENTRYPOINT ["/app/efbundle"]
