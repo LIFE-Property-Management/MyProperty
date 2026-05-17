@@ -1,0 +1,40 @@
+# =============================================================
+#  infrastructure/prometheus/prometheus.yml
+#
+#  Local-only metrics scrape config for the docker compose stack.
+#  Wires Prometheus into Grafana via Grafana datasource provisioning
+#  (see infrastructure/grafana/provisioning/datasources/prometheus.yaml).
+#
+#  Alerting rules and a real Alertmanager belong to M4.5 (monitoring
+#  stack + alerts). This file scrapes the services we have today;
+#  scrape jobs for new exporters get appended here.
+# =============================================================
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: myproperty-dev
+
+scrape_configs:
+  # Prometheus self-monitoring — useful baseline for a Grafana sanity dashboard.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # MyProperty API. The .NET service does not expose a /metrics endpoint
+  # in M3 — wiring `prometheus-net` or `OpenTelemetry.Exporter.Prometheus`
+  # is an M4.5 task. The job is kept here so the scrape target exists and
+  # Prometheus reports it as "down" until the endpoint is added (visible
+  # signal during demo grading; trivial to flip to "up" once the metrics
+  # middleware is registered).
+  - job_name: myproperty-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8080"]
+        labels:
+          service: api
+
+  # Node-exporter / cadvisor are intentionally not included in M4.1.
+  # Add when (a) we need host-level metrics, or (b) M4.5 wires container
+  # metrics into Grafana. Keeping the M4.1 stack tight.

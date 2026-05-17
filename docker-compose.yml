@@ -137,6 +137,107 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── MyProperty API (.NET 10) ────────────────────────────────────────────────
+  # Production-grade hardening (non-root user, distroless base, healthcheck via
+  # the existing /api/v1/health/ready endpoint surfaced through Docker) lands
+  # in M4.2. M4.1 only needs the service to start and reach its dependencies.
+  #
+  # JWKS / issuer split: Authority stays at the browser-facing localhost URL
+  # so the iss claim baked into tokens matches; MetadataAddress points at the
+  # cluster-internal keycloak hostname so this container can actually fetch
+  # the JWKS document. Both halves are required — see Program.cs and
+  # infrastructure/keycloak/PRODUCTION.md.
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: myproperty-api:dev
+    container_name: myproperty-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      LokiUrl: "http://loki:3100"
+      Keycloak__Authority: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}/realms/MyProperty"
+      Keycloak__MetadataAddress: "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration"
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=myproperty;Username=postgres;Password=postgres"
+      Cache__RedisConnection: "redis:6379"
+      Cache__InstancePrefix: "myproperty:dev:"
+      SignalR__UseRedisBackplane: "true"
+      Cors__AllowedOrigins__0: "${FRONTEND_PUBLIC_URL:-http://localhost:3000}"
+      Smtp__Host: "mailhog"
+      Smtp__Port: "1025"
+      Smtp__UseStartTls: "false"
+      Smtp__FromAddress: "no-reply@myproperty.local"
+      Smtp__FromName: "MyProperty (dev)"
+      Invites__PortalBaseUrl: "${FRONTEND_PUBLIC_URL:-http://localhost:3000}"
+      Invites__ExpiryDays: "7"
+      RabbitMq__Enabled: "true"
+      RabbitMq__HostName: "rabbitmq"
+      RabbitMq__Port: "5672"
+      RabbitMq__UserName: "guest"
+      RabbitMq__Password: "guest"
+      RabbitMq__VirtualHost: "/"
+      RabbitMq__Exchange: "myproperty.events"
+      FileStorage__LocalRoot: "/var/myproperty/storage"
+      Anthropic__Model: "claude-sonnet-4-5"
+      Anthropic__TimeoutSeconds: "30"
+      Anthropic__ApiKey: "${ANTHROPIC_API_KEY:-}"
+    ports:
+      - "5042:8080"   # Host port matches launchSettings.json + NEXT_PUBLIC_API_BASE_URL
+    volumes:
+      - backend_storage:/var/myproperty/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+    healthcheck:
+      # Hits the /live probe (Predicate=_=>false → returns 200 if the process
+      # is responsive). Uses curl (installed in the runtime image 
+      # via the Dockerfile). /api/v1/health/live is AllowAnonymous.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ── MyProperty frontend (Next.js) ───────────────────────────────────────────
+  # NEXT_PUBLIC_* vars are inlined into the bundle at build time, not runtime.
+  # The Docker build-args here come from .env (or compose defaults) so the
+  # bundle the browser downloads has the right URLs baked in.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5042}
+        NEXT_PUBLIC_KEYCLOAK_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+        NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:-MyProperty}
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-myproperty-frontend}
+    image: myproperty-frontend:dev
+    container_name: myproperty-frontend
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   # ── Loki (log aggregation) ───────────────────────────────────────────────────
   loki:
     image: grafana/loki:3.2.0
@@ -155,7 +256,54 @@ services:
       retries: 10
       start_period: 30s
 
-  # ── Grafana (log visualisation) ──────────────────────────────────────────────
+  # ── Promtail (ships container logs to Loki) ─────────────────────────────────
+  # Reads docker container stdout/stderr from the host's /var/lib/docker mount
+  # and pushes to Loki. The compose project / service labels become Loki
+  # labels (see infrastructure/promtail/config.yml). Without this, only the
+  # backend pushes structured logs (via Serilog.Sinks.Grafana.Loki); every
+  # other container would be a `docker logs` debug session.
+  promtail:
+    image: grafana/promtail:3.2.0
+    container_name: myproperty-promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./infrastructure/promtail/config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - promtail_positions:/tmp
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+
+  # ── Prometheus (metrics) ────────────────────────────────────────────────────
+  # Scrapes the API's /metrics endpoint (target stays "down" until the .NET
+  # service exposes one — M4.5 deliverable). Provisioned as a Grafana
+  # datasource alongside Loki.
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: myproperty-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    ports:
+      - "9090:9090"   # Prometheus UI →  http://localhost:9090
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:9090/-/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Grafana (dashboards) ─────────────────────────────────────────────────────
   # NOTE: anonymous admin is enabled — local demo only, not suitable for production.
   grafana:
     image: grafana/grafana:11.1.0
@@ -172,6 +320,8 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+      prometheus:
+        condition: service_healthy
     networks:
       - myproperty-net
     healthcheck:
@@ -186,6 +336,9 @@ volumes:
   loki_data:
   rabbitmq_data:
   keycloak_import:
+  backend_storage:
+  prometheus_data:
+  promtail_positions:
 
 networks:
   myproperty-net:
