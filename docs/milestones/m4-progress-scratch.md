@@ -78,3 +78,32 @@ Each plan is scoped to be reviewable as a single commit and verifiable against a
 **Sprint progress.** 6 of 9 M4 blockers closed (Plan 1: C1, H7, A1 backend; Plan 2: F1, F2, A2).
 
 ---
+
+### 2026-05-16 — M4 unblock sprint, Plan 3 (A6, E5)
+
+**Scope.** Keycloak realm production-readiness: deployable realm config (A6) and a runtime spec for `start --import-realm` mode (E5).
+
+**Changes.**
+- `infrastructure/keycloak/realm-export.json` → `realm-export.template.json`. The two URL spots inside the `myproperty-frontend` client (`redirectUris`, `webOrigins`) now use `${MYPROPERTY_FRONTEND_BASE_URL}`. Localhost and the Plan 1 placeholder `https://myproperty.PLACEHOLDER.example` both removed from the template — single source of truth via the env var. The Plan 1 audience mapper (`audience-myproperty-api`) survives intact.
+- `docker-compose.yml` — new `keycloak-realm-init` service (`alpine:3.20`, runs `envsubst` once, exits) plus new `keycloak_import` named volume. Keycloak service updated: import dir is now the named volume (not a host bind mount), `depends_on` adds `keycloak-realm-init: service_completed_successfully`, env block gets `MYPROPERTY_FRONTEND_BASE_URL` with `http://localhost:3000` default.
+- `docker-compose.yml` — healthcheck swapped from `curl` to an inline Java probe (compiles `HealthCheck.java` to `/tmp` on first run, uses the bundled JRE to GET the realm well-known endpoint). The curl-based probe has almost certainly been silently failing since the Keycloak 26 image stripped curl from its UBI Micro base; verified before the swap that the container had been stuck in `health: starting` indefinitely.
+- `infrastructure/keycloak/PRODUCTION.md` — new doc for the DevOps teammate. Covers: why `start-dev` is dev-only, the full env-var checklist for `start --import-realm` (`KC_HOSTNAME`, `KC_PROXY_HEADERS=xforwarded`, `KC_HTTP_ENABLED=true`, `KC_HOSTNAME_STRICT=true`, plus DB/admin/IdP secrets), the init-container pattern translated to a Helm-shaped K8s example, URL conventions (public vs cluster-internal, with the JWT issuer-vs-authority mismatch gotcha called out), the realm-import-on-first-startup behavior with operational implications, and a recommendation to use Keycloak's native `/health/live`+`/health/ready` on port 9000 for K8s probes rather than copying the dev compose Java probe.
+- Old `infrastructure/keycloak/realm-export.json` deleted — eliminates the trap where a future bind-mount addition would pull in two competing realm files.
+
+**Verification.**
+- **G1** (template structure): `jq` confirmed both URL spots use the placeholder var, audience mapper present, bearer-only `myproperty-api` client present, zero occurrences of `myproperty.PLACEHOLDER.example` or `localhost:3000` literals in the template.
+- **G2** (`docker compose config`): exit 0.
+- **G3** (clean boot from empty DB): after dropping the keycloak DB + named volume and `docker compose up -d keycloak`, the container reached `Up (healthy)` within the start_period — the Java healthcheck works where curl had been failing silently for the entire prior sprint.
+- **G4** (init pipeline): `keycloak-realm-init` exited 0, logged the success message, the rendered `realm-export.json` was present in `/opt/keycloak/data/import/` inside the Keycloak container with `http://localhost:3000` substituted in place of the env-var placeholder (dev default applied).
+- **G5** (realm endpoint): `GET /realms/MyProperty/.well-known/openid-configuration` returned issuer `http://localhost:8080/realms/MyProperty`.
+- **G6** (env-var override): re-rendering with `MYPROPERTY_FRONTEND_BASE_URL=https://staging.example.com` flowed the override into the produced JSON — proves the prod path actually works without needing to stand up a prod-mode harness locally.
+- **G7** (integration tests): 28/28 pass. Audience validation from Plan 1 still intact; the realm changes don't touch the `MyPropertyTest` fixture realm.
+- **G8** (doc readability): PRODUCTION.md reads top-to-bottom as a standalone deploy spec.
+
+**Side note — healthcheck bug closed as a side-benefit.** The audit didn't flag the broken curl healthcheck (it was reading source statically; couldn't observe that the runtime exec was failing). Caught it mid-planning by inspecting `docker compose ps keycloak` — container stuck in `health: starting` indefinitely. Since the plan was already modifying the keycloak service block for the init-container wiring, replacing the probe in the same commit was nearly free. Worth noting because it means M4 demo grading on `docker compose ps` will now show Keycloak as `(healthy)` rather than ambiguous-state.
+
+**M3 grade impact.** A6 was an M4 blocker per the audit; E5 was an M4 blocker for the K8s deployment specifically. Both close cleanly. The healthcheck fix isn't audit-graded but eliminates a "why is Keycloak stuck in starting" question if a grader inspects the local stack.
+
+**Sprint progress.** 7 of 9 M4 blockers closed. Remaining: H1 (readiness health probe — Plan 4) and D2 (EF migration bundle in CI/CD — Plan 5).
+
+---
