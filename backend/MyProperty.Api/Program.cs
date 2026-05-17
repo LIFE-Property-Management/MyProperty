@@ -87,12 +87,22 @@ try
 
     var keycloakAuthority = builder.Configuration[$"{KeycloakOptions.SectionName}:Authority"]
         ?? throw new InvalidOperationException("Keycloak:Authority is required.");
+    var keycloakMetadataAddress = builder.Configuration[$"{KeycloakOptions.SectionName}:MetadataAddress"];
 
     // ── Authentication ────────────────────────────────────────────────────────────
     builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
             options.Authority = keycloakAuthority;
+            // When MetadataAddress is set, JWKS discovery uses it instead of
+            // {Authority}/.well-known/openid-configuration. Lets the API pod
+            // reach Keycloak on the cluster-internal URL while Authority stays
+            // the browser-facing public URL that JWT `iss` claims carry. See
+            // KeycloakOptions and infrastructure/keycloak/PRODUCTION.md.
+            if (!string.IsNullOrWhiteSpace(keycloakMetadataAddress))
+            {
+                options.MetadataAddress = keycloakMetadataAddress;
+            }
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
             options.TokenValidationParameters = new()
             {

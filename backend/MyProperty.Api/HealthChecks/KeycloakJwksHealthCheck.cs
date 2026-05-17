@@ -18,8 +18,29 @@ internal sealed class KeycloakJwksHealthCheck(
     {
         try
         {
-            var authority = keycloakOptions.Value.Authority.TrimEnd('/');
-            var jwksUrl = $"{authority}/protocol/openid-connect/certs";
+            // Prefer the cluster-internal MetadataAddress when set — Authority
+            // is the browser-facing URL (used as ValidIssuer) and isn't
+            // necessarily reachable from inside the API pod. The discovery URL
+            // ends with /.well-known/openid-configuration; strip that to get
+            // the realm base, then append the JWKS path. Falls back to
+            // {Authority}/protocol/openid-connect/certs when MetadataAddress
+            // isn't configured (single-network deployments).
+            var options = keycloakOptions.Value;
+            string realmBase;
+            if (!string.IsNullOrWhiteSpace(options.MetadataAddress))
+            {
+                const string WellKnownSuffix = "/.well-known/openid-configuration";
+                var addr = options.MetadataAddress;
+                realmBase = addr.EndsWith(WellKnownSuffix, StringComparison.Ordinal)
+                    ? addr[..^WellKnownSuffix.Length]
+                    : addr.TrimEnd('/');
+            }
+            else
+            {
+                realmBase = options.Authority.TrimEnd('/');
+            }
+
+            var jwksUrl = $"{realmBase}/protocol/openid-connect/certs";
 
             using var client = httpClientFactory.CreateClient("keycloak-jwks");
             using var response = await client.GetAsync(jwksUrl, cancellationToken);
