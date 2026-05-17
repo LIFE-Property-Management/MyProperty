@@ -25,7 +25,7 @@ Detail per item — fix shape, risk, and dependencies — lives in `docs/audits/
 **Out of scope.** Anything not in the 9 items above. In particular: Anthropic OCR retry hardening (H2), RabbitMQ correlation ID propagation (L3), Redis fallback strategy (H4), brute-force protection (A4), Postgres pool tuning (D3), rate-limit boundary tests (C2), multi-tenancy retrofit, OWASP ZAP findings, IDOR existence leak. All deferred to M4 main work or M5.
 
 **Sprint exit criteria — verification gate.** When all 9 items are closed, a multi-container `docker compose up` succeeds and a browser at `http://localhost:3000` can:
-1. Reach `http://localhost:5042/api/v1/health` without CORS errors.
+1. Reach `http://localhost:5042/api/v1/health/live` without CORS errors.
 2. Initiate Keycloak login without redirect URI rejection.
 3. Complete a JWT-authenticated API call end-to-end.
 4. Have no `.env.local` content baked into the frontend production image.
