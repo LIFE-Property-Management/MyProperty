@@ -29,10 +29,10 @@ internal sealed class KeycloakJwksHealthCheck(
             string realmBase;
             if (!string.IsNullOrWhiteSpace(options.MetadataAddress))
             {
-                const string WellKnownSuffix = "/.well-known/openid-configuration";
+                const string wellKnownSuffix = "/.well-known/openid-configuration";
                 var addr = options.MetadataAddress;
-                realmBase = addr.EndsWith(WellKnownSuffix, StringComparison.Ordinal)
-                    ? addr[..^WellKnownSuffix.Length]
+                realmBase = addr.EndsWith(wellKnownSuffix, StringComparison.Ordinal)
+                    ? addr[..^wellKnownSuffix.Length]
                     : addr.TrimEnd('/');
             }
             else

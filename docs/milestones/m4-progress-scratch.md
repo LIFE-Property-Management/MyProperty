@@ -156,4 +156,6 @@ Each plan is scoped to be reviewable as a single commit and verifiable against a
 
 **M4 deliverable progress.** 1 of 12. Remaining for M4 main work: M4.2 (production Dockerfiles), M4.3 (CI/CD pipeline), M4.4 (K8s + Helm), M4.5 (monitoring dashboards + alerts), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security hardening), M4.9 (Nginx + SSL), M4.10 (Linux server), M4.11 (AIOps), M4.12 (AI Log Entry #4).
 
+**Known deviation logged.** `AnthropicOcrOptions` is defined in `Application/Common/Ocr/` and registered via `AddAiServices` in Infrastructure — violates the options-in-Api convention. Tracked for post-M4 cleanup in backend `CLAUDE.md`.
+
 ---

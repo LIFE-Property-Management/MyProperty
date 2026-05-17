@@ -291,6 +291,7 @@ Each technology has a distinct role; do not blur them.
 - **Per-IP rate limiting on anonymous invite endpoints** (`GET /by-token/{token}`, `POST /{token}/reject`). Without it, an attacker can enumerate token validity via the 404-vs-200/204 distinction. Owned by **M3.12** — limit per IP, not per user.
 - `HashToken` duplication — identical private static in `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, `GetInviteByTokenHandler`, `InvitePreviewAndRejectTests` . Extract to `Application/Invites/InviteTokenHasher.cs` post-M3. Also delete MyProperty.Tests/Unit/Handlers/TestUtils/TokenHasher.cs and replace its usages with the extracted class.
 - The hardcoded cache key string landlord:{landlordId}:dashboard in EvictDashboardCacheAsync — should reference a shared constant post-M3.
+- `AnthropicOcrOptions` defined in `Application/Common/Ocr/` — violates the options-in-Api convention. Move to `Api/Options/`, register in `Program.cs` alongside other options, strip `ValidateOnStart()` from `AddAiServices` in Infrastructure. `AddAiServices` should only register `IReceiptOcrService`.
 
 ## Testing (M3.11)
 
