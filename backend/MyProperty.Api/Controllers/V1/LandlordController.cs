@@ -57,7 +57,7 @@ public sealed class LandlordController(
     {
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLandlordTenants.Handle(
-            new GetLandlordTenantsQuery(landlord.Id, page, pageSize), ct);
+            new GetLandlordTenantsQuery( page, pageSize), ct);
         return Ok(result);
     }
 

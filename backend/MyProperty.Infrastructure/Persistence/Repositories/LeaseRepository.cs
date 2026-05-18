@@ -65,4 +65,27 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
             .OrderBy(l => l.EndDate)
             .ToListAsync(ct);
     }
+    
+    public async Task<(IReadOnlyList<Lease> Items, int TotalCount)> ListActiveTenantsByLandlordAsync(
+        Guid landlordId, int page, int pageSize, CancellationToken ct)
+    {
+        var baseQuery = db.Leases
+            .Where(l => l.LandlordId == landlordId && l.Status == LeaseStatus.Active);
+
+        var distinctTenantsQuery = baseQuery
+            .GroupBy(l => l.TenantId)
+            .Select(g => g.OrderByDescending(l => l.StartDate).First());
+
+        var totalCount = await distinctTenantsQuery.CountAsync(ct);
+
+        var items = await distinctTenantsQuery
+            .Include(l => l.Property)
+            .Include(l => l.Tenant)
+            .OrderByDescending(l => l.StartDate)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
 }

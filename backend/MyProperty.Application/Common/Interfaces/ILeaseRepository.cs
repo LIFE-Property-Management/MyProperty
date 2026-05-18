@@ -42,4 +42,14 @@ public interface ILeaseRepository
     /// </summary>
     Task<IReadOnlyList<Lease>> ListExpiringSoonAsync(
         Guid landlordId, int daysThreshold, CancellationToken ct);
+    
+    /// <summary>
+    /// Paginated list of distinct active tenants for a landlord. Returns one lease
+    /// per tenant (the most recent by StartDate) with Property and Tenant included.
+    /// Used to render the landlord Tenants page — see <c>portals.md</c>.
+    /// Post-lease (read-only) tenants are not included; see M4 backlog for the
+    /// follow-up that adds them.
+    /// </summary>
+    Task<(IReadOnlyList<Lease> Items, int TotalCount)> ListActiveTenantsByLandlordAsync(
+        Guid landlordId, int page, int pageSize, CancellationToken ct);
 }
