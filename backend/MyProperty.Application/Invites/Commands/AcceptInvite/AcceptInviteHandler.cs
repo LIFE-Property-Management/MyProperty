@@ -45,8 +45,7 @@ public sealed class AcceptInviteHandler(
             StartDate = invite.ProposedStartDate,
             EndDate = invite.ProposedEndDate,
             MonthlyRent = invite.ProposedMonthlyRent,
-            Currency = invite.Currency,
-            Status = LeaseStatus.Active,
+            Currency = invite.Currency
         };
 
         await leases.AddAsync(lease, ct);

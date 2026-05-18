@@ -7,6 +7,5 @@ public sealed class TerminateLeaseValidator : AbstractValidator<TerminateLeaseCo
     public TerminateLeaseValidator()
     {
         RuleFor(x => x.LeaseId).NotEmpty();
-        RuleFor(x => x.LandlordId).NotEmpty();
     }
 }

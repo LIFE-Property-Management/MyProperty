@@ -72,7 +72,7 @@ public sealed class LeasesController(
     public async Task<IActionResult> Terminate(Guid id, CancellationToken ct)
     {
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        await terminateLease.Handle(new TerminateLeaseCommand(id, landlord.Id), ct);
+        await terminateLease.Handle(new TerminateLeaseCommand(id), ct);
         return NoContent();
     }
 }

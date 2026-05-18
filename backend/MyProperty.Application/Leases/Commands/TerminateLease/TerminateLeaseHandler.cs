@@ -8,25 +8,26 @@ namespace MyProperty.Application.Leases.Commands.TerminateLease;
 
 public sealed class TerminateLeaseHandler(
     IValidator<TerminateLeaseCommand> validator,
-    ILeaseRepository leaseRepo,
+    ILeaseRepository leases,
+    IUserRepository users,
+    ICurrentUser currentUser,
     ILandlordDashboardCache dashboardCache)
 {
     public async Task Handle(TerminateLeaseCommand cmd, CancellationToken ct)
     {
         await validator.EnsureValidAsync(cmd, ct);
+        
+        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
-        var lease = await leaseRepo.GetByIdAsync(cmd.LeaseId, ct)
+        var lease = await leases.GetByIdAsync(cmd.LeaseId, ct)
             ?? throw new NotFoundException("Lease", cmd.LeaseId);
 
-        if (lease.LandlordId != cmd.LandlordId)
+        if (lease.LandlordId != landlord.Id)
             throw new ForbiddenException("You do not own this lease.");
 
-        if (lease.Status == LeaseStatus.Terminated)
-            throw new ConflictException("Lease is already terminated.");
+        lease.Terminate();
+        await leases.SaveChangesAsync(ct);
 
-        lease.Status = LeaseStatus.Terminated;
-        await leaseRepo.SaveChangesAsync(ct);
-
-        await dashboardCache.InvalidateAsync(cmd.LandlordId, ct);
+        await dashboardCache.InvalidateAsync(landlord.Id, ct);
     }
 }
