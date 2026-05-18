@@ -6,7 +6,6 @@ public sealed class GetLeasesExpiringSoonValidator : AbstractValidator<GetLeases
 {
     public GetLeasesExpiringSoonValidator()
     {
-        RuleFor(x => x.LandlordId).NotEmpty();
         RuleFor(x => x.DaysThreshold).InclusiveBetween(1, 365);
     }
 }

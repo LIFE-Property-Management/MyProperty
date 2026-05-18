@@ -6,18 +6,24 @@ namespace MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
 
 public sealed class GetLeasesExpiringSoonHandler(
     IValidator<GetLeasesExpiringSoonQuery> validator,
-    ILeaseRepository leaseRepo)
+    ILeaseRepository leases,
+    IUserRepository users,
+    ICurrentUser currentUser)
 {
     public async Task<IReadOnlyList<ExpiringLeaseDto>> Handle(
         GetLeasesExpiringSoonQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
-
+        
+        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var leases = await leaseRepo.ListExpiringSoonAsync(
-            query.LandlordId, query.DaysThreshold, ct);
+        var leasesExpiringSoon = await leases.ListExpiringSoonAsync(
+            landlord.Id, query.DaysThreshold, ct);
 
-        return leases.Select(l => new ExpiringLeaseDto(
+        // Property is always loaded via Include in ListExpiringSoonAsync
+        // Tenant is always loaded via Include in ListExpiringSoonAsync
+        return leasesExpiringSoon.Select(l => new ExpiringLeaseDto(
             l.Id,
             l.PropertyId,
             l.Property!.Name,

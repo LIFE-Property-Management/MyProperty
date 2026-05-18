@@ -56,7 +56,7 @@ public sealed class LeasesController(
     {
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLeasesExpiringSoon.Handle(
-            new GetLeasesExpiringSoonQuery(landlord.Id, daysThreshold), ct);
+            new GetLeasesExpiringSoonQuery(daysThreshold), ct);
         return Ok(result);
     }
 

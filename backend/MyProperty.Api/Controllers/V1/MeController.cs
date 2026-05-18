@@ -94,7 +94,7 @@ public sealed class MeController(
     public async Task<ActionResult<TenantLeaseDto>> Lease(CancellationToken ct)
     {
         var user = await userRepository.GetOrSyncFromClaimsAsync(User, ct);
-        var result = await getTenantLease.Handle(new GetTenantLeaseQuery(user.Id), ct);
+        var result = await getTenantLease.Handle(new GetTenantLeaseQuery(), ct);
         if (result is null)
             return NoContent();
         return Ok(result);

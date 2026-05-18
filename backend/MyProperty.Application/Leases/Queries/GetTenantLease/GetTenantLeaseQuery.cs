@@ -1,3 +1,3 @@
 namespace MyProperty.Application.Leases.Queries.GetTenantLease;
 
-public sealed record GetTenantLeaseQuery(Guid TenantId);
+public sealed record GetTenantLeaseQuery;

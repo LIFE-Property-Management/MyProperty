@@ -2,11 +2,16 @@ using MyProperty.Application.Common.Interfaces;
 
 namespace MyProperty.Application.Leases.Queries.GetTenantLease;
 
-public sealed class GetTenantLeaseHandler(ILeaseRepository leaseRepo)
+public sealed class GetTenantLeaseHandler (
+    ILeaseRepository leases,
+    IUserRepository users,
+    ICurrentUser currentUser)
 {
     public async Task<TenantLeaseDto?> Handle(GetTenantLeaseQuery query, CancellationToken ct)
     {
-        var lease = await leaseRepo.GetActiveByTenantIdAsync(query.TenantId, ct);
+        var tenant = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        
+        var lease = await leases.GetActiveByTenantIdAsync(tenant.Id, ct);
         if (lease is null)
             return null;
 
@@ -14,6 +19,7 @@ public sealed class GetTenantLeaseHandler(ILeaseRepository leaseRepo)
             ? $"{lease.Landlord.FirstName} {lease.Landlord.LastName}"
             : string.Empty;
 
+        // Property is always loaded via Include in GetActiveByTenantIdAsync
         return new TenantLeaseDto(
             lease.Id,
             lease.Property!.Name,
