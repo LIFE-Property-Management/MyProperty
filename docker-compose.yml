@@ -278,9 +278,10 @@ services:
       - myproperty-net
 
   # ── Prometheus (metrics) ────────────────────────────────────────────────────
-  # Scrapes the API's /metrics endpoint (target stays "down" until the .NET
-  # service exposes one — M4.5 deliverable). Provisioned as a Grafana
-  # datasource alongside Loki.
+  # Scrapes the API's /metrics endpoint (prometheus-net.AspNetCore middleware
+  # registered in MyProperty.Api/Program.cs — M4.5). Provisioned as a Grafana
+  # datasource alongside Loki. Loads alerting rules from ./alerts/ and forwards
+  # firing alerts to the alertmanager service.
   prometheus:
     image: prom/prometheus:v2.55.0
     container_name: myproperty-prometheus
@@ -289,15 +290,46 @@ services:
       - --storage.tsdb.path=/prometheus
       - --web.console.libraries=/usr/share/prometheus/console_libraries
       - --web.console.templates=/usr/share/prometheus/consoles
+      # Enable lifecycle API so `curl -X POST /-/reload` picks up new alert
+      # rules without restarting the container — useful during M4.5 demo
+      # when iterating on alerts/*.yml.
+      - --web.enable-lifecycle
     ports:
       - "9090:9090"   # Prometheus UI →  http://localhost:9090
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus_data:/prometheus
     networks:
       - myproperty-net
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --spider http://localhost:9090/-/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Alertmanager (alert routing) ────────────────────────────────────────────
+  # Receives firing alerts from Prometheus, deduplicates / groups them, and
+  # forwards to the configured receivers. M4.5 wires a single webhook receiver
+  # reserved for M4.11 (AIOps auto-triage); the target URL fails until M4.11
+  # registers a service at it, which is the documented M4.5 demo state — the
+  # alerts themselves are visible in the Prometheus + Alertmanager UIs.
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: myproperty-alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "9093:9093"   # Alertmanager UI →  http://localhost:9093
+    volumes:
+      - ./infrastructure/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:9093/-/ready || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -339,6 +371,7 @@ volumes:
   backend_storage:
   prometheus_data:
   promtail_positions:
+  alertmanager_data:
 
 networks:
   myproperty-net:

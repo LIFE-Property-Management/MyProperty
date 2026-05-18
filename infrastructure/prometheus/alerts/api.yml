@@ -1,0 +1,106 @@
+# =============================================================
+#  infrastructure/prometheus/alerts/api.yml
+#
+#  M4.5 alerting rules for the MyProperty API.
+#
+#  Severity convention:
+#    critical → page-worthy (downtime, complete failure)
+#    warning  → degraded but functional (high error rate, slow responses)
+#
+#  All alerts carry a `service` label (= "api") so Alertmanager routing in
+#  infrastructure/alertmanager/alertmanager.yml can group by service. The
+#  `runbook_url` annotation deliberately points at the in-repo operations
+#  docs rather than an external wiki — survives org migration, single source.
+# =============================================================
+
+groups:
+  # ── API availability and request-path health ──────────────────────────────
+  - name: myproperty-api
+    interval: 15s
+    rules:
+
+      # `up` is the synthetic gauge Prometheus emits per scrape target: 1 if
+      # the last scrape succeeded, 0 if it failed. Two minutes of `0` means
+      # the API container is down, unreachable, or wedged in a way that fails
+      # /metrics scraping. Same predicate K8s readinessProbe uses indirectly.
+      - alert: MyPropertyApiDown
+        expr: up{job="myproperty-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "MyProperty API is down"
+          description: "Prometheus has been unable to scrape {{ $labels.instance }} for at least 2 minutes. Check `docker compose logs backend` or the K8s pod logs."
+          runbook_url: "https://github.com/drinprekaj/MyProperty/blob/main/docs/operations/health-probes.md"
+
+      # Error rate over the trailing 5 minutes. The ratio form (5xx / total)
+      # avoids false positives during quiet periods — a single 5xx during a
+      # 1-rps window would otherwise trip a raw-count alert. Threshold of 5%
+      # is the loose default for a milestone demo; tune from real traffic.
+      # `or vector(0)` keeps the expression defined when no requests have
+      # arrived yet (avoids NaN that Alertmanager treats as "absent").
+      - alert: MyPropertyApiHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_received_total{job="myproperty-api", code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_received_total{job="myproperty-api"}[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API 5xx error rate above 5%"
+          description: "More than 5% of requests have returned 5xx for at least 5 minutes (current: {{ $value | humanizePercentage }})."
+
+      # p95 latency. histogram_quantile over the duration histogram exposed by
+      # prometheus-net's UseHttpMetrics middleware. 1s is generous for a
+      # CRUD-ish API; the alert exists to catch a runaway query / N+1 / dead
+      # downstream rather than to police every millisecond.
+      - alert: MyPropertyApiHighLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{job="myproperty-api"}[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API p95 latency above 1s"
+          description: "p95 request duration has exceeded 1 second for 10 minutes (current: {{ $value | humanizeDuration }}). Investigate slow endpoints in the Grafana 'MyProperty API — RED metrics' dashboard."
+
+      # In-flight saturation. The gauge tops out at Kestrel's effective
+      # concurrent-request limit; sustained high values indicate the API is
+      # backpressuring. Threshold of 100 is conservative for a single API
+      # instance running in compose; lift it when you scale horizontally.
+      - alert: MyPropertyApiHighInFlightRequests
+        expr: sum(http_requests_in_progress{job="myproperty-api"}) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API saturating — many in-flight requests"
+          description: "More than 100 concurrent requests in flight for 5 minutes (current: {{ $value }}). Likely a slow downstream (Postgres / Keycloak / RabbitMQ) holding request threads."
+
+  # ── Scrape-target liveness (catch-all) ────────────────────────────────────
+  # Fires when ANY scrape target — not just the API — has been unreachable
+  # for 5 minutes. Catches Alertmanager itself going dark and gives one
+  # alert per failing instance for free, instead of one bespoke rule per
+  # service. Lower severity than MyPropertyApiDown because non-API targets
+  # may be diagnostic (Prometheus self-scrape).
+  - name: generic
+    interval: 15s
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus target {{ $labels.job }} is down"
+          description: "Target {{ $labels.instance }} (job {{ $labels.job }}) has not been scrapeable for 5 minutes."
