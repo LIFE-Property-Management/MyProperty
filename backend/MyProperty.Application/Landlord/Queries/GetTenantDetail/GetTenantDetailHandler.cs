@@ -7,14 +7,19 @@ namespace MyProperty.Application.Landlord.Queries.GetTenantDetail;
 
 public sealed class GetTenantDetailHandler(
     IValidator<GetTenantDetailQuery> validator,
-    ILeaseRepository leaseRepo)
+    ILeaseRepository leases,
+    IUserRepository users,
+    ICurrentUser currentUser)
 {
     public async Task<TenantDetailDto> Handle(GetTenantDetailQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
+        
+        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
-        var lease = await leaseRepo.GetLeaseWithPaymentsByTenantAndLandlordAsync(
-            query.TenantId, query.LandlordId, ct)
+
+        var lease = await leases.GetLeaseWithPaymentsByTenantAndLandlordAsync(
+            query.TenantId, landlord.Id, ct)
             ?? throw new NotFoundException("Tenant lease", query.TenantId);
 
         var payments = lease.Payments

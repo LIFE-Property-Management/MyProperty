@@ -7,6 +7,5 @@ public sealed class GetTenantDetailValidator : AbstractValidator<GetTenantDetail
     public GetTenantDetailValidator()
     {
         RuleFor(x => x.TenantId).NotEmpty();
-        RuleFor(x => x.LandlordId).NotEmpty();
     }
 }

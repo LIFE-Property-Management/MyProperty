@@ -74,7 +74,7 @@ public sealed class LandlordController(
     public async Task<ActionResult<TenantDetailDto>> TenantDetail(Guid id, CancellationToken ct)
     {
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        var result = await getTenantDetail.Handle(new GetTenantDetailQuery(id, landlord.Id), ct);
+        var result = await getTenantDetail.Handle(new GetTenantDetailQuery(id), ct);
         return Ok(result);
     }
 }
