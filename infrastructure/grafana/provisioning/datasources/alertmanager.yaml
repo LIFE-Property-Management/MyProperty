@@ -1,0 +1,16 @@
+apiVersion: 1
+datasources:
+  - name: Alertmanager
+    type: alertmanager
+    uid: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    isDefault: false
+    jsonData:
+      # M4.5 uses Prometheus' own alerting (rule files loaded by Prometheus,
+      # firing alerts pushed to Alertmanager). Setting "implementation: prometheus"
+      # tells Grafana the alerts are managed by Prometheus' rule evaluator, so
+      # the Alerting → Active panels read from Prometheus and the routing /
+      # silencing views read from Alertmanager.
+      implementation: prometheus
+      handleGrafanaManagedAlerts: false
