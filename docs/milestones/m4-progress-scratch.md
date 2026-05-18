@@ -121,6 +121,34 @@ The current `GetLandlordTenantsHandler` filters to active leases only, which mea
 
 ---
 
+### 2026-05-16 — M4 unblock sprint, Plan 4 (H1)
+
+**Scope.** Readiness health probe: replaced the static-OK `/api/v1/health` controller with a three-endpoint health pipeline backed by `Microsoft.Extensions.Diagnostics.HealthChecks`, and produced an operations doc DevOps consumes for K8s probe wiring.
+
+**Changes.**
+- `backend/MyProperty.Api/Controllers/V1/HealthController.cs` deleted.
+- `backend/MyProperty.Application/Health/HealthResponse.cs` deleted; folder removed.
+- `backend/MyProperty.Api/HealthChecks/KeycloakJwksHealthCheck.cs` added — small custom `IHealthCheck` GETs `{Authority}/protocol/openid-connect/certs` with a 2-second timeout configured on the named `HttpClient` at registration.
+- `backend/MyProperty.Api/Program.cs` — `AddHealthChecks()` block with `AddNpgSql` (tag `ready`), `AddRedis` / `AddRabbitMQ` / `KeycloakJwksHealthCheck` (tag `diagnostic`); three `MapHealthChecks` calls (`/live` no checks, `/ready` ready-tagged only, `/diagnostics` all checks) using `UIResponseWriter`.
+- `backend/MyProperty.Api/MyProperty.Api.csproj` — added `AspNetCore.HealthChecks.{NpgSql,Redis,Rabbitmq,UI.Client}`.
+- `backend/MyProperty.Tests/Integration/...` — old `/health` tests deleted; new tests for `/live`, `/ready`, and `/diagnostics` cover status codes, anonymous access, and response-body shape.
+- `docs/operations/health-probes.md` created (folder is new) — three-endpoint contract, decision log for diagnostic-only checks, K8s probe block with parameter reasoning, local verification commands including the `/ready` vs `/diagnostics` distinction.
+- `docs/audits/m3-m4-audit/dev-prod-gaps.md` — H1 row annotated CLOSED.
+
+**Verification.** Runtime behavior verified by stopping each downstream container: `/ready` returns 503 only for Postgres outages and 200 (with the missing check absent from the body) for Redis/RabbitMQ/Keycloak outages; `/diagnostics` returns 503 when any check is unhealthy and 200 only when all four pass; `/live` returns 200 with empty entries regardless of downstream state. Full integration test suite green.
+
+**Decision: three endpoints, not two.** Initial implementation used `/live` + `/ready` with a tag predicate scoping checks to "ready"-tagged only. This caused diagnostic checks to be skipped entirely from the `/ready` response body, defeating their purpose. Resolved by adding `/diagnostics` as a third endpoint that runs all checks; `/ready` keeps its strict predicate and serves K8s, `/diagnostics` serves humans debugging from outside the cluster. Reasoning lives in `docs/operations/health-probes.md`.
+
+**Decision: only Postgres blocks `/ready`.** Redis, RabbitMQ, and Keycloak JWKS register as diagnostic checks. Short version: each of those downstreams has graceful-degradation behavior or aggressive client-side caching (JWT middleware caches JWKS for ~24h with cached keys retained on refresh failure) that makes "take the whole API out of rotation" the wrong tradeoff for brief outages.
+
+**Side note — initial predicate trap.** First implementation defined `/ready` with `Predicate = check => check.Tags.Contains("ready")`. This is doubly restrictive: it scopes both *which checks run* and *which appear in the response body* — not just which ones gate the status code. Diagnostic checks never executed. Caught at the manual smoke test stage when the curl response showed only postgres in the entries. Three-endpoint split is the framework-idiomatic fix.
+
+**M3 grade impact.** None directly — H1 is an M4 readiness item, not M3 grading. The operations doc puts a deliverable in DevOps's hands ahead of their Helm/K8s work.
+
+**Sprint progress.** 8 of 9 M4 blockers closed. Remaining: D2 (EF migration bundle in CI/CD) — Plan 5.
+
+---
+
 ### 2026-05-17 — M4.1 Docker Compose (full stack)
 
 **Scope.** Bring every service in the M4.1 deliverable onto a single `docker compose up`: Next.js + .NET API + PostgreSQL + Redis + Keycloak + RabbitMQ + monitoring stack (Loki + Promtail + Prometheus + Grafana). MailHog (dev SMTP catcher) stays, since the existing M3.7 invite flow depends on it.
@@ -170,5 +198,38 @@ The current `GetLandlordTenantsHandler` filters to active leases only, which mea
 **M4 deliverable progress.** 1 of 12. Remaining for M4 main work: M4.2 (production Dockerfiles), M4.3 (CI/CD pipeline), M4.4 (K8s + Helm), M4.5 (monitoring dashboards + alerts), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security hardening), M4.9 (Nginx + SSL), M4.10 (Linux server), M4.11 (AIOps), M4.12 (AI Log Entry #4).
 
 **Known deviation logged.** `AnthropicOcrOptions` is defined in `Application/Common/Ocr/` and registered via `AddAiServices` in Infrastructure — violates the options-in-Api convention. Tracked for post-M4 cleanup in backend `CLAUDE.md`.
+
+---
+
+### 2026-05-17 — M4 unblock sprint, Plan 5 (D2)
+
+**Scope.** EF migration bundle artifact: produces a self-contained migration runner shipped as a Docker image on GHCR, plus the operations doc DevOps consumes to wire it into a Helm pre-upgrade Job. Closes the last of nine M4 application-code blockers.
+
+**Changes.**
+- New `backend/scripts/build-migration-bundle.sh` — executable bash driver; local mode (default) builds `myproperty-migrations:local` with no push; CI mode (via `PUSH=true`, `IMAGE_REGISTRY`, `GIT_SHA`, `BRANCH_NAME`) dual-tags and pushes to GHCR. Single source of truth shared by developers and CI.
+- New `backend/Dockerfile.migrations` — single-stage, base `mcr.microsoft.com/dotnet/aspnet:10.0`, `ENTRYPOINT = /app/efbundle`. Bundle binary produced by the script before `docker build` runs.
+- `.github/workflows/backend-ci.yml` extended with a `migration-bundle` job (`needs: build-and-test`, `if: github.event_name == 'push'`, `permissions: contents: read, packages: write`, concurrency group keyed by ref). Pushes to `ghcr.io/${{ github.repository_owner }}/myproperty-migrations` with dual tags (short SHA + branch name).
+- `backend/MyProperty.Infrastructure/Persistence/AppDbContextFactory.cs` — connection string now reads `ConnectionStrings__Postgres` env var first, falls back to the existing hardcoded local literal for `dotnet ef` developer workflows.
+- New `docs/operations/migrations.md` — 13-section operations spec for DevOps: image reference, required env vars, exit-code contract, idempotency guarantee, Helm pre-upgrade Job example, job-timeout guidance, mid-migration failure semantics, forward-only rollback policy with documented break-glass procedure, local verification recipe.
+
+**Verification.** Built locally; ran against a throwaway `postgres:16` container. All 7 migrations applied, exit 0. `__EFMigrationsHistory` inspection confirmed all migration IDs present in correct order. Second run a clean no-op, exit 0 (idempotency confirmed). Bogus connection string exits 1 with a recognisable `Name or service not known` stderr message.
+
+**Decision: Docker image, not raw binary artifact.** DevOps is building Helm from scratch; handing them a K8s-native primitive (`image: <ref>`) instead of a binary they'd have to wrap in their own base image removes a layer of invention before May 22. Same scope-split logic as Plan 3 (`keycloak-realm-init` → K8s `initContainer`).
+
+**Decision: framework-dependent on `dotnet/aspnet:10.0`.** Same base-image family as the API image, runtime CVE patches land on rebuild without needing to bump bundle source, ~120 MB total image size. Self-contained was the alternative; trade-off was size + manual CVE coverage with no real upside given the existing base-image choice.
+
+**Decision: dual-tag by short SHA + branch, Helm pins to SHA only.** Branch tag is mutable convenience for humans inspecting the registry; SHA is immutable for production references. The doc is explicit that referencing the branch tag from Helm is the wrong pattern — single most common source of "why did production migrate to the wrong schema" incidents.
+
+**Decision: forward-only migrations, no automated rollback.** EF bundles don't expose `down` migrations by default. Documented break-glass procedure (manual `dotnet ef database update <PreviousMigration>` from a dev machine) for prod incidents where the forward-fix isn't viable.
+
+**Side note — script-driven bundle build, not multi-stage Dockerfile.** Considered putting `dotnet ef migrations bundle` inside an SDK build stage. Chose script-driven instead: gives exact parity between local and CI invocation through one entry point; Dockerfile stays trivially auditable (one `COPY`, one `ENTRYPOINT`).
+
+**Side note — `runtime:10.0` vs `aspnet:10.0` base image.** Initial plan specified `mcr.microsoft.com/dotnet/runtime:10.0` on the assumption that a migration bundle needs only EF Core + Npgsql + the base runtime. The bundle is compiled against the startup project's TFM (`MyProperty.Api`, an ASP.NET Core web project), so it requires `Microsoft.AspNetCore.App` at runtime. Caught at smoke test (exit 150, `COREHOST_LIBHOSTSDK_RESOLUTION_FAILURE`); resolved by switching to `mcr.microsoft.com/dotnet/aspnet:10.0`, which is `runtime:10.0` plus the ASP.NET Core shared framework. Side benefit: the migration image shares its base layer with the API image, improving registry cache locality.
+
+**Side note — `IDesignTimeDbContextFactory` short-circuits the bundle's config pipeline.** First clean-base bundle run picked up the hardcoded localhost connection string from `AppDbContextFactory.cs` and ignored `ConnectionStrings__Postgres` entirely. Root cause: EF tooling resolves the `DbContext` via `IDesignTimeDbContextFactory<TContext>` if one exists in the startup project's assembly graph, bypassing `Program.cs`'s configuration pipeline. Fixed by making the factory read the env var first and fall back to the hardcoded literal only when unset. The fallback is documented as local-dev-only in `migrations.md` §3 so DevOps knows the K8s Job must inject the env var explicitly.
+
+**M3 grade impact.** None directly — D2 is an M4 readiness item.
+
+**Sprint progress.** 9 of 9 M4 blockers closed. M4 unblock sprint complete; DevOps is now unblocked for Helm/K8s/Compose work against stable application contracts.
 
 ---
