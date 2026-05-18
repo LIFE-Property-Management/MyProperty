@@ -26,11 +26,19 @@ using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
+using MyProperty.Application.Landlord.Queries.GetLandlordTenants;
+using MyProperty.Application.Landlord.Queries.GetTenantDetail;
+using MyProperty.Application.Leases.Commands.TerminateLease;
+using MyProperty.Application.Leases.Queries.GetLandlordLeases;
+using MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
+using MyProperty.Application.Leases.Queries.GetTenantLease;
 using MyProperty.Application.Payments.Commands.ConfirmPayment;
 using MyProperty.Application.Payments.Commands.CreatePayment;
 using MyProperty.Application.Payments.Commands.RejectPayment;
 using MyProperty.Application.Payments.Commands.SubmitPayment;
 using MyProperty.Application.Payments.Queries.DownloadReceipt;
+using MyProperty.Application.Properties.Commands.CreateProperty;
+using MyProperty.Application.Properties.Queries.GetLandlordProperties;
 using MyProperty.Infrastructure;
 using Serilog;
 using Serilog.Events;
@@ -151,6 +159,18 @@ try
 
     // Landlord handlers
     builder.Services.AddScoped<GetLandlordDashboardHandler>();
+    builder.Services.AddScoped<GetLandlordTenantsHandler>();
+    builder.Services.AddScoped<GetTenantDetailHandler>();
+
+    // Property handlers
+    builder.Services.AddScoped<CreatePropertyHandler>();
+    builder.Services.AddScoped<GetLandlordPropertiesHandler>();
+
+    // Lease handlers
+    builder.Services.AddScoped<GetLandlordLeasesHandler>();
+    builder.Services.AddScoped<GetLeasesExpiringSoonHandler>();
+    builder.Services.AddScoped<GetTenantLeaseHandler>();
+    builder.Services.AddScoped<TerminateLeaseHandler>();
 
     // Payment handlers
     builder.Services.AddScoped<CreatePaymentHandler>();

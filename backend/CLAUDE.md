@@ -293,6 +293,20 @@ Each technology has a distinct role; do not blur them.
 - The hardcoded cache key string landlord:{landlordId}:dashboard in EvictDashboardCacheAsync — should reference a shared constant post-M3.
 - `AnthropicOcrOptions` defined in `Application/Common/Ocr/` — violates the options-in-Api convention. Move to `Api/Options/`, register in `Program.cs` alongside other options, strip `ValidateOnStart()` from `AddAiServices` in Infrastructure. `AddAiServices` should only register `IReceiptOcrService`.
 
+
+## (For Later) Single active lease per tenant — enforce as domain invariant
+
+The dashboard, tenant detail page, and `GetActiveByTenantIdAsync` all assume a tenant has at most one active lease. The current data model permits multiple, which silently breaks these assumptions (tenant sees only one of N active leases; landlord sees only the most recent on the tenant detail page).
+
+**Required work:**
+1. Add domain invariant: reject lease creation if tenant already has an active lease. Enforce in `AcceptInviteHandler` and any future lease-creation path.
+2. Add partial unique index in EF Core configuration: `Lease(TenantId) WHERE Status = 'Active' AND DeletedAt IS NULL`. Generate migration.
+3. Remove the line "Multiple active leases per tenant are allowed (no constraint)" from `CLAUDE.md` (Invites section).
+4. Audit existing data — backfill or terminate duplicates before applying the unique index in any non-dev environment.
+5. Rename `GetLeaseWithPaymentsByTenantAndLandlordAsync` to `GetActiveLeaseWithPaymentsByTenantAndLandlordAsync` and add the `Status == Active` filter once the invariant holds. Return null when none exists.
+
+**Why deferred:** enforcement requires migration + multi-handler validation + test data cleanup. Out of scope for the current PR.
+
 ## Testing (M3.11)
 
 - **xUnit** for the test framework. Project: `MyProperty.Tests/` (added at M3.11), split into `Unit/` and `Integration/`.

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Domain.Entities;
+using MyProperty.Domain.Enums;
 
 namespace MyProperty.Infrastructure.Persistence.Repositories;
 
@@ -11,4 +12,80 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
 
     public Task AddAsync(Lease lease, CancellationToken ct)
         => db.Leases.AddAsync(lease, ct).AsTask();
+
+    public Task SaveChangesAsync(CancellationToken ct)
+        => db.SaveChangesAsync(ct);
+
+    public async Task<(IReadOnlyList<Lease> Items, int TotalCount)> ListByLandlordAsync(
+        Guid landlordId, int page, int pageSize, CancellationToken ct)
+    {
+        var query = db.Leases
+            .Include(l => l.Property)
+            .Include(l => l.Tenant)
+            .Where(l => l.LandlordId == landlordId)
+            .OrderByDescending(l => l.StartDate);
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
+
+    public Task<Lease?> GetActiveByTenantIdAsync(Guid tenantId, CancellationToken ct)
+        => db.Leases
+            .Include(l => l.Property)
+            .Include(l => l.Landlord)
+            .FirstOrDefaultAsync(l => l.TenantId == tenantId && l.Status == LeaseStatus.Active, ct);
+
+    public Task<Lease?> GetLeaseWithPaymentsByTenantAndLandlordAsync(
+        Guid tenantId, Guid landlordId, CancellationToken ct)
+        => db.Leases
+            .Include(l => l.Property)
+            .Include(l => l.Tenant)
+            .Include(l => l.Payments)
+            .Where(l => l.TenantId == tenantId && l.LandlordId == landlordId)
+            .OrderByDescending(l => l.StartDate)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<Lease>> ListExpiringSoonAsync(
+        Guid landlordId, int daysThreshold, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var threshold = today.AddDays(daysThreshold);
+
+        return await db.Leases
+            .Include(l => l.Property)
+            .Include(l => l.Tenant)
+            .Where(l => l.LandlordId == landlordId
+                     && l.Status == LeaseStatus.Active
+                     && l.EndDate <= threshold)
+            .OrderBy(l => l.EndDate)
+            .ToListAsync(ct);
+    }
+    
+    public async Task<(IReadOnlyList<Lease> Items, int TotalCount)> ListActiveTenantsByLandlordAsync(
+        Guid landlordId, int page, int pageSize, CancellationToken ct)
+    {
+        var baseQuery = db.Leases
+            .Where(l => l.LandlordId == landlordId && l.Status == LeaseStatus.Active);
+
+        var distinctTenantsQuery = baseQuery
+            .GroupBy(l => l.TenantId)
+            .Select(g => g.OrderByDescending(l => l.StartDate).First());
+
+        var totalCount = await distinctTenantsQuery.CountAsync(ct);
+
+        var items = await distinctTenantsQuery
+            .Include(l => l.Property)
+            .Include(l => l.Tenant)
+            .OrderByDescending(l => l.StartDate)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
 }

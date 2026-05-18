@@ -62,8 +62,7 @@ public sealed class LandlordDashboardTests(ApiFixture fixture)
                 StartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
                 EndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
                 MonthlyRent = 800m,
-                Currency = "EUR",
-                Status = LeaseStatus.Active,
+                Currency = "EUR"
             });
             db.Payments.Add(new Payment
             {

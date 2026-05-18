@@ -50,6 +50,19 @@ When all four pass, message DevOps teammate that app-code blockers are cleared a
 
 Each plan is scoped to be reviewable as a single commit and verifiable against a concrete curl / build / test command.
 
+
+## Post-lease tenant visibility on Tenants page
+
+Per `portals.md`: "Tenants with any prior active lease are never auto-deleted. Post-lease accounts persist with read-only access — show as read-only, not inactive or deleted."
+
+The current `GetLandlordTenantsHandler` filters to active leases only, which means tenants whose leases have ended (status `ReadOnly`) disappear from the Tenants page. This contradicts portals.md.
+
+**Required work:**
+1. Decide where read-only tenants surface: same Tenants page with a status badge, or a separate "Past Tenants" / archived view.
+2. If same page: replace `ListActiveTenantsByLandlordAsync` with a tenant-centric query (likely on `ITenantRepository` or `IUserRepository`) that returns distinct users with any lease relationship to the landlord, plus a derived current-status column.
+3. Update `LandlordTenantDto` to expose tenant account status, not just lease status.
+
+**Why deferred:** product decision on where post-lease tenants render still open. Path A (active-only) ships first to unblock the Tenants page.
 ---
 
 ### 2026-05-13 — M4 unblock sprint, Plan 2 (F1, F2, A2)
