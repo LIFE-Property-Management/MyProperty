@@ -34,8 +34,11 @@ BUNDLE_DIR="${BACKEND_DIR}/artifacts/migration-bundle"
 rm -rf "${BUNDLE_DIR}"
 mkdir -p "${BUNDLE_DIR}"
 
-echo "▸ Producing EF migration bundle (linux-x64, framework-dependent)"
+echo "▸ Restoring backend projects"
 pushd "${BACKEND_DIR}" >/dev/null
+dotnet restore MyProperty.Api/MyProperty.Api.csproj -r linux-x64
+
+echo "▸ Producing EF migration bundle (linux-x64, framework-dependent)"
 dotnet ef migrations bundle \
   --project MyProperty.Infrastructure \
   --startup-project MyProperty.Api \
