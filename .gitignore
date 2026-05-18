@@ -83,7 +83,6 @@ backend/bin/
 backend/obj/
 **/bin/
 **/obj/
-backend/artifacts/
 
 # User-specific VS / Rider files
 *.user
