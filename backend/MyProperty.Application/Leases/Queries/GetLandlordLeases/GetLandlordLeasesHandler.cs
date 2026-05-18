@@ -7,15 +7,21 @@ namespace MyProperty.Application.Leases.Queries.GetLandlordLeases;
 
 public sealed class GetLandlordLeasesHandler(
     IValidator<GetLandlordLeasesQuery> validator,
-    ILeaseRepository leaseRepo)
+    ILeaseRepository leases,
+    IUserRepository users,
+    ICurrentUser currentUser)
 {
     public async Task<PagedResult<LeaseDto>> Handle(GetLandlordLeasesQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
+        
+        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
-        var (items, totalCount) = await leaseRepo.ListByLandlordAsync(
-            query.LandlordId, query.Page, query.PageSize, ct);
+        var (items, totalCount) = await leases.ListByLandlordAsync(
+            landlord.Id, query.Page, query.PageSize, ct);
 
+        // Property is always loaded via Include in ListByLandlordAsync
+        // Tenant is always loaded via Include in ListByLandlordAsync
         var dtos = items.Select(l => new LeaseDto(
             l.Id,
             l.PropertyId,
