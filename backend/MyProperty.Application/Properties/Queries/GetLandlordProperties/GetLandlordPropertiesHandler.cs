@@ -7,14 +7,18 @@ namespace MyProperty.Application.Properties.Queries.GetLandlordProperties;
 
 public sealed class GetLandlordPropertiesHandler(
     IValidator<GetLandlordPropertiesQuery> validator,
-    IPropertyRepository propertyRepo)
+    IPropertyRepository properties,
+    IUserRepository users,
+    ICurrentUser currentUser)
 {
     public async Task<PagedResult<PropertyDto>> Handle(GetLandlordPropertiesQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
+        
+        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
-        var (items, totalCount) = await propertyRepo.ListByLandlordAsync(
-            query.LandlordId, query.Page, query.PageSize, ct);
+        var (items, totalCount) = await properties.ListByLandlordAsync(
+            landlord.Id, query.Page, query.PageSize, ct);
 
         var dtos = items.Select(p => new PropertyDto(
             p.Id, p.Name, p.Address, p.UnitNumber, p.CreatedAt)).ToList();
