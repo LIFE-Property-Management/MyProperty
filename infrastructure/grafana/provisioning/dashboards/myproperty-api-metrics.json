@@ -587,7 +587,7 @@
             "thresholdsStyle": { "mode": "off" }
           },
           "mappings": [],
-          "unit": "percentunit"
+          "unit": "short"
         },
         "overrides": []
       },
