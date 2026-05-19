@@ -281,6 +281,6 @@ This deviation is also surfaced in the M5 architecture doc (per the original dec
 - `MyPropertyApiNoTraffic` alert. Briefly considered: alert when request rate drops to zero for an extended window. Rejected for M4.5 because the demo will frequently leave the stack idle and the alert would fire on lack of activity rather than lack of health. Re-introduce post-deployment when steady-state traffic is the baseline.
 - Hangfire dashboard requests (`/hangfire/*`) currently flow through `UseHttpMetrics` with empty controller/action labels (Hangfire renders its UI via its own middleware, not MVC routing). This produces a `controller=""` bucket on the request-rate panel. Cosmetic; could be suppressed with a route-template filter. Deferred.
 
-**M4 deliverable progress.** 5 of 12. Closed: M4.1 (compose), M4.5 (this entry), plus the audit deliverables D2 (migration bundle) and H1 (health probes) shipped during the unblock sprint. The CI/CD pipeline (M4.3) refactor that landed in commit `8eb8c0e` is also closed. Remaining for M4: M4.2 (production Dockerfiles), M4.4 (K8s + Helm), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security hardening), M4.9 (Nginx + SSL), M4.10 (Linux server), M4.11 (AIOps), M4.12 (AI Log Entry #4).
+**M4 deliverable progress.** 2 of 12. Closed: M4.1 (compose), M4.5 (this entry). Remaining for M4: M4.2 (production Dockerfiles), M4.3 (CI/CD) M4.4 (K8s + Helm), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security hardening), M4.9 (Nginx + SSL), M4.10 (Linux server), M4.11 (AIOps), M4.12 (AI Log Entry #4).
 
 ---
