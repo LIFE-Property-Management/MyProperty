@@ -40,6 +40,7 @@ using MyProperty.Application.Payments.Queries.DownloadReceipt;
 using MyProperty.Application.Properties.Commands.CreateProperty;
 using MyProperty.Application.Properties.Queries.GetLandlordProperties;
 using MyProperty.Infrastructure;
+using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
@@ -406,7 +407,22 @@ builder.Services.AddAuthorization(options =>
     // CorrelationIdMiddleware must come before UseSerilogRequestLogging so the
     // correlation ID is already in LogContext when the request log entry is written.
     app.UseMiddleware<CorrelationIdMiddleware>();
-    app.UseSerilogRequestLogging();
+
+    // Suppress request-log spam for endpoints that Prometheus + Docker hit on a
+    // 15s schedule. Without this, every scrape produces an Information-level
+    // "HTTP GET /metrics responded 200" line in Loki, which buries real request
+    // logs and inflates retention storage. Errors still log at Error level.
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.GetLevel = (httpContext, _, ex) =>
+        {
+            if (ex != null) return LogEventLevel.Error;
+            var path = httpContext.Request.Path;
+            if (path.StartsWithSegments("/metrics")) return LogEventLevel.Verbose;
+            if (path.StartsWithSegments("/api/v1/health")) return LogEventLevel.Verbose;
+            return LogEventLevel.Information;
+        };
+    });
 
     if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
     {
@@ -454,6 +470,11 @@ builder.Services.AddAuthorization(options =>
         app.UseHttpsRedirection();
     }
 
+    // HTTP request metrics for Prometheus. 
+    // Default label set (code, method, controller, action) is what the alert
+    // rules in infrastructure/prometheus/alerts/api.yml expect.
+    app.UseHttpMetrics();
+    
     // CORS runs after scheme is correct (so preflight responses carry the right
     // Location semantics) and before authentication (preflight OPTIONS requests
     // carry no Authorization header and must short-circuit before auth runs).
@@ -471,6 +492,12 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 
     app.MapControllers();
     app.MapHub<NotificationsHub>(NotificationsHub.Path);
+
+    // Prometheus scrape target. AllowAnonymous so the scraper does not need a
+    // JWT (it lives inside the cluster, hits the cluster-internal hostname).
+    // The default-deny fallback policy in AddAuthorization would otherwise
+    // bounce every scrape with a 401, leaving the target permanently "down".
+    app.MapMetrics().AllowAnonymous();
 
     // Health endpoints — three endpoints, each with one job.
     //

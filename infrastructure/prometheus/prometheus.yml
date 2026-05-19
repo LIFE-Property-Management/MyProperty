@@ -3,11 +3,13 @@
 #
 #  Local-only metrics scrape config for the docker compose stack.
 #  Wires Prometheus into Grafana via Grafana datasource provisioning
-#  (see infrastructure/grafana/provisioning/datasources/prometheus.yaml).
+#  (see infrastructure/grafana/provisioning/datasources/prometheus.yaml)
+#  and into Alertmanager via the alerting block below.
 #
-#  Alerting rules and a real Alertmanager belong to M4.5 (monitoring
-#  stack + alerts). This file scrapes the services we have today;
-#  scrape jobs for new exporters get appended here.
+#  Rule files live in ./alerts/ (mounted at /etc/prometheus/alerts in
+#  the container). New alert groups go in their own file inside that
+#  directory — Prometheus loads everything matching alerts/*.yml on
+#  startup and on SIGHUP / config reload.
 # =============================================================
 
 global:
@@ -16,18 +18,32 @@ global:
   external_labels:
     monitor: myproperty-dev
 
+# Rule files are evaluated every `evaluation_interval` (15s above).
+# Each file may contain one or more `groups`; each group has its own
+# `rules:` list of alerting / recording rules.
+rule_files:
+  - alerts/*.yml
+
+# Alertmanager fan-out. Prometheus pushes firing alerts here; Alertmanager
+# owns grouping / deduplication / routing to receivers. The webhook
+# receiver wired in infrastructure/alertmanager/alertmanager.yml is the
+# integration seam for M4.11 (AIOps webhook → LLM → Slack auto-triage).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
 scrape_configs:
-  # Prometheus self-monitoring — useful baseline for a Grafana sanity dashboard.
+  # Prometheus self-monitoring — useful baseline for a Grafana sanity dashboard
+  # and powers the generic PrometheusTargetDown alert.
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
 
-  # MyProperty API. The .NET service does not expose a /metrics endpoint
-  # in M3 — wiring `prometheus-net` or `OpenTelemetry.Exporter.Prometheus`
-  # is an M4.5 task. The job is kept here so the scrape target exists and
-  # Prometheus reports it as "down" until the endpoint is added (visible
-  # signal during demo grading; trivial to flip to "up" once the metrics
-  # middleware is registered).
+  # MyProperty API. /metrics is exposed by prometheus-net.AspNetCore middleware
+  # registered in MyProperty.Api/Program.cs (M4.5). The endpoint is AllowAnonymous
+  # so the scrape does not need a JWT.
   - job_name: myproperty-api
     metrics_path: /metrics
     static_configs:
@@ -35,6 +51,11 @@ scrape_configs:
         labels:
           service: api
 
-  # Node-exporter / cadvisor are intentionally not included in M4.1.
-  # Add when (a) we need host-level metrics, or (b) M4.5 wires container
-  # metrics into Grafana. Keeping the M4.1 stack tight.
+  # Alertmanager self-scrape — Alertmanager exposes /metrics by default. Lets
+  # the same Grafana stack visualise alert-firing rate alongside API metrics
+  # and gives the GenericTargetDown alert a way to detect Alertmanager itself
+  # going dark.
+  - job_name: alertmanager
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["alertmanager:9093"]
