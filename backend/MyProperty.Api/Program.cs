@@ -470,6 +470,11 @@ builder.Services.AddAuthorization(options =>
         app.UseHttpsRedirection();
     }
 
+    // HTTP request metrics for Prometheus. 
+    // Default label set (code, method, controller, action) is what the alert
+    // rules in infrastructure/prometheus/alerts/api.yml expect.
+    app.UseHttpMetrics();
+    
     // CORS runs after scheme is correct (so preflight responses carry the right
     // Location semantics) and before authentication (preflight OPTIONS requests
     // carry no Authorization header and must short-circuit before auth runs).
@@ -478,14 +483,6 @@ builder.Services.AddAuthorization(options =>
     app.UseAuthentication();
     app.UseRateLimiter();
     app.UseAuthorization();
-
-    // HTTP request metrics for Prometheus. Placed after UseAuthorization so the
-    // route template is already resolved — produces label values like
-    // controller="Payments" instead of opaque path strings, which is how the
-    // M4.5 Grafana dashboard groups request-rate / latency / error panels.
-    // Default label set (code, method, controller, action) is what the alert
-    // rules in infrastructure/prometheus/alerts/api.yml expect.
-    app.UseHttpMetrics();
 
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
