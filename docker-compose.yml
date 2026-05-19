@@ -338,6 +338,46 @@ services:
       retries: 10
       start_period: 30s
 
+  # ── AIOps webhook (M4.11) ───────────────────────────────────────────────────
+  # Receives Alertmanager webhook POSTs at /alerts, runs each firing alert
+  # through Anthropic Claude for triage, and posts the result to Slack as
+  # a Block Kit message. Resolved alerts skip the LLM (no triage needed) and
+  # post a short resolution.
+  #
+  # Graceful degradation:
+  #   - ANTHROPIC_API_KEY empty → triage disabled; raw labels/annotations
+  #     are posted to Slack with a "Triage disabled" header.
+  #   - SLACK_WEBHOOK_URL empty → message bodies are logged to stdout, which
+  #     Promtail forwards to Loki (visible in Grafana → Explore → Loki).
+  #
+  # The real traffic path stays internal: alertmanager → aiops-webhook:5001
+  # over the docker network. Host port 5001 is exposed only so the demo can
+  # `curl http://localhost:5001/alerts -d '{...}'` for synthetic testing.
+  aiops-webhook:
+    build:
+      context: ./infrastructure/aiops-webhook
+      dockerfile: Dockerfile
+    image: myproperty-aiops-webhook:dev
+    container_name: myproperty-aiops-webhook
+    environment:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      ANTHROPIC_MODEL: "${AIOPS_ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      AIOPS_LOG_LEVEL: "${AIOPS_LOG_LEVEL:-INFO}"
+    ports:
+      - "5001:5001"
+    depends_on:
+      alertmanager:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5001/health',timeout=3).status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   # ── Grafana (dashboards) ─────────────────────────────────────────────────────
   # NOTE: anonymous admin is enabled — local demo only, not suitable for production.
   grafana:
