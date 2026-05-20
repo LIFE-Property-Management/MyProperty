@@ -21,7 +21,7 @@ from typing import Any
 
 import anthropic
 import httpx
-from fastapi import FastAPI, status
+from fastapi import BackgroundTasks, FastAPI, status
 from pydantic import BaseModel, ConfigDict, Field
 
 # ── Config ────────────────────────────────────────────────────
@@ -106,12 +106,16 @@ Severity assessment: one sentence on user impact and whether this needs paging
 someone or can wait for business hours."""
 
 
-def triage_alert(alert: Alert, payload_status: str) -> str:
-    """Call Claude with the alert details and return triage text.
+def triage_alert(alert: Alert, payload_status: str) -> str | None:
+    """Call Claude with the alert details and return triage text, or None if LLM is disabled.
 
-    Returns a fallback raw-label dump if the LLM is disabled or the call fails.
+    Returns None when claude_client is None — callers render a small context block instead
+    of a full triage section. Returns a fallback string if the call succeeds but errors.
     Never raises — the webhook contract is "AM gets a 2xx no matter what."
     """
+    if claude_client is None:
+        return None
+
     labels_block = "\n".join(f"  {k}: {v}" for k, v in sorted(alert.labels.items()))
     annotations_block = "\n".join(
         f"  {k}: {v}" for k, v in sorted(alert.annotations.items())
@@ -125,9 +129,6 @@ def triage_alert(alert: Alert, payload_status: str) -> str:
         f"\n"
         f"Annotations:\n{annotations_block}\n"
     )
-
-    if claude_client is None:
-        return f"Triage disabled (ANTHROPIC_API_KEY unset).\n\n{user_prompt}"
 
     try:
         message = claude_client.messages.create(
@@ -220,6 +221,15 @@ def build_slack_blocks(
                 "text": {"type": "mrkdwn", "text": f"*Triage*\n{triage_text[:2900]}"},
             }
         )
+    elif alert_status != "resolved" and triage_text is None and not ANTHROPIC_API_KEY:
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [
+                    {"type": "mrkdwn", "text": "_Triage disabled — ANTHROPIC_API_KEY unset._"}
+                ],
+            }
+        )
 
     accessory_buttons: list[dict[str, Any]] = []
     if runbook := alert.annotations.get("runbook_url"):
@@ -280,22 +290,8 @@ def health() -> dict[str, str]:
     return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
 
 
-@app.post("/alerts", status_code=status.HTTP_202_ACCEPTED)
-def alerts(payload: AlertmanagerPayload) -> dict[str, Any]:
-    """Alertmanager webhook target.
-
-    Always returns 2xx — Alertmanager retries non-2xx on its own schedule,
-    which would compound a transient LLM/Slack outage into an alert storm.
-    Failures inside this handler are logged and swallowed; the firing alert
-    remains visible in the Prometheus + Alertmanager + Grafana UIs."""
-    log.info(
-        "Received AM payload status=%s receiver=%s alerts=%d",
-        payload.status,
-        payload.receiver,
-        len(payload.alerts),
-    )
-
-    processed = 0
+def process_payload(payload: AlertmanagerPayload) -> None:
+    """Process each alert in the payload — runs in background after /alerts returns 202."""
     for alert in payload.alerts:
         alertname = alert.labels.get("alertname", "unknown")
         severity = alert.labels.get("severity", "info")
@@ -306,16 +302,29 @@ def alerts(payload: AlertmanagerPayload) -> dict[str, Any]:
             alert.status,
             alert.fingerprint,
         )
-
-        # Resolved alerts skip the LLM — no triage needed for state transitions
-        # that the on-call engineer already knows about.
         triage_text: str | None = None
         if alert.status == "firing":
             triage_text = triage_alert(alert, payload.status)
-
         blocks = build_slack_blocks(alert, alert.status, triage_text)
         summary_text = f"[{alert.status.upper()}] {alertname} ({severity})"
         post_to_slack(blocks, summary_text)
-        processed += 1
 
-    return {"received": len(payload.alerts), "processed": processed}
+
+@app.post("/alerts", status_code=status.HTTP_202_ACCEPTED)
+def alerts(payload: AlertmanagerPayload, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """Alertmanager webhook target.
+
+    Returns 202 immediately after queuing background work — keeps the response
+    inside AM's default 10s http_config.timeout even when Claude is slow.
+    Always returns 2xx — AM retries non-2xx, which would compound a transient
+    LLM/Slack outage into an alert storm. Failures inside process_payload are
+    logged and swallowed; the firing alert stays visible in Prometheus +
+    Alertmanager + Grafana UIs regardless."""
+    log.info(
+        "Received AM payload status=%s receiver=%s alerts=%d",
+        payload.status,
+        payload.receiver,
+        len(payload.alerts),
+    )
+    background_tasks.add_task(process_payload, payload)
+    return {"received": len(payload.alerts), "queued": True}
