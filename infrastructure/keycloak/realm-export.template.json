@@ -929,7 +929,7 @@
       ]
     },
     {
-      "id": "some-new-uuid-for-tenant",
+      "id": "5cb84d1a-7522-43a7-b9a4-f80df44de38a",
       "username": "tenant@dev.local",
       "email": "tenant@dev.local",
       "firstName": "Tenant",
