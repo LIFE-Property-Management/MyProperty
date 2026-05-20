@@ -39,7 +39,7 @@ updating this doc are incomplete.
 | `Invites:ExpiryDays` | `Invites__ExpiryDays` | No | `7` | appsettings.json | K8s ConfigMap | |
 | `FileStorage:LocalRoot` | `FileStorage__LocalRoot` | Yes | (none) | appsettings.Development.json | K8s ConfigMap + PV mount | **Audit E2 / D4**: must be a mounted persistent volume path in prod, e.g. `/app/storage`. Receipts are lost on container restart otherwise. |
 | `Anthropic:ApiKey` | `Anthropic__ApiKey` | No | (none) | user-secrets | K8s secret | When unset, OCR enters stub mode and logs once at startup. |
-| `Anthropic:Model` | `Anthropic__Model` | No | `claude-sonnet-4-5` | appsettings.json | K8s ConfigMap | |
+| `Anthropic:Model` | `Anthropic__Model` | No | `claude-sonnet-4-5-20250929` | appsettings.json | K8s ConfigMap | |
 | `Anthropic:TimeoutSeconds` | `Anthropic__TimeoutSeconds` | No | `30` | appsettings.json | K8s ConfigMap | |
 | `Smtp:Host` / `Smtp:Port` / `Smtp:UseStartTls` / `Smtp:Username` / `Smtp:Password` | `Smtp__*` | Yes | (none) | user-secrets / appsettings.Development.json | K8s secret (username/password); ConfigMap (host/port/tls) | **Audit E1**: `UseStartTls` MUST be `true` in any deployed environment. Cleartext SMTP otherwise. |
 | `Cors:AllowedOrigins` *(future)* | `Cors__AllowedOrigins` | Yes (post-C1) | (none) | appsettings.Development.json | K8s ConfigMap | Comma-separated list of allowed origins. Added in C1. |

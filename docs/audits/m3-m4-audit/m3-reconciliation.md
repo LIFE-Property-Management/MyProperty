@@ -152,7 +152,7 @@ Same as above. The original M3.8 five-event list includes `InviteAccepted` and `
 
 ### M3.10 Receipt OCR — what shipped
 
-**AI provider:** Anthropic vision API (`https://api.anthropic.com/v1/messages`). Model: `claude-sonnet-4-5` (default in `AnthropicOcrOptions`; overridable via `Anthropic:Model` config).
+**AI provider:** Anthropic vision API (`https://api.anthropic.com/v1/messages`). Model: `claude-sonnet-4-5-20250929` (default in `AnthropicOcrOptions`; overridable via `Anthropic:Model` config).
 
 **Service interface:** `IReceiptOcrService` in `Application/Common/Interfaces/IReceiptOcrService.cs`. Single method: `ExtractAsync(Stream image, string contentType, CancellationToken ct) → ReceiptOcrResult`.
 
@@ -171,7 +171,7 @@ Migration `20260508221203_AddPaymentOcrColumns` adds all five columns. The post-
 
 **Config keys:**
 - `Anthropic:ApiKey` — required for live OCR; absent enables stub mode
-- `Anthropic:Model` — defaults to `claude-sonnet-4-5`
+- `Anthropic:Model` — defaults to `claude-sonnet-4-5-20250929`
 - `Anthropic:TimeoutSeconds` — defaults to 30; used to set `HttpClient.Timeout`
 
 **Idempotency guard:** `ReceiptOcrJob` checks `payment.OcrProcessedAt is not null` before processing — re-enqueued jobs skip silently.
