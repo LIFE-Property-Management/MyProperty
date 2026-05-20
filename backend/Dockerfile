@@ -34,11 +34,15 @@
 #    CLAUDE.md "Cloud file storage: not adopted" note.
 # =============================================================
 
+# Base image digests pinned for supply-chain integrity (M4.3).
+# Tags retained as human-readable labels; @sha256 is the contract.
+# Bumped via Dependabot (see .github/dependabot.yml) — do not hand-edit.
+
 # ── Stage 1: restore ──────────────────────────────────────────
 # NuGet restore as its own stage so source-only changes don't
 # bust the NuGet cache. We copy csproj/props files only, restore,
 # then layer source in the build stage.
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:dc8430e6024d454edadad1e160e1973be3cabbb7125998ef190d9e5c6adf7dbb AS restore
 WORKDIR /src
 
 COPY Directory.Build.props ./
@@ -76,7 +80,7 @@ RUN dotnet publish MyProperty.Api/MyProperty.Api.csproj \
 # No shell, no apt, no busybox, no /bin, no /usr/bin tools.
 # Container runs as USER $APP_UID (= 1654) by default; no
 # explicit USER directive needed but kept for clarity.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:c30fa82755872b47156f0b1ba3012a1705c8d8a95b319eb1c8924a4f4fc16a46 AS runtime
 WORKDIR /app
 
 # Kestrel listens on 8080 inside the container.

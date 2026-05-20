@@ -35,17 +35,21 @@
 #    follow-up post-M4.
 # =============================================================
 
+# Base image digests pinned for supply-chain integrity (M4.3).
+# Tags retained as human-readable labels; @sha256 is the contract.
+# Bumped via Dependabot (see .github/dependabot.yml) — do not hand-edit.
+
 # ── Stage 1: dependencies ────────────────────────────────────
 # Isolated stage for npm ci so source-only changes don't bust
 # the layer cache. node_modules from this stage flows into the
 # builder stage; runtime never sees the full tree.
-FROM node:20-alpine AS deps
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # ── Stage 2: build ───────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS builder
 WORKDIR /app
 
 # Build args — NEXT_PUBLIC_* vars are inlined into the bundle
@@ -72,7 +76,7 @@ RUN npm run build
 # Standalone output emits a minimal server.js + only the node_modules
 # actually traced at build time. Static assets and public/ are
 # copied separately.
-FROM node:20-alpine AS runner
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \
