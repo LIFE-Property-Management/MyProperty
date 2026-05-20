@@ -52,7 +52,8 @@ def test_build_slack_blocks_firing_includes_triage_section():
     alert = main.Alert(**FIRING_PAYLOAD["alerts"][0])
     blocks = main.build_slack_blocks(alert, "firing", "Triage text here.")
     triage_blocks = [
-        b for b in blocks
+        b
+        for b in blocks
         if b.get("type") == "section"
         and isinstance(b.get("text"), dict)
         and "Triage" in b["text"].get("text", "")
@@ -65,7 +66,8 @@ def test_build_slack_blocks_resolved_omits_triage_section():
     alert = main.Alert(**FIRING_PAYLOAD["alerts"][0])
     blocks = main.build_slack_blocks(alert, "resolved", "Should be ignored.")
     triage_blocks = [
-        b for b in blocks
+        b
+        for b in blocks
         if b.get("type") == "section"
         and isinstance(b.get("text"), dict)
         and "Triage" in b["text"].get("text", "")
@@ -85,8 +87,10 @@ def test_triage_alert_returns_none_when_llm_disabled():
 
 def test_alerts_endpoint_returns_202_with_no_api_key():
     """The webhook accepts payloads and queues background work even when triage is disabled."""
-    with patch.object(main, "claude_client", None), \
-         patch.object(main, "SLACK_WEBHOOK_URL", ""):
+    with (
+        patch.object(main, "claude_client", None),
+        patch.object(main, "SLACK_WEBHOOK_URL", ""),
+    ):
         client = TestClient(main.app)
         response = client.post("/alerts", json=FIRING_PAYLOAD)
     assert response.status_code == 202
