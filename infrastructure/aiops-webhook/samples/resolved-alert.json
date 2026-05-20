@@ -1,0 +1,30 @@
+{
+  "version": "4",
+  "status": "resolved",
+  "receiver": "aiops-webhook",
+  "groupKey": "{}:{alertname=\"MyPropertyApiDown\"}",
+  "groupLabels": {"alertname": "MyPropertyApiDown"},
+  "commonLabels": {"alertname": "MyPropertyApiDown", "severity": "critical", "service": "api"},
+  "commonAnnotations": {},
+  "externalURL": "http://localhost:9093",
+  "alerts": [
+    {
+      "status": "resolved",
+      "labels": {
+        "alertname": "MyPropertyApiDown",
+        "severity": "critical",
+        "service": "api",
+        "job": "myproperty-api"
+      },
+      "annotations": {
+        "summary": "MyProperty API is down",
+        "description": "Prometheus has been unable to scrape myproperty-api for at least 2 minutes.",
+        "runbook_url": "https://github.com/LIFE-Property-Management/MyProperty/blob/main/docs/operations/health-probes.md"
+      },
+      "startsAt": "2026-05-19T14:32:01Z",
+      "endsAt": "2026-05-19T14:38:14Z",
+      "generatorURL": "http://localhost:9090/graph?g0.expr=up+%3D%3D+0",
+      "fingerprint": "deadbeef00000001"
+    }
+  ]
+}

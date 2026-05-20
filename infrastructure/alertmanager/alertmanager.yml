@@ -5,15 +5,14 @@
 #  (configured in infrastructure/prometheus/prometheus.yml), groups
 #  them, and forwards to receivers.
 #
-#  Receiver shape for M4.5: a single webhook receiver reserved for the
-#  M4.11 AIOps pipeline (Webhook → LLM → Slack auto-triage). The
-#  webhook URL points at an internal service name (`aiops-webhook`)
-#  that M4.11 will register; until then, the POST will fail and
-#  Alertmanager will log the retry — that is the expected demo state
-#  for M4.5. The firing alert is still visible in:
+#  Receiver shape: a single webhook receiver wired to the M4.11 AIOps
+#  pipeline (Webhook → LLM → Slack auto-triage). The webhook URL targets
+#  the internal `aiops-webhook` service on the compose docker network.
+#  The firing alert is visible in:
 #    - http://localhost:9090/alerts          (Prometheus)
 #    - http://localhost:9093/#/alerts        (Alertmanager UI)
 #    - the "Active alerts" Grafana panel     (M4.5 dashboard)
+#    - Slack (or stdout → Loki when SLACK_WEBHOOK_URL is unset)
 # =============================================================
 
 global:
@@ -44,10 +43,8 @@ route:
 
 receivers:
   - name: aiops-webhook
-    # M4.11 will replace this URL with the address of the AIOps webhook
-    # receiver service (or override via Helm value in K8s). Until then,
-    # POSTs to this URL fail; Alertmanager retries per its own internal
-    # schedule. This is the documented M4.5 demo state.
+    # M4.11 registered the AIOps webhook receiver service at this URL.
+    # Override via Helm value in K8s to point at the deployed AIOps webhook.
     webhook_configs:
       - url: http://aiops-webhook:5001/alerts
         # send_resolved=true so the AIOps receiver also gets a "resolved"
