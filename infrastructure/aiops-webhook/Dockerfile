@@ -15,7 +15,7 @@
 # =============================================================
 
 # ── Stage 1: build venv ──────────────────────────────────────
-FROM python:3.12-slim AS deps
+FROM python:3.12.13-slim AS deps
 WORKDIR /build
 
 ENV VENV_PATH=/opt/aiops-venv
@@ -26,7 +26,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Stage 2: runtime ─────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+FROM python:3.12.13-slim AS runtime
 
 # Non-root user, in the spirit of M4.2 / M4.8 hardening even though
 # this file lives outside the API/frontend production Dockerfile scope.
@@ -45,8 +45,8 @@ COPY main.py .
 
 # python -c probe — slim base ships neither curl nor wget, and Python
 # is already present. Treats any non-200 as unhealthy.
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5001/health',timeout=3).status==200 else 1)" || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=3)"
 
 USER aiops
 EXPOSE 5001
