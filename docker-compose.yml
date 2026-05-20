@@ -86,6 +86,28 @@ services:
     networks:
       - myproperty-net
 
+  # ── Backend storage init (chowns volume for non-root backend) ───────────────
+  # The chiseled backend runtime runs as UID 1654. Docker named volumes are
+  # owned by root by default, so the non-root container can't write to
+  # /var/myproperty/storage without this init step. This container runs as
+  # root, chowns the volume tree to 1654:1654, exits. Same pattern as
+  # keycloak-realm-init above; maps 1:1 to a Kubernetes initContainer in M4.4.
+  #
+  # No-op on second and subsequent runs (chown of already-owned files is
+  # cheap). Exits in <1s once the volume is in place.
+  backend-storage-init:
+    image: alpine:3.20
+    container_name: myproperty-backend-storage-init
+    user: "0:0"
+    command: >
+      sh -c "mkdir -p /var/myproperty/storage &&
+      chown -R 1654:1654 /var/myproperty/storage &&
+      echo 'Backend storage ownership set to 1654:1654'"
+    volumes:
+      - backend_storage:/var/myproperty/storage
+    networks:
+      - myproperty-net
+
   # ── Redis ────────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
@@ -195,17 +217,14 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
+      backend-storage-init:
+        condition: service_completed_successfully
     networks:
       - myproperty-net
-    healthcheck:
-      # Hits the /live probe (Predicate=_=>false → returns 200 if the process
-      # is responsive). Uses curl (installed in the runtime image 
-      # via the Dockerfile). /api/v1/health/live is AllowAnonymous.
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/health/live || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
+    # Docker HEALTHCHECK omitted: chiseled runtime has no shell or curl
+    # to run a probe. Compose treats `running` as sufficient; K8s
+    # readiness/liveness probes (M4.4) target /api/v1/health/ready
+    # and /api/v1/health/live directly via HTTP from the kubelet.
 
   # ── MyProperty frontend (Next.js) ───────────────────────────────────────────
   # NEXT_PUBLIC_* vars are inlined into the bundle at build time, not runtime.
@@ -232,7 +251,7 @@ services:
     networks:
       - myproperty-net
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:3000/ || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --spider http://127.0.0.1:3000/ || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
