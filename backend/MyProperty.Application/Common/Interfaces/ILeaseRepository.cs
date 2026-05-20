@@ -42,7 +42,7 @@ public interface ILeaseRepository
     /// </summary>
     Task<IReadOnlyList<Lease>> ListExpiringSoonAsync(
         Guid landlordId, int daysThreshold, CancellationToken ct);
-    
+
     /// <summary>
     /// Paginated list of distinct active tenants for a landlord. Returns one lease
     /// per tenant (the most recent by StartDate) with Property and Tenant included.

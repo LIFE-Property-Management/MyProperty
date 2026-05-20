@@ -110,9 +110,9 @@ public sealed class HealthEndpointTests(ApiFixture fixture)
         var entries = json.RootElement.GetProperty("entries");
         var keys = entries.EnumerateObject().Select(p => p.Name).ToList();
 
-        Assert.Contains("postgres",      keys);
-        Assert.Contains("redis",         keys);
-        Assert.Contains("rabbitmq",      keys);
+        Assert.Contains("postgres", keys);
+        Assert.Contains("redis", keys);
+        Assert.Contains("rabbitmq", keys);
         Assert.Contains("keycloak-jwks", keys);
     }
 

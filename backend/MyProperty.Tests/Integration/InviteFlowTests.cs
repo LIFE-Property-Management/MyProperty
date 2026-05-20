@@ -50,14 +50,14 @@ public sealed class InviteFlowTests(ApiFixture fixture)
         // ── 2. Landlord creates an invite for the tenant seed user.
         fixture.Queue.Clear();
         var createCmd = new CreateInviteCommand(
-            PropertyId:          propertyId,
-            Email:               ApiFixture.TenantEmail,
-            FirstName:           "Tenant",
-            LastName:            "Seed",
-            ProposedStartDate:   DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
-            ProposedEndDate:     DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
+            PropertyId: propertyId,
+            Email: ApiFixture.TenantEmail,
+            FirstName: "Tenant",
+            LastName: "Seed",
+            ProposedStartDate: DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
+            ProposedEndDate: DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
             ProposedMonthlyRent: 950m,
-            Currency:            "EUR");
+            Currency: "EUR");
 
         var createResp = await landlordClient.PostAsJsonAsync("/api/v1/invites", createCmd);
         Assert.Equal(HttpStatusCode.OK, createResp.StatusCode);

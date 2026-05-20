@@ -18,7 +18,7 @@ public sealed class PaymentCreatedConsumer(
     ILogger<PaymentCreatedConsumer> logger)
     : IntegrationEventConsumerBase<PaymentCreatedEvent>(connections, scopeFactory, options, logger)
 {
-    protected override string QueueName  => "myproperty.payment.created.signalr";
+    protected override string QueueName => "myproperty.payment.created.signalr";
     protected override string RoutingKey => "payment.created";
 
     protected override Task HandleAsync(

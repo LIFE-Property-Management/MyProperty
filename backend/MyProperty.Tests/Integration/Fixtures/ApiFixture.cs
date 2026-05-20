@@ -21,11 +21,11 @@ public sealed class ApiFixture : IAsyncLifetime
     private const string RealmName = "MyPropertyTest";
     private const string ClientId = "test-cli";
 
-    public const string LandlordEmail   = "landlord@test.local";
-    public const string Landlord2Email  = "landlord2@test.local";
-    public const string TenantEmail     = "tenant@test.local";
-    public const string ImposterEmail   = "imposter@test.local";
-    public const string SeedPassword    = "Password1!";
+    public const string LandlordEmail = "landlord@test.local";
+    public const string Landlord2Email = "landlord2@test.local";
+    public const string TenantEmail = "tenant@test.local";
+    public const string ImposterEmail = "imposter@test.local";
+    public const string SeedPassword = "Password1!";
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")
@@ -57,14 +57,14 @@ public sealed class ApiFixture : IAsyncLifetime
         await _admin.EnsureRealmRoleAsync(RealmName, "Admin");
         await _admin.EnsurePublicClientAsync(RealmName, ClientId);
 
-        await _admin.CreateUserAsync(RealmName, LandlordEmail,  SeedPassword, "Landlord");
+        await _admin.CreateUserAsync(RealmName, LandlordEmail, SeedPassword, "Landlord");
         await _admin.CreateUserAsync(RealmName, Landlord2Email, SeedPassword, "Landlord");
-        await _admin.CreateUserAsync(RealmName, TenantEmail,    SeedPassword, "Tenant");
-        await _admin.CreateUserAsync(RealmName, ImposterEmail,  SeedPassword, "Tenant");
+        await _admin.CreateUserAsync(RealmName, TenantEmail, SeedPassword, "Tenant");
+        await _admin.CreateUserAsync(RealmName, ImposterEmail, SeedPassword, "Tenant");
 
         Factory = new MyPropertyApiFactory(
             postgresConnectionString: _postgres.GetConnectionString(),
-            keycloakAuthority:        $"{_keycloak.GetBaseAddress().TrimEnd('/')}/realms/{RealmName}");
+            keycloakAuthority: $"{_keycloak.GetBaseAddress().TrimEnd('/')}/realms/{RealmName}");
 
         // Force factory bootstrap by resolving the service provider, then run
         // EF Core migrations against the real Postgres container.

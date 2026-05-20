@@ -22,14 +22,14 @@ public sealed class PaymentConfirmedConsumer(
     ILogger<PaymentConfirmedConsumer> logger)
     : IntegrationEventConsumerBase<PaymentConfirmedEvent>(connections, scopeFactory, options, logger)
 {
-    protected override string QueueName  => "myproperty.payment.confirmed.email";
+    protected override string QueueName => "myproperty.payment.confirmed.email";
     protected override string RoutingKey => "payment.confirmed";
 
     protected override async Task HandleAsync(
         PaymentConfirmedEvent evt, IServiceProvider services, CancellationToken ct)
     {
-        var users         = services.GetRequiredService<IUserRepository>();
-        var jobs          = services.GetRequiredService<IBackgroundJobQueue>();
+        var users = services.GetRequiredService<IUserRepository>();
+        var jobs = services.GetRequiredService<IBackgroundJobQueue>();
         var notifications = services.GetRequiredService<INotificationDispatcher>();
 
         var tenant = await users.GetByIdAsync(evt.TenantId, ct);
@@ -64,9 +64,9 @@ public sealed class PaymentConfirmedConsumer(
             """;
 
         return new EmailMessage(
-            To:      to,
+            To: to,
             Subject: "Your payment was confirmed",
-            Body:    body,
-            IsHtml:  true);
+            Body: body,
+            IsHtml: true);
     }
 }

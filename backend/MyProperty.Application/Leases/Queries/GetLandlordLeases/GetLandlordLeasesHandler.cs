@@ -14,7 +14,7 @@ public sealed class GetLandlordLeasesHandler(
     public async Task<PagedResult<LeaseDto>> Handle(GetLandlordLeasesQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
-        
+
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
         var (items, totalCount) = await leases.ListByLandlordAsync(

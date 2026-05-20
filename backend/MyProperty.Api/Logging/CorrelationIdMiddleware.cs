@@ -1,26 +1,26 @@
-    using Serilog.Context;
+using Serilog.Context;
 
-    namespace MyProperty.Api.Logging;
+namespace MyProperty.Api.Logging;
 
-    public class CorrelationIdMiddleware(RequestDelegate next)
+public class CorrelationIdMiddleware(RequestDelegate next)
+{
+    private const string HeaderName = "X-Correlation-Id";
+
+    public async Task InvokeAsync(HttpContext context)
     {
-        private const string HeaderName = "X-Correlation-Id";
+        var rawHeader = context.Request.Headers[HeaderName].FirstOrDefault();
+        var correlationId = IsValidCorrelationId(rawHeader)
+            ? rawHeader!
+            : Guid.NewGuid().ToString("N");
 
-        public async Task InvokeAsync(HttpContext context)
+        context.Response.Headers[HeaderName] = correlationId;
+
+        using (LogContext.PushProperty("CorrelationId", correlationId))
         {
-            var rawHeader = context.Request.Headers[HeaderName].FirstOrDefault();
-            var correlationId = IsValidCorrelationId(rawHeader)
-                ? rawHeader!
-                : Guid.NewGuid().ToString("N");
-
-            context.Response.Headers[HeaderName] = correlationId;
-
-            using (LogContext.PushProperty("CorrelationId", correlationId))
-            {
-                await next(context);
-            }
+            await next(context);
         }
-        
-        private static bool IsValidCorrelationId(string? value) =>
-            !string.IsNullOrEmpty(value) && value.Length <= 64 && value.All(char.IsAsciiLetterOrDigit);
     }
+
+    private static bool IsValidCorrelationId(string? value) =>
+        !string.IsNullOrEmpty(value) && value.Length <= 64 && value.All(char.IsAsciiLetterOrDigit);
+}

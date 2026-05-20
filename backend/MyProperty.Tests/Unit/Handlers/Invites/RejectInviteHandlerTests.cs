@@ -21,21 +21,21 @@ public sealed class RejectInviteHandlerTests
     private static Invite SeedInvite(
         InviteStatus status = InviteStatus.Pending,
         DateTime? expiresAt = null) => new()
-    {
-        Id = Guid.NewGuid(),
-        LandlordId = Guid.NewGuid(),
-        PropertyId = Guid.NewGuid(),
-        Email = "tenant@example.com",
-        FirstName = "Ada",
-        LastName = "Lovelace",
-        TokenHash = TokenHashHex,
-        Status = status,
-        ExpiresAt = expiresAt ?? DateTime.UtcNow.AddDays(5),
-        ProposedStartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
-        ProposedEndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
-        ProposedMonthlyRent = 1000m,
-        Currency = "EUR",
-    };
+        {
+            Id = Guid.NewGuid(),
+            LandlordId = Guid.NewGuid(),
+            PropertyId = Guid.NewGuid(),
+            Email = "tenant@example.com",
+            FirstName = "Ada",
+            LastName = "Lovelace",
+            TokenHash = TokenHashHex,
+            Status = status,
+            ExpiresAt = expiresAt ?? DateTime.UtcNow.AddDays(5),
+            ProposedStartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            ProposedEndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
+            ProposedMonthlyRent = 1000m,
+            Currency = "EUR",
+        };
 
     [Fact]
     public async Task Happy_path_marks_invite_rejected_and_saves()

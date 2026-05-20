@@ -17,14 +17,14 @@ public sealed class CreateInviteValidatorTests
         string? currency = null,
         Guid? propertyId = null) =>
         new(
-            PropertyId:          propertyId ?? Guid.NewGuid(),
-            Email:               email ?? "tenant@example.com",
-            FirstName:           firstName ?? "Ada",
-            LastName:            lastName ?? "Lovelace",
-            ProposedStartDate:   start ?? DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
-            ProposedEndDate:     end ?? DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
+            PropertyId: propertyId ?? Guid.NewGuid(),
+            Email: email ?? "tenant@example.com",
+            FirstName: firstName ?? "Ada",
+            LastName: lastName ?? "Lovelace",
+            ProposedStartDate: start ?? DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
+            ProposedEndDate: end ?? DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
             ProposedMonthlyRent: rent ?? 850m,
-            Currency:            currency ?? "EUR");
+            Currency: currency ?? "EUR");
 
     [Fact]
     public void HappyPath_passes()
@@ -85,7 +85,7 @@ public sealed class CreateInviteValidatorTests
         _sut.TestValidate(Valid(start: DateOnly.FromDateTime(DateTime.UtcNow.Date)))
             .ShouldNotHaveValidationErrorFor(x => x.ProposedStartDate);
     }
-    
+
     [Fact]
     public void EndDateNotAfterStart_fails()
     {

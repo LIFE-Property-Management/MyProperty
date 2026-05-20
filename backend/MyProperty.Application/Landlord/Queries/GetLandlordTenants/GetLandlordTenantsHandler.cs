@@ -16,7 +16,7 @@ public sealed class GetLandlordTenantsHandler(
         await validator.EnsureValidAsync(query, ct);
 
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        
+
         var (items, totalCount) = await leases.ListActiveTenantsByLandlordAsync(
             landlord.Id, query.Page, query.PageSize, ct);
 

@@ -87,7 +87,7 @@ internal sealed class GlobalExceptionHandler(
             Detail = "Please retry; if the problem persists, contact support.",
         };
     }
-    
+
     private static ProblemDetails BuildLeaseAlreadyTerminated(LeaseAlreadyTerminatedException ex) => new()
     {
         Title = "Lease already terminated.",

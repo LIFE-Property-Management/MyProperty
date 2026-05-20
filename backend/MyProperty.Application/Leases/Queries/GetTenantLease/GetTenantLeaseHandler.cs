@@ -2,7 +2,7 @@ using MyProperty.Application.Common.Interfaces;
 
 namespace MyProperty.Application.Leases.Queries.GetTenantLease;
 
-public sealed class GetTenantLeaseHandler (
+public sealed class GetTenantLeaseHandler(
     ILeaseRepository leases,
     IUserRepository users,
     ICurrentUser currentUser)
@@ -10,7 +10,7 @@ public sealed class GetTenantLeaseHandler (
     public async Task<TenantLeaseDto?> Handle(GetTenantLeaseQuery query, CancellationToken ct)
     {
         var tenant = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        
+
         var lease = await leases.GetActiveByTenantIdAsync(tenant.Id, ct);
         if (lease is null)
             return null;

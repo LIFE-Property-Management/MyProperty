@@ -15,9 +15,9 @@ public sealed class CreatePropertyHandler(
     public async Task<PropertyCreatedDto> Handle(CreatePropertyCommand cmd, CancellationToken ct)
     {
         await validator.EnsureValidAsync(cmd, ct);
-        
+
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        
+
         var property = new Property
         {
             LandlordId = landlord.Id,

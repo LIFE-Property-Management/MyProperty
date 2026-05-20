@@ -51,14 +51,14 @@ public sealed class CreateInviteHandlerTests
     };
 
     private static CreateInviteCommand ValidCommand(Guid propertyId) => new(
-        PropertyId:          propertyId,
-        Email:               "tenant@example.com",
-        FirstName:           "Ada",
-        LastName:            "Lovelace",
-        ProposedStartDate:   DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
-        ProposedEndDate:     DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
+        PropertyId: propertyId,
+        Email: "tenant@example.com",
+        FirstName: "Ada",
+        LastName: "Lovelace",
+        ProposedStartDate: DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
+        ProposedEndDate: DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
         ProposedMonthlyRent: 850m,
-        Currency:            "EUR");
+        Currency: "EUR");
 
     [Fact]
     public async Task Happy_path_persists_invite_and_enqueues_email()

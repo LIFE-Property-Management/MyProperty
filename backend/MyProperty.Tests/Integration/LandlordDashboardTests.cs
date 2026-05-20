@@ -29,7 +29,7 @@ public sealed class LandlordDashboardTests(ApiFixture fixture)
         // Seed two properties + one active lease + one outstanding payment.
         var propertyA = Guid.NewGuid();
         var propertyB = Guid.NewGuid();
-        var leaseId   = Guid.NewGuid();
+        var leaseId = Guid.NewGuid();
         var paymentId = Guid.NewGuid();
 
         await fixture.WithDbAsync(async db =>
@@ -45,13 +45,17 @@ public sealed class LandlordDashboardTests(ApiFixture fixture)
             db.Users.Add(tenant);
             db.Properties.Add(new Property
             {
-                Id = propertyA, LandlordId = landlordId,
-                Name = "Dashboard Apt A", Address = "1 Apt A",
+                Id = propertyA,
+                LandlordId = landlordId,
+                Name = "Dashboard Apt A",
+                Address = "1 Apt A",
             });
             db.Properties.Add(new Property
             {
-                Id = propertyB, LandlordId = landlordId,
-                Name = "Dashboard Apt B", Address = "2 Apt B",
+                Id = propertyB,
+                LandlordId = landlordId,
+                Name = "Dashboard Apt B",
+                Address = "2 Apt B",
             });
             db.Leases.Add(new Lease
             {
@@ -86,7 +90,7 @@ public sealed class LandlordDashboardTests(ApiFixture fixture)
         Assert.NotNull(dto1);
         Assert.True(dto1!.TotalProperties >= 2,
             $"expected ≥ 2 properties owned by landlord, got {dto1.TotalProperties}");
-        Assert.True(dto1.ActiveLeases  >= 1);
+        Assert.True(dto1.ActiveLeases >= 1);
         Assert.True(dto1.ActiveTenants >= 1);
         Assert.True(dto1.OverduePayments >= 1, "outstanding payment with past DueDate should count as overdue");
 
