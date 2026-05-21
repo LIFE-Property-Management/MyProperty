@@ -107,3 +107,28 @@ aiopsWebhook:
     limits:
       cpu: 200m
       memory: 256Mi
+
+loki:
+  image:
+    repository: grafana/loki
+    tag: "3.2.0"
+  storage:
+    size: 10Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+promtail:
+  image:
+    repository: grafana/promtail
+    tag: "3.2.0"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
