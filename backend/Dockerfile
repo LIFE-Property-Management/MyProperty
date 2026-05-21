@@ -80,7 +80,7 @@ RUN dotnet publish MyProperty.Api/MyProperty.Api.csproj \
 # No shell, no apt, no busybox, no /bin, no /usr/bin tools.
 # Container runs as USER $APP_UID (= 1654) by default; no
 # explicit USER directive needed but kept for clarity.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:c30fa82755872b47156f0b1ba3012a1705c8d8a95b319eb1c8924a4f4fc16a46 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:a5532f95f87501535df78fd1b0f39a6356d3a5beaaa5d8637cb62931cd2747ab AS runtime
 WORKDIR /app
 
 # Kestrel listens on 8080 inside the container.
