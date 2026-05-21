@@ -374,7 +374,50 @@ The `myproperty` namespace enforces `baseline` PSS:
 
 ## CD workflow
 
-<!-- Populated in Phase 10 -->
+`.github/workflows/cd.yml` fires on push to `main` or `develop`. Both branches deploy to the same `myproperty` release (latest push wins — single cluster, single environment per Decision #11).
+
+### Trigger
+
+```
+on:
+  push:
+    branches: [main, develop]
+```
+
+### What it does
+
+1. Checks out the repo.
+2. Authenticates to DOKS via `doctl` using `DIGITALOCEAN_ACCESS_TOKEN`.
+3. Installs Helm v3.20.0.
+4. Runs `helm dependency update` to pull the kube-prometheus-stack chart.
+5. Runs `helm upgrade --install myproperty` with all four image tags set to `${{ github.sha }}`.
+6. Posts a Discord notification on success or failure.
+
+### Safety properties
+
+- **`--atomic`** — Helm rolls back to the previous successful release on any failure. The cluster never sits in a half-applied state.
+- **`--timeout 10m`** — Postgres + Keycloak cold-start can take 5+ minutes. Default 5m would false-fail.
+- **`--wait`** — blocks until all resources report Ready. The success Discord notification means "deployed and healthy," not "applied."
+- **`concurrency: cancel-in-progress: true`** — if two commits land on the same branch in quick succession, the older run is cancelled to prevent concurrent `helm upgrade` conflicts.
+
+### Required repo secrets
+
+| Secret | Purpose |
+|---|---|
+| `DIGITALOCEAN_ACCESS_TOKEN` | doctl auth (Read+Write). Also used by M4.7 Terraform. |
+| `DISCORD_WEBHOOK_URL` | Deployment notifications. |
+
+### SHA-tag race condition
+
+All four image tags are set to `${{ github.sha }}`. The CD workflow assumes the four image-build workflows (backend-ci, frontend-ci, aiops-webhook-ci, migration-bundle) have completed for this SHA before CD runs. If any image hasn't built yet, Helm fails on `ImagePullBackOff` and rolls back atomically — acceptable failure mode; re-run CD once the image is available.
+
+### Manual override
+
+```bash
+gh workflow run cd.yml --ref main
+```
+
+Or trigger a fresh push. The CD workflow is the normal path; manual `helm upgrade` (see [§ Upgrade](#upgrade)) is for emergencies only.
 
 ---
 
