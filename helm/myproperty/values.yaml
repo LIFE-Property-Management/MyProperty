@@ -1,2 +1,41 @@
 # Default values for the myproperty Helm chart.
 # Single environment — no value layering. Override at deploy time with --set or --values.
+
+postgres:
+  image:
+    repository: postgres
+    tag: 16-alpine
+  storage:
+    size: 10Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+redis:
+  image:
+    repository: redis
+    tag: 7-alpine
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+rabbitmq:
+  image:
+    repository: rabbitmq
+    tag: 3-management
+  storage:
+    size: 5Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
