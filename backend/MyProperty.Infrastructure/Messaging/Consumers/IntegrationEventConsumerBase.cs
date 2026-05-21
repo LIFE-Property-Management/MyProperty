@@ -104,22 +104,22 @@ public abstract class IntegrationEventConsumerBase<TEvent>(
         _channel = await connection.CreateChannelAsync(cancellationToken: ct);
 
         await _channel.ExchangeDeclareAsync(
-            exchange:   _options.Exchange,
-            type:       ExchangeType.Topic,
-            durable:    true,
+            exchange: _options.Exchange,
+            type: ExchangeType.Topic,
+            durable: true,
             autoDelete: false,
             cancellationToken: ct);
 
         await _channel.QueueDeclareAsync(
-            queue:      QueueName,
-            durable:    true,
-            exclusive:  false,
+            queue: QueueName,
+            durable: true,
+            exclusive: false,
             autoDelete: false,
             cancellationToken: ct);
 
         await _channel.QueueBindAsync(
-            queue:      QueueName,
-            exchange:   _options.Exchange,
+            queue: QueueName,
+            exchange: _options.Exchange,
             routingKey: RoutingKey,
             cancellationToken: ct);
 
@@ -132,8 +132,8 @@ public abstract class IntegrationEventConsumerBase<TEvent>(
         consumer.ReceivedAsync += OnMessageAsync;
 
         await _channel.BasicConsumeAsync(
-            queue:    QueueName,
-            autoAck:  false,
+            queue: QueueName,
+            autoAck: false,
             consumer: consumer,
             cancellationToken: ct);
 

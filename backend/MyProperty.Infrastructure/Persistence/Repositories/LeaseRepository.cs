@@ -65,7 +65,7 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
             .OrderBy(l => l.EndDate)
             .ToListAsync(ct);
     }
-    
+
     public async Task<(IReadOnlyList<Lease> Items, int TotalCount)> ListActiveTenantsByLandlordAsync(
         Guid landlordId, int page, int pageSize, CancellationToken ct)
     {

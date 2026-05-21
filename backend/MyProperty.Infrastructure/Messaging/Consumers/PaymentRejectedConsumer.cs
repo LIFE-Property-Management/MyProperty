@@ -18,7 +18,7 @@ public sealed class PaymentRejectedConsumer(
     ILogger<PaymentRejectedConsumer> logger)
     : IntegrationEventConsumerBase<PaymentRejectedEvent>(connections, scopeFactory, options, logger)
 {
-    protected override string QueueName  => "myproperty.payment.rejected.signalr";
+    protected override string QueueName => "myproperty.payment.rejected.signalr";
     protected override string RoutingKey => "payment.rejected";
 
     protected override Task HandleAsync(

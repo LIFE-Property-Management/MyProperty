@@ -43,8 +43,8 @@ public sealed class DownloadReceiptHandler(
         var stream = await fileStorage.DownloadAsync(payment.ReceiptFileKey, ct);
 
         return new DownloadReceiptResult(
-            Content:     stream,
-            FileName:    payment.ReceiptFileName ?? "receipt",
+            Content: stream,
+            FileName: payment.ReceiptFileName ?? "receipt",
             ContentType: payment.ReceiptContentType ?? "application/octet-stream");
     }
 }

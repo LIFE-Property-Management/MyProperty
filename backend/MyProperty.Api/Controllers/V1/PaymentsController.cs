@@ -84,12 +84,12 @@ public sealed class PaymentsController(
         try
         {
             var cmd = new SubmitPaymentCommand(
-                PaymentId:     id,
-                Method:        method,
-                Notes:         notes,
-                FileStream:    fileStream,
-                FileName:      file?.FileName,
-                ContentType:   file?.ContentType,
+                PaymentId: id,
+                Method: method,
+                Notes: notes,
+                FileStream: fileStream,
+                FileName: file?.FileName,
+                ContentType: file?.ContentType,
                 FileSizeBytes: file?.Length);
 
             return Ok(await submit.Handle(cmd, ct));

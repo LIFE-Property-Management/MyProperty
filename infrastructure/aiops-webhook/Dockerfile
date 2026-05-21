@@ -14,8 +14,12 @@
 #  C toolchain needed in either stage.
 # =============================================================
 
+# Base image digests pinned for supply-chain integrity (M4.3).
+# Tags retained as human-readable labels; @sha256 is the contract.
+# Bumped via Dependabot (see .github/dependabot.yml) — do not hand-edit.
+
 # ── Stage 1: build venv ──────────────────────────────────────
-FROM python:3.12.13-slim AS deps
+FROM python:3.12-slim@sha256:9d3abd9fc11d06998ccdbdd93b4dd49b5ad7d67fcbbc11c016eb0eb2c2194891 AS deps
 WORKDIR /build
 
 ENV VENV_PATH=/opt/aiops-venv
@@ -26,7 +30,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Stage 2: runtime ─────────────────────────────────────────
-FROM python:3.12.13-slim AS runtime
+FROM python:3.12-slim@sha256:9d3abd9fc11d06998ccdbdd93b4dd49b5ad7d67fcbbc11c016eb0eb2c2194891 AS runtime
 
 # Non-root user, in the spirit of M4.2 / M4.8 hardening even though
 # this file lives outside the API/frontend production Dockerfile scope.

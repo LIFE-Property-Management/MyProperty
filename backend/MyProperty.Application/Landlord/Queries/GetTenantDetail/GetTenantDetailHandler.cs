@@ -14,7 +14,7 @@ public sealed class GetTenantDetailHandler(
     public async Task<TenantDetailDto> Handle(GetTenantDetailQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
-        
+
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
 

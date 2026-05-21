@@ -386,3 +386,166 @@ This deviation is also surfaced in the M5 architecture doc (per the original dec
 **M4 deliverable progress.** 4 of 12 closed. Closed: M4.1 (compose),M4.2 (production Dockerfiles), M4.5 (monitoring stack), M4.11 (this entry). Remaining: M4.3 (CI/CD), M4.4 (K8s + Helm), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security hardening), M4.9 (Nginx + SSL), M4.10 (Linux server), M4.12 (AI Log Entry #4).
 
 ---
+
+### 2026-05-20 — M4.3 CI/CD pipeline
+
+**Scope.** Close M4.3 — "lint → test → build → push." Extends two existing
+workflows (backend, frontend) and adds a new one for the Python aiops-webhook
+service. Pins all four Dockerfiles' base images to `@sha256:` digests and
+wires Dependabot across NuGet/npm/pip/Docker/GitHub-Actions ecosystems for
+weekly automated update PRs. Lands the three explicit carry-overs from prior
+milestone scratch entries: Trivy CVE scanning as a CI gate (M4.2 deferral),
+digest pinning + Dependabot (M4.2 deferral), and Python lint + pytest job
+(M4.11 promise).
+
+**Changes.**
+- `dotnet format MyProperty.sln` baseline commit (43 files, dominated by
+  `Program.cs`). Pure whitespace + using-ordering changes; no behavioral
+  impact. Lands before the CI format gate so the gate has a clean baseline
+  to verify against. Plan estimated 18 files; actual run touched 43 (test
+  files and infrastructure consumers had also drifted from formatter
+  conventions).
+- `backend/Dockerfile`, `backend/Dockerfile.migrations`, `frontend/Dockerfile`,
+  `infrastructure/aiops-webhook/Dockerfile` — base image references pinned to
+  `@sha256:` digests. Tags retained as human-readable labels. aiops-webhook
+  also had its tag normalized from `python:3.12.13-slim` to `python:3.12-slim`
+  (see decisions section for rationale).
+- `.github/dependabot.yml` (new) — five-ecosystem coverage on weekly cadence.
+- `.github/workflows/backend-ci.yml` — added `Format check` step into
+  `build-and-test` job; added new `api-image` job that builds the runtime
+  API image, dual-tags by SHA+branch, pushes to GHCR, scans with Trivy,
+  uploads SARIF. Existing `build-and-test` (test logic) and
+  `migration-bundle` jobs unchanged.
+- `.github/workflows/frontend-ci.yml` — added new `frontend-image` job
+  mirroring the backend pattern, with placeholder `NEXT_PUBLIC_*` build args.
+  Deliberately gates on `[lint, typecheck, unit-tests]` and NOT `e2e-tests`
+  (Playwright is slow + flaky-prone for non-code reasons).
+- `.github/workflows/aiops-webhook-ci.yml` (new) — ruff format/lint, pytest,
+  image build/push, Trivy. Three jobs in series.
+- `infrastructure/aiops-webhook/requirements-dev.txt` — added `ruff==0.15.13`
+  (current stable as of 2026-05-20; Dependabot pip entry will surface future
+  bumps).
+- `infrastructure/aiops-webhook/main.py` and `tests/test_main.py` — ruff
+  format + ruff check --fix baseline applied. Same pattern as Phase 0's
+  dotnet format baseline. 25 lines changed, whitespace/line-wrapping only.
+- `docs/operations/ci-cd.md` (new) — formal pipeline spec; matches the shape
+  of `docs/operations/migrations.md` and `docs/operations/health-probes.md`.
+
+**Decisions.**
+- **Trivy non-blocking** (`exit-code: 0`). Transitive .NET and Next.js
+  advisories produce frequent false positives at the HIGH severity level
+  with no triage workflow in place. Non-blocking preserves visibility
+  (Security tab) without compounding the deadline week. Documented for
+  post-M4 hardening with a three-step procedure (triage backlog, baseline
+  `.trivyignore` with expirations, flip to blocking).
+- **Dependabot, not Renovate.** Native GitHub primitive, single config file,
+  no app installation. Covers all five ecosystems.
+- **`dotnet format` as a hard gate.** The baseline commit makes this safe
+  immediately rather than a future cleanup. Without the gate, the M4.3
+  "lint" coverage was: frontend (eslint), Python (ruff, new this PR),
+  backend (nothing) — a visible asymmetry.
+- **ruff format baseline before the gate goes live.** Same reasoning as
+  dotnet format (Phase 0). `ruff format .` + `ruff check --fix .` applied
+  to `main.py` and `tests/test_main.py`. 25 lines changed, all formatting
+  (line-length wrapping, list comprehensions, parenthesised `with` blocks).
+  Verified: `ruff format --check .` and `ruff check .` both exit 0 after,
+  pytest 5/5 still pass.
+- **`python:3.12-slim` + digest over `python:3.12.13-slim` + digest.** The
+  aiops-webhook Dockerfile used a patch-version-specific tag. Updated to the
+  floating minor-version tag + digest to match the convention of all other
+  images and ensure Dependabot's Docker entry picks it up cleanly.
+- **Integration tests stay out of CI.** Backend integration suite requires
+  Testcontainers + Postgres + Keycloak; cold image pulls add 3–5 min per
+  run. M3.11 close verified the suite locally; pre-merge local runs cover
+  the same surface. Post-M4 follow-up adds a `main`-branch-only job once
+  the time budget is less constrained.
+- **No end-to-end smoke test in CI.** Frontend↔backend auth isn't wired
+  (M4.2 G18 note). Each image must build cleanly; that's the verification.
+  Post-M4 follow-up adds a compose-up + curl-loop job once OIDC integration
+  lands.
+- **Frontend image built with placeholder `NEXT_PUBLIC_*` URLs.** The
+  resulting image is for traceability and Trivy scanning only; not
+  environment-ready. M4.4 (Helm) rebuilds per-environment with real values.
+- **Action versions pinned to v3/v6 family, not v4/v7.** The newer versions
+  require Node.js 24, which GitHub Actions forces on June 2, 2026.
+  Migrating during M4.3 would mean re-running M4.2 verification gates on
+  the frontend Dockerfile. Out of deadline scope. Documented as a post-M4
+  batched bump.
+
+**Verification.**
+- **G1** (Phase 0 — format baseline): `dotnet format --verify-no-changes`
+  exits 0 after the baseline commit. 43 files in the baseline diff,
+  whitespace/ordering only.
+- **G2** (Phase 1 — digest pinning): all four full builds succeed (api,
+  frontend, aiops-webhook, migrations — via build-migration-bundle.sh).
+- **G3** (Phase 2 — Dependabot YAML): `yaml.safe_load` parses
+  `.github/dependabot.yml`. Runtime activation only after merge to develop;
+  first PRs typically appear within 24h.
+- **G4** (Phase 3 — backend CI YAML): `yaml.safe_load` parses
+  `backend-ci.yml`. Local `dotnet format --verify-no-changes --no-restore`
+  exits 0 — confirms the format gate will pass on the next CI run.
+- **G5** (Phase 4 — frontend CI YAML): `yaml.safe_load` parses
+  `frontend-ci.yml`.
+- **G6** (Phase 5 — aiops CI YAML): `yaml.safe_load` parses
+  `aiops-webhook-ci.yml`. Local pytest run against the suite passes
+  (5/5, from M4.11). Local `ruff format --check .` and `ruff check .` both
+  clean after baseline applied.
+- **G7** (Phase 6 — docs): both files parse as valid markdown; cross-links
+  to other operations docs resolve.
+
+End-to-end pipeline verification (the workflows actually run on GitHub)
+happens on first push of the PR. Per the M4.3 contract — image build is the
+verification, not runtime smoke. Each image must reach GHCR with both SHA
+and branch tags.
+
+**Side notes.**
+- **`dotnet format` baseline larger than expected.** 43 files affected vs.
+  18 estimated. Root cause: test files and infrastructure consumers had also
+  drifted, not just `Program.cs`. Future M4/M5 work should run `dotnet
+  format` locally before each commit to keep diffs review-friendly.
+- **ruff baseline was also needed.** `ruff format --check .` failed on first
+  run against `main.py` and `tests/test_main.py`. Applied `ruff format .`
+  + `ruff check --fix .` as the baseline, same pattern as Phase 0.
+- **`python:3.12.13-slim` tag deviation.** The aiops-webhook Dockerfile
+  was pinned to a patch-version tag rather than the floating minor-version
+  form. Aligned to `python:3.12-slim@sha256:...` to match the convention
+  of all other images.
+- **Trivy + GHCR-hosted SARIF + Code Scanning** requires
+  `permissions.security-events: write` on each job that uploads. Easy to
+  forget when copying the pattern across workflows; all three image-build
+  jobs in this PR carry the permission explicitly.
+
+**Known follow-ups (post-M4).**
+- **Trivy blocking gate.** Triage the HIGH-severity backlog in the Security
+  tab, add `.trivyignore` with dated exceptions, flip `exit-code: 0` →
+  `exit-code: 1` across all three image-build jobs.
+- **Backend integration tests in CI.** Add a second job in `backend-ci.yml`
+  scoped to PRs against `main`. Use Testcontainers; expect a 5–8 min run.
+- **End-to-end smoke test job.** Once frontend↔backend OIDC integration
+  lands, add a compose-up + curl-loop step that exercises the redirect
+  dance and an authenticated API call against the CI-built images.
+- **CD wiring.** Out of scope for M4.3 by decision; revisit post-M4 once
+  the Helm chart from M4.4 stabilizes.
+- **Node.js 24 migration.** Before June 2, 2026 (GitHub's deprecation
+  date), bump `docker/login-action@v3` → `@v4`, `docker/setup-buildx-action@v3`
+  → `@v4`, `docker/build-push-action@v6` → `@v7`, `actions/setup-node`
+  `node-version: 20` → `24`, and `frontend/Dockerfile` runtime base
+  `node:20-alpine` → `node:24-alpine` (re-run M4.2 G10–G15 verification
+  gates).
+- **GHCR tag retention.** Branch-tagged images accumulate indefinitely.
+  Scheduled cleanup workflow prunes branch tags > 30 days old.
+- **`frontend-image` job E2E gating.** Currently bypasses Playwright in
+  `needs:`. Post-M4, consider a separate "release gate" job that requires
+  all four upstream jobs green before publishing `release-*` tags.
+
+**M3 grade impact.** None — M4.3 is the M4 row. Closes three explicit
+carry-overs from M4.2 and M4.11 entries that would otherwise have been M4
+grade-loss flags (Trivy gate, digest pinning, Python CI).
+
+**M4 deliverable progress.** 5 of 12 closed. Closed: M4.1 (compose), M4.2
+(production Dockerfiles), M4.3 (this entry), M4.5 (monitoring), M4.11
+(AIOps webhook). Remaining: M4.4 (K8s + Helm), M4.6 (Uptime Kuma), M4.7
+(Terraform), M4.8 (security hardening), M4.9 (Nginx + SSL), M4.10 (Linux
+server), M4.12 (AI Log Entry #4).
+
+---

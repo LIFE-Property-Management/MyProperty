@@ -14,8 +14,8 @@ public class IntegrationEventNamingTests
     [Theory]
     [InlineData(typeof(PaymentSubmittedEvent), "payment.submitted")]
     [InlineData(typeof(PaymentConfirmedEvent), "payment.confirmed")]
-    [InlineData(typeof(PaymentRejectedEvent),  "payment.rejected")]
-    [InlineData(typeof(PaymentCreatedEvent),   "payment.created")]
+    [InlineData(typeof(PaymentRejectedEvent), "payment.rejected")]
+    [InlineData(typeof(PaymentCreatedEvent), "payment.created")]
     public void RoutingKey_StripsEventSuffix_AndDottedLowerCase(Type eventType, string expected)
     {
         Assert.Equal(expected, IntegrationEventNaming.RoutingKey(eventType));

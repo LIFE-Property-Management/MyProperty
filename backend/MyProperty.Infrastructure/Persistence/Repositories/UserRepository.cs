@@ -66,7 +66,7 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
             existing.LastName = lastName;
             changed = true;
         }
-        
+
         if (phone is not null && existing.Phone != phone)
         {
             existing.Phone = phone;

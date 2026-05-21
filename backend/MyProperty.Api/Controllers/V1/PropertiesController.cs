@@ -33,7 +33,7 @@ public sealed class PropertiesController(
         [FromBody] CreatePropertyRequest request, CancellationToken ct)
     {
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        var cmd = new CreatePropertyCommand( request.Name, request.Address, request.UnitNumber);
+        var cmd = new CreatePropertyCommand(request.Name, request.Address, request.UnitNumber);
         var result = await createProperty.Handle(cmd, ct);
         return CreatedAtAction(nameof(List), new { }, result);
     }
@@ -51,7 +51,7 @@ public sealed class PropertiesController(
     {
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLandlordProperties.Handle(
-            new GetLandlordPropertiesQuery( page, pageSize), ct);
+            new GetLandlordPropertiesQuery(page, pageSize), ct);
         return Ok(result);
     }
 }

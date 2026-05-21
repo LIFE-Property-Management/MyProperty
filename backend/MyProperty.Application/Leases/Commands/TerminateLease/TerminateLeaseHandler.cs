@@ -16,7 +16,7 @@ public sealed class TerminateLeaseHandler(
     public async Task Handle(TerminateLeaseCommand cmd, CancellationToken ct)
     {
         await validator.EnsureValidAsync(cmd, ct);
-        
+
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
 
         var lease = await leases.GetByIdAsync(cmd.LeaseId, ct)

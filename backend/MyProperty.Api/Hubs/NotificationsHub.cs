@@ -38,7 +38,7 @@ public sealed class NotificationsHub(
 {
     public const string Path = "/hubs/notifications";
 
-    public static string TenantGroup(Guid userId)   => $"tenant:{userId}";
+    public static string TenantGroup(Guid userId) => $"tenant:{userId}";
     public static string LandlordGroup(Guid userId) => $"landlord:{userId}";
 
     public override async Task OnConnectedAsync()

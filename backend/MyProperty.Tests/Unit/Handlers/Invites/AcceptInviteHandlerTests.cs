@@ -33,21 +33,21 @@ public sealed class AcceptInviteHandlerTests
         DateTime? expiresAt = null,
         string email = "tenant@example.com",
         Guid? landlordId = null) => new()
-    {
-        Id = Guid.NewGuid(),
-        LandlordId = landlordId ?? Guid.NewGuid(),
-        PropertyId = Guid.NewGuid(),
-        Email = email,
-        FirstName = "Ada",
-        LastName = "Lovelace",
-        TokenHash = TokenHashHex,
-        Status = status,
-        ExpiresAt = expiresAt ?? DateTime.UtcNow.AddDays(5),
-        ProposedStartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
-        ProposedEndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
-        ProposedMonthlyRent = 1000m,
-        Currency = "EUR",
-    };
+        {
+            Id = Guid.NewGuid(),
+            LandlordId = landlordId ?? Guid.NewGuid(),
+            PropertyId = Guid.NewGuid(),
+            Email = email,
+            FirstName = "Ada",
+            LastName = "Lovelace",
+            TokenHash = TokenHashHex,
+            Status = status,
+            ExpiresAt = expiresAt ?? DateTime.UtcNow.AddDays(5),
+            ProposedStartDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            ProposedEndDate = DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
+            ProposedMonthlyRent = 1000m,
+            Currency = "EUR",
+        };
 
     private static User SeedTenant(string email) => new()
     {

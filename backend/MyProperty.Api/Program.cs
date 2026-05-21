@@ -121,8 +121,8 @@ try
                 // `myproperty-api` bearer-only client in the same file exists
                 // purely as the audience target.
                 ValidateAudience = true,
-                ValidAudience    = "myproperty-api",
-                NameClaimType    = "preferred_username",
+                ValidAudience = "myproperty-api",
+                NameClaimType = "preferred_username",
             };
 
             // SignalR's WebSocket handshake cannot carry an Authorization
@@ -180,135 +180,135 @@ try
     builder.Services.AddScoped<RejectPaymentHandler>();
     builder.Services.AddScoped<DownloadReceiptHandler>();
 
-// FluentValidation — auto-register every IValidator<T> in the Application assembly.
-builder.Services.AddValidatorsFromAssemblyContaining<CreateInviteCommand>();
+    // FluentValidation — auto-register every IValidator<T> in the Application assembly.
+    builder.Services.AddValidatorsFromAssemblyContaining<CreateInviteCommand>();
 
-// Invite options
-builder.Services.AddOptions<InviteOptions>()
-    .Bind(builder.Configuration.GetSection("Invites"))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+    // Invite options
+    builder.Services.AddOptions<InviteOptions>()
+        .Bind(builder.Configuration.GetSection("Invites"))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
 
-// ── CORS ──────────────────────────────────────────────────────────────────────
-// Allowed origins are configured per-environment. Strict allowlist (no
-// AllowAnyOrigin) because AllowCredentials is required for the SignalR
-// WebSocket handshake, and the CORS spec forbids `*` together with credentials.
-// Methods and headers default to "any" — restricting them is more maintenance
-// pain than security benefit; the origin allowlist is the real boundary.
-builder.Services.AddOptions<CorsOptions>()
-    .Bind(builder.Configuration.GetSection(CorsOptions.SectionName))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+    // ── CORS ──────────────────────────────────────────────────────────────────────
+    // Allowed origins are configured per-environment. Strict allowlist (no
+    // AllowAnyOrigin) because AllowCredentials is required for the SignalR
+    // WebSocket handshake, and the CORS spec forbids `*` together with credentials.
+    // Methods and headers default to "any" — restricting them is more maintenance
+    // pain than security benefit; the origin allowlist is the real boundary.
+    builder.Services.AddOptions<CorsOptions>()
+        .Bind(builder.Configuration.GetSection(CorsOptions.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
 
-var corsOrigins = builder.Configuration
-    .GetSection($"{CorsOptions.SectionName}:AllowedOrigins")
-    .Get<string[]>() ?? [];
+    var corsOrigins = builder.Configuration
+        .GetSection($"{CorsOptions.SectionName}:AllowedOrigins")
+        .Get<string[]>() ?? [];
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("MyPropertyDefault", policy =>
-        policy.WithOrigins(corsOrigins)
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials());
-});
-
-// ── Rate limiting ─────────────────────────────────────────────────────────────
-// Two policies:
-//  • "anon-invite"   per-IP, tight — applied to anonymous invite endpoints to
-//                    deter token enumeration attacks (the 404-vs-200 distinction
-//                    on `GET /invites/by-token/{token}` and the 404-vs-204 on
-//                    `POST /invites/{token}/reject` is otherwise an oracle).
-//  • "authenticated" per-user (sub claim, falls back to IP), looser — covers
-//                    every JWT-protected endpoint.
-// Limits are deliberately conservative for the milestone; tune from telemetry.
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    options.AddPolicy("anon-invite", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 30,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                AutoReplenishment = true,
-            }));
-
-    options.AddPolicy("authenticated", httpContext =>
+    builder.Services.AddCors(options =>
     {
-        var sub = httpContext.User.FindFirst("sub")?.Value;
-        var key = sub ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: key,
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 120,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                AutoReplenishment = true,
-            });
+        options.AddPolicy("MyPropertyDefault", policy =>
+            policy.WithOrigins(corsOrigins)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials());
     });
-});
 
-// ── Health checks ─────────────────────────────────────────────────────────────
-// Two probe endpoints:
-//   /health/live  → process responsive. K8s livenessProbe target.
-//   /health/ready → Postgres reachable. K8s readinessProbe target.
-// Redis, RabbitMQ, and Keycloak JWKS are registered as diagnostic checks so they
-// appear in the response body for debugging but do not affect the /ready status
-// code — taking the whole API out of rotation because (e.g.) Redis hiccupped is
-// a worse outage than the degraded landlord dashboard.
-builder.Services.AddHttpClient("keycloak-jwks", client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(2);
-});
-builder.Services.AddHealthChecks()
-    .AddNpgSql(
-        connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("Postgres")!,
-        name: "postgres",
-        tags: ["ready"])
-    .AddRedis(
-        connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>()["Cache:RedisConnection"]!,
-        name: "redis",
-        tags: ["diagnostic"])
-    .AddRabbitMQ(
-        factory: sp =>
+    // ── Rate limiting ─────────────────────────────────────────────────────────────
+    // Two policies:
+    //  • "anon-invite"   per-IP, tight — applied to anonymous invite endpoints to
+    //                    deter token enumeration attacks (the 404-vs-200 distinction
+    //                    on `GET /invites/by-token/{token}` and the 404-vs-204 on
+    //                    `POST /invites/{token}/reject` is otherwise an oracle).
+    //  • "authenticated" per-user (sub claim, falls back to IP), looser — covers
+    //                    every JWT-protected endpoint.
+    // Limits are deliberately conservative for the milestone; tune from telemetry.
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        options.AddPolicy("anon-invite", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 30,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true,
+                }));
+
+        options.AddPolicy("authenticated", httpContext =>
         {
-            var cfg = sp.GetRequiredService<IConfiguration>();
-            return new ConnectionFactory
+            var sub = httpContext.User.FindFirst("sub")?.Value;
+            var key = sub ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: key,
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true,
+                });
+        });
+    });
+
+    // ── Health checks ─────────────────────────────────────────────────────────────
+    // Two probe endpoints:
+    //   /health/live  → process responsive. K8s livenessProbe target.
+    //   /health/ready → Postgres reachable. K8s readinessProbe target.
+    // Redis, RabbitMQ, and Keycloak JWKS are registered as diagnostic checks so they
+    // appear in the response body for debugging but do not affect the /ready status
+    // code — taking the whole API out of rotation because (e.g.) Redis hiccupped is
+    // a worse outage than the degraded landlord dashboard.
+    builder.Services.AddHttpClient("keycloak-jwks", client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(2);
+    });
+    builder.Services.AddHealthChecks()
+        .AddNpgSql(
+            connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>().GetConnectionString("Postgres")!,
+            name: "postgres",
+            tags: ["ready"])
+        .AddRedis(
+            connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>()["Cache:RedisConnection"]!,
+            name: "redis",
+            tags: ["diagnostic"])
+        .AddRabbitMQ(
+            factory: sp =>
             {
-                HostName    = cfg["RabbitMq:HostName"] ?? "localhost",
-                Port        = cfg.GetValue("RabbitMq:Port", 5672),
-                UserName    = cfg["RabbitMq:UserName"] ?? "guest",
-                Password    = cfg["RabbitMq:Password"] ?? "guest",
-                VirtualHost = cfg["RabbitMq:VirtualHost"] ?? "/",
-                AutomaticRecoveryEnabled = false,
-            }.CreateConnectionAsync(CancellationToken.None);
-        },
-        name: "rabbitmq",
-        tags: ["diagnostic"])
-    .AddCheck<KeycloakJwksHealthCheck>(
-        name: "keycloak-jwks",
-        tags: ["diagnostic"]);
+                var cfg = sp.GetRequiredService<IConfiguration>();
+                return new ConnectionFactory
+                {
+                    HostName = cfg["RabbitMq:HostName"] ?? "localhost",
+                    Port = cfg.GetValue("RabbitMq:Port", 5672),
+                    UserName = cfg["RabbitMq:UserName"] ?? "guest",
+                    Password = cfg["RabbitMq:Password"] ?? "guest",
+                    VirtualHost = cfg["RabbitMq:VirtualHost"] ?? "/",
+                    AutomaticRecoveryEnabled = false,
+                }.CreateConnectionAsync(CancellationToken.None);
+            },
+            name: "rabbitmq",
+            tags: ["diagnostic"])
+        .AddCheck<KeycloakJwksHealthCheck>(
+            name: "keycloak-jwks",
+            tags: ["diagnostic"]);
 
-// ── Authorization ─────────────────────────────────────────────────────────────
-builder.Services.AddAuthorization(options =>
-{
-    // Default-deny: every endpoint requires authentication unless it opts out
-    // with [AllowAnonymous]. Per-role authorization remains an explicit choice
-    // via the named policies below.
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
+    // ── Authorization ─────────────────────────────────────────────────────────────
+    builder.Services.AddAuthorization(options =>
+    {
+        // Default-deny: every endpoint requires authentication unless it opts out
+        // with [AllowAnonymous]. Per-role authorization remains an explicit choice
+        // via the named policies below.
+        options.FallbackPolicy = new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
 
-        options.AddPolicy("RequireTenant",   p => p.RequireRole("Tenant"));
+        options.AddPolicy("RequireTenant", p => p.RequireRole("Tenant"));
         options.AddPolicy("RequireLandlord", p => p.RequireRole("Landlord"));
-        options.AddPolicy("RequireAdmin",    p => p.RequireRole("Admin"));
+        options.AddPolicy("RequireAdmin", p => p.RequireRole("Admin"));
     });
 
     // ── Problem Details ───────────────────────────────────────────────────────────
@@ -373,12 +373,12 @@ builder.Services.AddAuthorization(options =>
 
         c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
-            Name         = "Authorization",
-            Type         = SecuritySchemeType.Http,
-            Scheme       = "bearer",
+            Name = "Authorization",
+            Type = SecuritySchemeType.Http,
+            Scheme = "bearer",
             BearerFormat = "JWT",
-            In           = ParameterLocation.Header,
-            Description  = "Paste a Keycloak access token.",
+            In = ParameterLocation.Header,
+            Description = "Paste a Keycloak access token.",
         });
 
         c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
@@ -440,7 +440,7 @@ builder.Services.AddAuthorization(options =>
         });
     }
 
-// Forwarded headers must run before everything that observes scheme/host/IP
+    // Forwarded headers must run before everything that observes scheme/host/IP
     // (HTTPS redirect, request logging, rate limiting). Behind Nginx/K8s ingress
     // doing TLS termination, the pod receives plain HTTP with X-Forwarded-Proto:
     // https — without this middleware, UseHttpsRedirection would issue a 301 to
@@ -456,7 +456,7 @@ builder.Services.AddAuthorization(options =>
                          | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
                          | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost,
     };
-    
+
     forwardedHeadersOptions.KnownIPNetworks.Clear();
     forwardedHeadersOptions.KnownProxies.Clear();
     app.UseForwardedHeaders(forwardedHeadersOptions);
@@ -474,7 +474,7 @@ builder.Services.AddAuthorization(options =>
     // Default label set (code, method, controller, action) is what the alert
     // rules in infrastructure/prometheus/alerts/api.yml expect.
     app.UseHttpMetrics();
-    
+
     // CORS runs after scheme is correct (so preflight responses carry the right
     // Location semantics) and before authentication (preflight OPTIONS requests
     // carry no Authorization header and must short-circuit before auth runs).
@@ -484,11 +484,11 @@ builder.Services.AddAuthorization(options =>
     app.UseRateLimiter();
     app.UseAuthorization();
 
-app.UseHangfireDashboard("/hangfire", new DashboardOptions
-{
-    Authorization = [new AdminOnlyDashboardFilter()],
-    DashboardTitle = "MyProperty — Background Jobs",
-});
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = [new AdminOnlyDashboardFilter()],
+        DashboardTitle = "MyProperty — Background Jobs",
+    });
 
     app.MapControllers();
     app.MapHub<NotificationsHub>(NotificationsHub.Path);

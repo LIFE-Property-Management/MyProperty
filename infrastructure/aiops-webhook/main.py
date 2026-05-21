@@ -211,7 +211,9 @@ def build_slack_blocks(
 
     description = alert.annotations.get("description")
     if description:
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": description}})
+        blocks.append(
+            {"type": "section", "text": {"type": "mrkdwn", "text": description}}
+        )
 
     if triage_text and alert_status != "resolved":
         # Slack section text caps at 3000 chars.
@@ -226,7 +228,10 @@ def build_slack_blocks(
             {
                 "type": "context",
                 "elements": [
-                    {"type": "mrkdwn", "text": "_Triage disabled — ANTHROPIC_API_KEY unset._"}
+                    {
+                        "type": "mrkdwn",
+                        "text": "_Triage disabled — ANTHROPIC_API_KEY unset._",
+                    }
                 ],
             }
         )
@@ -311,7 +316,9 @@ def process_payload(payload: AlertmanagerPayload) -> None:
 
 
 @app.post("/alerts", status_code=status.HTTP_202_ACCEPTED)
-def alerts(payload: AlertmanagerPayload, background_tasks: BackgroundTasks) -> dict[str, Any]:
+def alerts(
+    payload: AlertmanagerPayload, background_tasks: BackgroundTasks
+) -> dict[str, Any]:
     """Alertmanager webhook target.
 
     Returns 202 immediately after queuing background work — keeps the response

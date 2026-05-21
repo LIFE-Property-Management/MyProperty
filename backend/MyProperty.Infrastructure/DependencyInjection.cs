@@ -121,7 +121,7 @@ public static class DependencyInjection
         services.AddStackExchangeRedisCache(options =>
         {
             options.Configuration = cacheOptions.RedisConnection;
-            options.InstanceName  = cacheOptions.InstancePrefix;
+            options.InstanceName = cacheOptions.InstancePrefix;
         });
 
         services.AddScoped<ILandlordDashboardCache, RedisLandlordDashboardCache>();

@@ -40,11 +40,11 @@ internal sealed class LandlordDashboardRepository(AppDbContext db) : ILandlordDa
                           && p.DueDate < today, ct);
 
         return new LandlordDashboardDto(
-            TotalProperties:  totalProperties,
-            ActiveLeases:     activeLeases,
-            ActiveTenants:    activeTenants,
-            PendingPayments:  pendingPayments,
-            OverduePayments:  overduePayments,
-            GeneratedAt:      DateTime.UtcNow);
+            TotalProperties: totalProperties,
+            ActiveLeases: activeLeases,
+            ActiveTenants: activeTenants,
+            PendingPayments: pendingPayments,
+            OverduePayments: overduePayments,
+            GeneratedAt: DateTime.UtcNow);
     }
 }

@@ -14,9 +14,9 @@ public sealed class GetLeasesExpiringSoonHandler(
         GetLeasesExpiringSoonQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
-        
+
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        
+
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var leasesExpiringSoon = await leases.ListExpiringSoonAsync(
             landlord.Id, query.DaysThreshold, ct);
