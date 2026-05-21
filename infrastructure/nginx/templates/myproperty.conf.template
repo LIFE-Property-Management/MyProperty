@@ -1,0 +1,181 @@
+# MyProperty nginx — virtual hosts.
+#
+# Three subdomains, one TLS cert (SAN-multi-name). The primary domain
+# (app.${MYPROPERTY_DOMAIN}) owns the cert; the other server blocks just
+# point ssl_certificate at the same files.
+#
+# Template processed at container start: the official nginx image runs
+# envsubst over files in /etc/nginx/templates/*.template (NGINX_ENVSUBST_FILTER
+# in docker-compose.yml scopes that to ^MYPROPERTY_ so $host / $remote_addr
+# etc. are passed through untouched). Output lands at /etc/nginx/conf.d/.
+#
+# Same template renders unchanged for self-signed (dev) and Let's Encrypt
+# (prod): both init scripts park the cert at
+# /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/{fullchain,privkey}.pem.
+
+# ── HTTP :80 — ACME challenge + redirect to HTTPS ───────────────────────────
+# One server block covers every subdomain. Certbot writes ACME challenge
+# files under /var/www/certbot/.well-known/acme-challenge/; everything
+# else 301s to https://. Doing the redirect at HTTP/80 rather than HTTPS
+# saves the unnecessary TLS handshake.
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    # Container healthcheck endpoint. Returns 200 without any upstream
+    # dependency — verifies only that nginx itself is responsive.
+    # Kept off the access log so the healthcheck loop doesn't drown
+    # the request stream Promtail ships to Loki.
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    # ACME HTTP-01 challenge passthrough. certbot writes one-shot files
+    # under /var/www/certbot/.well-known/acme-challenge/ during issuance
+    # and renewal; nginx must serve them on port 80 over plain HTTP.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── HTTPS :443 — frontend (Next.js) ─────────────────────────────────────────
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name app.${MYPROPERTY_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/privkey.pem;
+
+    # HSTS only after the cert is real. With self-signed certs in dev a
+    # browser still honors HSTS — and once cached, it will refuse plain
+    # HTTP forever (until manual cache clear). Strong recommendation: keep
+    # HSTS off when verifying with self-signed certs; flip on in prod
+    # once Let's Encrypt is issuing.
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    location / {
+        proxy_pass http://frontend:3000;
+        proxy_http_version 1.1;
+
+        # Forwarded headers. Next.js standalone respects X-Forwarded-Proto
+        # for absolute-URL construction.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Next.js HMR (dev only) uses WebSocket; harmless in prod.
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+        proxy_cache_bypass                 $http_upgrade;
+
+        proxy_read_timeout                 60s;
+        proxy_send_timeout                 60s;
+    }
+}
+
+# ── HTTPS :443 — backend (.NET API) ─────────────────────────────────────────
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name api.${MYPROPERTY_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/privkey.pem;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # Receipt upload cap. Inherited from the http block but restated here
+    # for grep-ability — this is the endpoint the cap actually applies to.
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://backend:8080;
+        proxy_http_version 1.1;
+
+        # Forwarded headers — ASP.NET reads these via UseForwardedHeaders()
+        # (Program.cs lines ~443–462). KnownProxies/KnownIPNetworks are
+        # cleared in the API because the cluster network is the trust
+        # boundary; the only way headers can reach the API is via this proxy.
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # SignalR WebSocket upgrade. The hub mounts at /hubs/notifications
+        # (Api/Hubs/NotificationsHub.Path). Without the upgrade headers,
+        # the connection downgrades to long-polling and drops every ~100s
+        # on nginx's idle timeout.
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+
+        # WebSocket idle timeout. Default 60s is fine for REST but kills
+        # idle SignalR connections; 1h matches the default keepalive
+        # interval clients send.
+        proxy_read_timeout                 3600s;
+        proxy_send_timeout                 3600s;
+    }
+}
+
+# ── HTTPS :443 — Keycloak ───────────────────────────────────────────────────
+# Production Keycloak is configured with:
+#   KC_PROXY_HEADERS=xforwarded
+#   KC_HOSTNAME=https://auth.${MYPROPERTY_DOMAIN}
+#   KC_HOSTNAME_STRICT=true
+#   KC_HTTP_ENABLED=true
+# See infrastructure/keycloak/PRODUCTION.md. Dev (start-dev) is lenient
+# enough that the same nginx block works without any of those env vars set.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name auth.${MYPROPERTY_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/privkey.pem;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # Keycloak admin console + account console can push >1 MB of static
+    # assets in a single response (the admin UI ships as one big bundle).
+    # Default proxy buffer 8k is fine for the OIDC discovery flow but
+    # produces "upstream sent too big header" warnings on console loads.
+    proxy_buffer_size       16k;
+    proxy_buffers           8 16k;
+    proxy_busy_buffers_size 32k;
+
+    # Keycloak's management port 9000 hosts /health and /metrics. Do NOT
+    # proxy 9000 — it leaks internal state. The realm well-known + OIDC
+    # endpoints are on 8080, which is what /-targets here.
+    location / {
+        proxy_pass http://keycloak:8080;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Forwarded-Port  443;
+
+        proxy_read_timeout                 60s;
+        proxy_send_timeout                 60s;
+    }
+}
