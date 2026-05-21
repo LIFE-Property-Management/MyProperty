@@ -56,8 +56,8 @@ additive.
 
 ### Local development — self-signed
 
-`infrastructure/nginx/init-selfsigned.sh` generates an ECDSA P-256
-certificate inside an `alpine:3.20` container (no host openssl
+`infrastructure/nginx/init-selfsigned.sh` generates an RSA-2048
+certificate inside an `alpine:3.20` container(no host openssl
 dependency) and writes it into the same `certbot_certs` named volume
 the production path uses. SAN entries cover all three subdomains plus
 the root domain.

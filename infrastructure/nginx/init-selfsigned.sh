@@ -15,7 +15,7 @@
 #
 # After running, add the same name to your browser/OS trust store if you
 # want to avoid the cert-warning interstitial; alternatively just click
-# through it in dev. The cert itself is a real X.509 + ECDSA chain, the
+# through it in dev. The cert itself is a real X.509 + RSA chain, the
 # only thing missing is a CA signature browsers trust by default.
 
 set -euo pipefail
@@ -36,8 +36,7 @@ echo
 docker volume create "${VOLUME}" > /dev/null
 
 # Generate the cert inside an alpine container so we don't depend on the
-# host having openssl installed. ECDSA P-256 keys are smaller and faster
-# than RSA-2048 with equivalent security; modern browsers accept them.
+# host having openssl installed.
 docker run --rm \
   -v "${VOLUME}:/etc/letsencrypt" \
   alpine:3.20 sh -c "
