@@ -4,6 +4,10 @@ description: MyProperty SaaS platform — backend API, frontend, Keycloak, data 
 type: application
 version: 0.1.0
 # appVersion is the SHA tag of the images deployed by this chart.
-# Phases 1-11 leave this as a placeholder; CD workflow sets image tags via --set at deploy time.
-# TODO(Phase 6): pin to specific SHA once kube-prometheus-stack dependency is added.
+# CD workflow sets all image tags via --set at deploy time.
 appVersion: "latest"
+
+dependencies:
+  - name: kube-prometheus-stack
+    version: "65.2.0"
+    repository: "https://prometheus-community.github.io/helm-charts"

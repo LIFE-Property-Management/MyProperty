@@ -132,3 +132,79 @@ promtail:
       memory: 64Mi
     limits:
       memory: 128Mi
+
+kube-prometheus-stack:
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: do-block-storage
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: 20Gi
+      serviceMonitorSelectorNilUsesHelmValues: false
+      ruleSelectorNilUsesHelmValues: false
+      resources:
+        requests:
+          cpu: 200m
+          memory: 512Mi
+        limits:
+          memory: 1Gi
+
+  alertmanager:
+    config:
+      route:
+        receiver: 'aiops-webhook'
+        group_by: ['alertname', 'severity']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        routes:
+          - matchers:
+              - severity = critical
+            receiver: 'aiops-webhook'
+      receivers:
+        - name: 'aiops-webhook'
+          webhook_configs:
+            - url: 'http://aiops-webhook.myproperty.svc.cluster.local:5001/alerts'
+              send_resolved: true
+      inhibit_rules:
+        - source_matchers:
+            - severity = critical
+          target_matchers:
+            - severity = warning
+          equal: ['alertname', 'service']
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: do-block-storage
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: 1Gi
+
+  grafana:
+    admin:
+      existingSecret: myproperty-grafana
+      userKey: admin-user
+      passwordKey: admin-password
+    persistence:
+      enabled: true
+      storageClassName: do-block-storage
+      size: 2Gi
+    sidecar:
+      datasources:
+        enabled: true
+        label: grafana_datasource
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+
+  defaultRules:
+    create: true
+    rules:
+      node: false
