@@ -67,7 +67,8 @@ server {
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 
     location / {
-        proxy_pass http://frontend:3000;
+        set $upstream_frontend http://frontend:3000;
+        proxy_pass $upstream_frontend;
         proxy_http_version 1.1;
 
         # Forwarded headers. Next.js standalone respects X-Forwarded-Proto
@@ -107,7 +108,8 @@ server {
     client_max_body_size 10m;
 
     location / {
-        proxy_pass http://backend:8080;
+        set $upstream_backend http://backend:8080;
+        proxy_pass $upstream_backend;
         proxy_http_version 1.1;
 
         # Forwarded headers — ASP.NET reads these via UseForwardedHeaders()
@@ -168,7 +170,8 @@ server {
     # proxy 9000 — it leaks internal state. The realm well-known + OIDC
     # endpoints are on 8080, which is what /-targets here.
     location / {
-        proxy_pass http://keycloak:8080;
+        set $upstream_keycloak http://keycloak:8080;
+        proxy_pass $upstream_keycloak;
         proxy_http_version 1.1;
 
         proxy_set_header Host              $host;
