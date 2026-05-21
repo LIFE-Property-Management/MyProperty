@@ -426,6 +426,92 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Nginx reverse proxy (M4.9) ──────────────────────────────────────────────
+  # Opt-in via `docker compose --profile proxy up`. Without the profile, the
+  # default stack still binds 3000/5042/8080/etc. to the host as before —
+  # existing curl/browser instructions throughout the docs keep working.
+  #
+  # With the profile, nginx adds host ports 80 + 443 and routes by subdomain:
+  #   app.${MYPROPERTY_DOMAIN}  → frontend:3000
+  #   api.${MYPROPERTY_DOMAIN}  → backend:8080
+  #   auth.${MYPROPERTY_DOMAIN} → keycloak:8080
+  #
+  # TLS material lives in the certbot_certs named volume. Local dev populates
+  # it via `infrastructure/nginx/init-selfsigned.sh`; production via
+  # `infrastructure/nginx/init-letsencrypt.sh` (Let's Encrypt webroot challenge).
+  # Either way nginx reads from the same path
+  # (/etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/{fullchain,privkey}.pem),
+  # so the vhost template is identical in dev + prod.
+  #
+  # The CMD wrapper runs `nginx -s reload` every 6h in a background loop so
+  # renewed certs from the certbot service get picked up without a manual
+  # restart. See docs/operations/nginx-ssl.md for the renewal architecture.
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: myproperty-nginx
+    command: ["/bin/sh", "-c", "while :; do sleep 6h & wait $${!}; nginx -s reload; done & exec /docker-entrypoint.sh nginx -g 'daemon off;'"]
+    environment:
+      # NGINX_ENVSUBST_FILTER scopes envsubst to MYPROPERTY_* so nginx's own
+      # variables ($host, $remote_addr, …) in the template pass through
+      # untouched. Without the filter, every $var in the template gets
+      # replaced and the config breaks at load time.
+      NGINX_ENVSUBST_FILTER: "^MYPROPERTY_"
+      MYPROPERTY_DOMAIN: "${MYPROPERTY_DOMAIN:-myproperty.localhost}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/templates:/etc/nginx/templates:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_started
+      keycloak:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+    healthcheck:
+      # /healthz is served by the default :80 server block (off the
+      # access log, no upstream dep). Verifies only that nginx itself
+      # is responsive — backend/frontend reachability is gated by
+      # their own healthchecks.
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    profiles:
+      - proxy
+
+  # ── Certbot (Let's Encrypt) ─────────────────────────────────────────────────
+  # Long-running service that runs `certbot renew` every 12h. Renewal is a
+  # no-op until certs are within 30 days of expiry; the loop exists so the
+  # action happens automatically when the time comes.
+  #
+  # First-time issuance is NOT handled here — run
+  # `./infrastructure/nginx/init-letsencrypt.sh` once after DNS is in place
+  # (or `init-selfsigned.sh` for local dev). The init script seeds a temp
+  # cert, starts nginx, runs `certbot certonly --webroot`, then reloads nginx.
+  #
+  # The 12h sleep + nginx's 6h reload loop bound the maximum staleness of
+  # served certs to ~18h after a renewal — comfortably inside the 30-day
+  # buffer Let's Encrypt provides before expiry.
+  certbot:
+    image: certbot/certbot:v2.11.0
+    container_name: myproperty-certbot
+    entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot --quiet; sleep 12h & wait $${!}; done"]
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    networks:
+      - myproperty-net
+    profiles:
+      - proxy
+
 volumes:
   postgres_data:
   grafana_data:
@@ -436,6 +522,8 @@ volumes:
   prometheus_data:
   promtail_positions:
   alertmanager_data:
+  certbot_certs:
+  certbot_www:
 
 networks:
   myproperty-net:
