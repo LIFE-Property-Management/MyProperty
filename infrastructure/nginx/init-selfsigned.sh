@@ -85,6 +85,7 @@ EOF
     rm openssl.cnf
     chmod 644 fullchain.pem
     chmod 600 privkey.pem
+    cp fullchain.pem chain.pem
     echo
     echo 'Generated:'
     ls -lh /etc/letsencrypt/live/${PRIMARY}/
