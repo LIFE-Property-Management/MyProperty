@@ -175,7 +175,7 @@ jobs:
             NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=myproperty-frontend
 
       - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
           format: sarif
