@@ -54,3 +54,56 @@ keycloak:
     limits:
       cpu: 1000m
       memory: 1Gi
+
+backend:
+  image:
+    repository: ghcr.io/life-property-management/myproperty-api
+    # Set at deploy time via --set backend.image.tag=<SHA>
+    tag: latest
+  # replicas: 1 — ReadWriteOnce PVC limits to single pod.
+  # M5 follow-up: migrate file storage to DO Spaces to remove this constraint.
+  replicas: 1
+  storage:
+    size: 5Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+migration:
+  image:
+    repository: ghcr.io/life-property-management/myproperty-migrations
+    # Set at deploy time via --set migration.image.tag=<SHA>
+    tag: latest
+
+frontend:
+  image:
+    repository: ghcr.io/life-property-management/myproperty-frontend
+    # Set at deploy time via --set frontend.image.tag=<SHA>
+    # Note: bundle has placeholder URLs until Phase 9 updates frontend-ci.yml.
+    tag: latest
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+aiopsWebhook:
+  image:
+    repository: ghcr.io/life-property-management/myproperty-aiops-webhook
+    # Set at deploy time via --set aiopsWebhook.image.tag=<SHA>
+    tag: latest
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
