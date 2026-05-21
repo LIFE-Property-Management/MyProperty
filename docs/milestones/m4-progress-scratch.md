@@ -568,7 +568,7 @@ self-signed for local dev verification, certbot webroot for production.
   OCSP stapling targeting Docker's embedded DNS resolver
   (`127.0.0.11`), `server_tokens off`, 10 MB `client_max_body_size`
   to gate receipt uploads, WebSocket upgrade map for SignalR.
-- `infrastructure/nginx/templates/myproperty.conf.template` (new) —
+  - `infrastructure/nginx/templates/myproperty.conf.template` (new) —
   three vhosts wired by `server_name` against `${MYPROPERTY_DOMAIN}`,
   expanded via the official nginx image's built-in envsubst pass at
   container start. One HTTP :80 default server handles `/healthz` (off
@@ -581,7 +581,9 @@ self-signed for local dev verification, certbot webroot for production.
   `proxy_read_timeout` to 1h so idle SignalR WebSockets do not get
   reaped by nginx's 60s default; auth vhost ups `proxy_buffer_size`
   to 16k so the Keycloak admin console's >1MB asset bundle does not
-  trip "upstream sent too big header" warnings.
+  trip "upstream sent too big header" warnings. Added ssl_trusted_certificate 
+  to all three HTTPS server blocks pointing at chain.pem; required for ssl_stapling_verify on 
+  to function with a real Let's Encrypt cert.
 - `infrastructure/nginx/init-selfsigned.sh` (new, executable) —
   generates an RSA-2048 cert with SAN entries for `app.${DOMAIN}`,
   `api.${DOMAIN}`, `auth.${DOMAIN}`, and `${DOMAIN}` inside an
