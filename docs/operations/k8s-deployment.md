@@ -337,7 +337,38 @@ helm rollback myproperty <REVISION> -n myproperty
 
 ## Security primitives
 
-<!-- Populated in Phase 8 -->
+Every pod in the chart applies the following baseline security posture:
+
+- `securityContext.seccompProfile.type: RuntimeDefault` at the pod level
+- `allowPrivilegeEscalation: false` on every container
+- `capabilities.drop: [ALL]` on every container
+- `automountServiceAccountToken: false` on every pod (**exception:** Promtail — needs the token for kubernetes_sd_configs Pod discovery)
+
+### Per-workload UID and readOnlyRootFilesystem table
+
+| Workload | runAsUser | readOnlyRootFilesystem | Notes |
+|---|---|---|---|
+| backend | 1654 | false | chiseled image expects UID 1654; Hangfire writes to tmp |
+| frontend | 1000 | false | node user in alpine; Next.js writes to tmp |
+| migration job | 0 (root) | false | Debian-base aspnet:10.0; M5 hardening pass |
+| aiops-webhook | 1000 | true | FastAPI is stateless; root FS can be RO |
+| postgres | 999 | false | postgres user in alpine image |
+| redis | 999 | true | redis-server tolerates RO root |
+| rabbitmq | 999 | false | writes to mnesia tmp |
+| keycloak | 1000 | false | writes cache files; M4.8 tightening |
+| loki | 10001 | true | filesystem storage is on a PVC, not root FS |
+| promtail | 0 (root) | true | must read root-owned kubelet log files |
+
+### Pod Security Standards
+
+The `myproperty` namespace enforces `baseline` PSS:
+- `enforce: baseline` — blocks privileged containers, host networking/PID, unsafe sysctls. Permissive enough that the migration job (root) and promtail (root) are not rejected at admission.
+- `audit: restricted` + `warn: restricted` — surfaces what M4.8 will need to tighten (non-root, seccomp, capabilities) without blocking the deploy.
+
+### Known exemptions
+
+- **Migration job** runs as root (UID 0). Base image is `mcr.microsoft.com/dotnet/aspnet:10.0` (Debian-slim). M5 follow-up: rebuild on chiseled image with explicit UID, verify Hangfire serialization compatibility.
+- **Promtail DaemonSet** runs as root. Required to read `/var/log/pods` which kubelet writes as root. M4.8 follow-up: investigate whether `runAsGroup` + adjusted log-file permissions can remove the requirement.
 
 ---
 
