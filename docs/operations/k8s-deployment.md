@@ -2,6 +2,32 @@
 
 ## Overview
 
+M4.4 ships the Helm chart (`helm/myproperty`) and CD workflow (`.github/workflows/cd.yml`) that deploy the full MyProperty stack to a DigitalOcean Kubernetes (DOKS) cluster.
+
+**What this chart owns:**
+
+| Tier | Components |
+|---|---|
+| App | Backend API, Frontend (Next.js), aiops-webhook |
+| Data | Postgres, Redis, RabbitMQ, Keycloak |
+| Migrations | EF Core bundle Job (pre-install/pre-upgrade hook) |
+| Monitoring | Loki, Promtail, kube-prometheus-stack (Prometheus + Grafana + Alertmanager) |
+| Ingress | Three Ingress resources for `app.`, `api.`, `auth.myproperty.works` |
+
+**What this chart does NOT own** (cluster-scoped one-shots, applied once per cluster):
+- ingress-nginx controller
+- cert-manager + ClusterIssuer
+- Kubernetes Secrets (credentials)
+- GHCR pull secret
+
+**Dependencies:**
+- M4.7 Terraform provisions the DOKS cluster. This chart deploys onto whatever cluster exists.
+- M4.9 locked in the three-subdomain, ingress-nginx + cert-manager architecture this chart implements.
+
+**Deployment model:** Single cluster, single namespace (`myproperty`), single environment. No value layering. CD triggers on push to `main` or `develop`.
+
+---
+
 ## Cluster prerequisites
 
 MyProperty requires the following to exist on the cluster before `helm install` runs.
@@ -325,13 +351,78 @@ helm rollback myproperty <REVISION> -n myproperty
 
 ## Resources
 
-<!-- Populated in Phase 7 -->
+Every Kubernetes resource kind shipped by this chart:
+
+| Kind | Count | Purpose |
+|---|---|---|
+| Namespace | 1 | `myproperty` namespace with PSS baseline enforcement |
+| Deployment | 4 | backend, frontend, keycloak, aiops-webhook |
+| StatefulSet | 3 | postgres, rabbitmq, loki |
+| DaemonSet | 1 | promtail (one pod per node) |
+| Job | 1 | EF Core migration bundle (Helm pre-install/pre-upgrade hook) |
+| Service | 7 | postgres, redis, rabbitmq, keycloak, backend, frontend, aiops-webhook, loki |
+| ServiceAccount | 8 | one per workload |
+| PersistentVolumeClaim | 1 | backend file storage (5Gi, RWO) |
+| Ingress | 3 | frontend, api (with WebSocket timeouts), keycloak (with proxy buffers) |
+| ConfigMap | 7 | postgres-init, keycloak-realm, loki-config, promtail-config, grafana-datasource-loki, grafana-dashboard-api-metrics, grafana-dashboard-api-logs |
+| ClusterRole | 1 | promtail Pod read access |
+| ClusterRoleBinding | 1 | promtail ServiceAccount binding |
+| ServiceMonitor | 1 | backend `/metrics` scrape target (kube-prometheus-stack CRD) |
+| PrometheusRule | 1 | M4.5 alert rules (kube-prometheus-stack CRD) |
+| StatefulSet (sub-chart) | 2 | Prometheus, Alertmanager (via kube-prometheus-stack) |
+| Deployment (sub-chart) | 3+ | Grafana, kube-state-metrics, operator (via kube-prometheus-stack) |
+
+> PersistentVolume resources are provisioned dynamically by DOKS from the `do-block-storage` StorageClass — not listed above. StatefulSet `volumeClaimTemplates` provision PVCs for postgres (10Gi), rabbitmq (5Gi), loki (10Gi), prometheus (20Gi), alertmanager (1Gi), grafana (2Gi).
 
 ---
 
 ## Values reference
 
-<!-- Populated in Phase 11 -->
+All image tags default to `latest` and **must** be overridden at deploy time via `--set`. The CD workflow sets them automatically to `${{ github.sha }}`.
+
+| Key | Default | Description |
+|---|---|---|
+| `postgres.image.repository` | `postgres` | Postgres image |
+| `postgres.image.tag` | `16-alpine` | Postgres image tag |
+| `postgres.storage.size` | `10Gi` | Postgres PVC size |
+| `postgres.storage.storageClassName` | `do-block-storage` | StorageClass for Postgres PVC |
+| `postgres.resources.*` | 100m/256Mi req, 512Mi lim | Postgres CPU/memory |
+| `redis.image.repository` | `redis` | Redis image |
+| `redis.image.tag` | `7-alpine` | Redis image tag |
+| `redis.resources.*` | 50m/64Mi req, 128Mi lim | Redis CPU/memory |
+| `rabbitmq.image.repository` | `rabbitmq` | RabbitMQ image |
+| `rabbitmq.image.tag` | `3-management` | RabbitMQ image tag |
+| `rabbitmq.storage.size` | `5Gi` | RabbitMQ PVC size |
+| `rabbitmq.storage.storageClassName` | `do-block-storage` | StorageClass for RabbitMQ PVC |
+| `rabbitmq.resources.*` | 100m/256Mi req, 512Mi lim | RabbitMQ CPU/memory |
+| `keycloak.image.repository` | `quay.io/keycloak/keycloak` | Keycloak image |
+| `keycloak.image.tag` | `26.2` | Keycloak image tag |
+| `keycloak.initImage.repository` | `alpine` | Init container image for realm envsubst |
+| `keycloak.initImage.tag` | `3.20` | Init container image tag |
+| `keycloak.resources.*` | 250m/512Mi req, 1000m/1Gi lim | Keycloak CPU/memory (JVM-heavy) |
+| `backend.image.repository` | `ghcr.io/life-property-management/myproperty-api` | Backend API image |
+| `backend.image.tag` | `latest` | **Set at deploy time** |
+| `backend.replicas` | `1` | Backend replicas — capped at 1 by RWO PVC (M5 follow-up) |
+| `backend.storage.size` | `5Gi` | Backend file storage PVC size |
+| `backend.storage.storageClassName` | `do-block-storage` | StorageClass for backend PVC |
+| `backend.resources.*` | 200m/512Mi req, 1000m/1Gi lim | Backend CPU/memory |
+| `migration.image.repository` | `ghcr.io/life-property-management/myproperty-migrations` | Migration bundle image |
+| `migration.image.tag` | `latest` | **Set at deploy time** |
+| `frontend.image.repository` | `ghcr.io/life-property-management/myproperty-frontend` | Frontend image |
+| `frontend.image.tag` | `latest` | **Set at deploy time** |
+| `frontend.replicas` | `2` | Frontend replicas (stateless) |
+| `frontend.resources.*` | 100m/256Mi req, 500m/512Mi lim | Frontend CPU/memory |
+| `aiopsWebhook.image.repository` | `ghcr.io/life-property-management/myproperty-aiops-webhook` | AIOps webhook image |
+| `aiopsWebhook.image.tag` | `latest` | **Set at deploy time** |
+| `aiopsWebhook.resources.*` | 50m/128Mi req, 200m/256Mi lim | AIOps webhook CPU/memory |
+| `loki.image.repository` | `grafana/loki` | Loki image |
+| `loki.image.tag` | `3.2.0` | Loki image tag |
+| `loki.storage.size` | `10Gi` | Loki PVC size |
+| `loki.resources.*` | 100m/256Mi req, 512Mi lim | Loki CPU/memory |
+| `promtail.image.repository` | `grafana/promtail` | Promtail image |
+| `promtail.image.tag` | `3.2.0` | Promtail image tag |
+| `promtail.resources.*` | 50m/64Mi req, 128Mi lim | Promtail CPU/memory |
+| `kube-prometheus-stack.*` | (see values.yaml) | Full kube-prometheus-stack overrides for Prometheus retention, Alertmanager routing, Grafana persistence |
 
 ---
 
@@ -423,10 +514,53 @@ Or trigger a fresh push. The CD workflow is the normal path; manual `helm upgrad
 
 ## Operational notes
 
-<!-- Populated in Phase 11 -->
+### MailHog not deployed
+
+The backend is configured with `Smtp__Host=mailhog` and `Smtp__Port=1025`. MailHog is not shipped in M4.4 — no SMTP service exists in the cluster. The invite email flow degrades gracefully (backend pod still starts; only the invite-sending code path fails). Tracked as a post-M4 follow-up (real SMTP provider or hosted MailDev).
+
+### Frontend bundle requires a fresh CI build after Phase 9
+
+The frontend image must be rebuilt after `.github/workflows/frontend-ci.yml` was updated with real production URLs (Phase 9). Until a new image is pushed to GHCR with those URLs baked in, the deployed frontend will call placeholder domains. First deploy should use a SHA from a CI run triggered after the Phase 9 commit.
+
+### Backend replicas capped at 1
+
+`backend.replicas: 1` because the backend file storage PVC uses `ReadWriteOnce` — only one pod can mount a block volume at a time. Two replicas would cause the second pod to fail to schedule. M5 follow-up: migrate file storage to DO Spaces (S3-compatible), which removes the RWO constraint and allows horizontal scaling.
+
+### ingress-nginx deprecation
+
+The `kubernetes/ingress-nginx` GitHub repository was archived on 2026-03-24. The Helm chart still installs and functions for the demo lifetime. No drop-in replacement with a migration tool is available at the time of writing. Tracked as an M5 follow-up.
+
+### kube-prometheus-stack CRD ownership
+
+kube-prometheus-stack installs several CRDs (ServiceMonitor, PrometheusRule, Alertmanager, etc.) as part of its chart. These are cluster-scoped. If you ever uninstall kube-prometheus-stack, the CRDs remain — you must delete them manually if needed. Do not run `helm uninstall myproperty` carelessly in a shared cluster.
+
+### First deploy is manual
+
+The CD workflow fires on push to `main` or `develop`, but the first deploy must be run manually from a laptop after M4.7 provisions the cluster and the bootstrap runbook is executed. See [§ Bootstrap runbook / Step 8](#step-8--helm-install).
+
+### CD workflow and branch protection
+
+Branch protection on `main` is active. The CD workflow runs on pushes to `main` and `develop` via GitHub Actions — it authenticates with `GITHUB_TOKEN` / `DIGITALOCEAN_ACCESS_TOKEN` and does not require bypassing branch protection rules.
 
 ---
 
 ## Known follow-ups
 
-<!-- Populated in Phase 11 -->
+### M4.8 (security hardening)
+- NetworkPolicies — deny-by-default ingress/egress with explicit allow rules per workload
+- sealed-secrets or external-secrets controller for Secret management (replaces manual `kubectl create secret`)
+- Frontend distroless base image
+
+### M5
+- Migration image chiseled rebuild — switch from `mcr.microsoft.com/dotnet/aspnet:10.0` (Debian-slim) to chiseled variant; requires validating Hangfire serialization compatibility
+- Backend RWO → DO Spaces — migrate `FileStorage__LocalRoot` to S3-compatible DO Spaces; removes ReadWriteOnce PVC constraint and unblocks `backend.replicas > 1`
+- CloudNativePG operator for Postgres — M4.7 uses managed Postgres as the "real cloud resource" for Terraform; in-cluster Postgres stays plain for the demo
+- ingress-nginx migration off the archived `kubernetes/ingress-nginx` chart — replacement controller TBD when a drop-in with migration tooling is available
+- Multi-environment value layering — if a staging cluster is provisioned, add `values-staging.yaml` / `values-prod.yaml` overlays and `workflow_dispatch` parameterisation in frontend-ci.yml
+
+### Post-M4
+- MailHog or real SMTP in-cluster — closes the invite email flow degradation
+- Renovate or Dependabot bumps for kube-prometheus-stack version
+- Uptime Kuma (M4.6 deliverable, separate chart, same namespace)
+- Wildcard cert via DNS-01 — removes the need to enumerate subdomains in the SAN list
+- Frontend↔backend OIDC integration — the deployed wiring is correct (JWT auth, Keycloak authority, CORS) but the screen-level auth flow is downstream frontend work tracked as an M3 carry-over; M4.4 ships the deployment substrate only
