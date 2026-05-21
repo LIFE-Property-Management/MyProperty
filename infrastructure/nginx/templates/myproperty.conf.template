@@ -54,6 +54,7 @@ server {
 
     ssl_certificate     /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/chain.pem;
 
     # HSTS only after the cert is real. With self-signed certs in dev a
     # browser still honors HSTS — and once cached, it will refuse plain
@@ -96,6 +97,7 @@ server {
 
     ssl_certificate     /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/chain.pem;
 
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
@@ -149,6 +151,7 @@ server {
 
     ssl_certificate     /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/chain.pem;
 
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
