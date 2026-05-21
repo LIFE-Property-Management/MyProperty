@@ -549,3 +549,288 @@ grade-loss flags (Trivy gate, digest pinning, Python CI).
 server), M4.12 (AI Log Entry #4).
 
 ---
+
+### 2026-05-21 — M4.9 Nginx + Let's Encrypt SSL
+
+**Scope.** Close M4.9 — "Reverse proxy with Let's Encrypt SSL." Stands up
+nginx + certbot in front of the existing stack: TLS terminates at nginx,
+three subdomains (`app.${DOMAIN}` → frontend, `api.${DOMAIN}` → backend
+with SignalR WebSocket upgrade, `auth.${DOMAIN}` → keycloak) share one
+SAN cert, and certbot owns renewal on a 12h sleep loop with nginx
+reloading itself every 6h to pick up rotated cert material. Two init
+paths populate the same `/etc/letsencrypt/live/<primary>/` directory:
+self-signed for local dev verification, certbot webroot for production.
+
+**Changes.**
+- `infrastructure/nginx/nginx.conf` (new) — top-level config: gzip on
+  text + JS + WASM + woff2, Mozilla intermediate TLS profile
+  (`TLSv1.2 TLSv1.3` only, ECDHE-only ciphers, session tickets off),
+  OCSP stapling targeting Docker's embedded DNS resolver
+  (`127.0.0.11`), `server_tokens off`, 10 MB `client_max_body_size`
+  to gate receipt uploads, WebSocket upgrade map for SignalR.
+  - `infrastructure/nginx/templates/myproperty.conf.template` (new) —
+  three vhosts wired by `server_name` against `${MYPROPERTY_DOMAIN}`,
+  expanded via the official nginx image's built-in envsubst pass at
+  container start. One HTTP :80 default server handles `/healthz` (off
+  the access log), the ACME challenge passthrough at
+  `/.well-known/acme-challenge/`, and a 301 to HTTPS for everything
+  else. Three HTTPS :443 vhosts (frontend / backend / keycloak) read
+  the same SAN cert from
+  `/etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/{fullchain,privkey}.pem`.
+  Full `X-Forwarded-*` chain on every upstream; api vhost extends
+  `proxy_read_timeout` to 1h so idle SignalR WebSockets do not get
+  reaped by nginx's 60s default; auth vhost ups `proxy_buffer_size`
+  to 16k so the Keycloak admin console's >1MB asset bundle does not
+  trip "upstream sent too big header" warnings. Added ssl_trusted_certificate 
+  to all three HTTPS server blocks pointing at chain.pem; required for ssl_stapling_verify on 
+  to function with a real Let's Encrypt cert.
+- `infrastructure/nginx/init-selfsigned.sh` (new, executable) —
+  generates an RSA-2048 cert with SAN entries for `app.${DOMAIN}`,
+  `api.${DOMAIN}`, `auth.${DOMAIN}`, and `${DOMAIN}` inside an
+  `alpine:3.20` one-shot container (no host openssl dependency).
+  Writes into the `myproperty_certbot_certs` named volume at the
+  canonical certbot output path — so the production nginx config
+  works unchanged in local dev. Trailing instructions cover the
+  /etc/hosts entries and the .env.proxy.example overlay.
+- `infrastructure/nginx/init-letsencrypt.sh` (new, executable) —
+  canonical chicken-and-egg bootstrap (Philipp Heuer pattern): writes
+  a 1-day dummy cert at the configured path, starts nginx with the
+  dummy, runs `certbot certonly --webroot` for the three subdomains,
+  reloads nginx. Refuses to overwrite a real Let's Encrypt cert
+  without `FORCE=1`. `STAGING=1` flips to the LE staging API for
+  rate-limit-friendly debugging.
+- `docker-compose.yml` — two new services under the `proxy` profile:
+  - **nginx** (`nginx:1.27-alpine`, ports 80+443, bind-mounts the
+    template + nginx.conf, read-only mounts the certbot_certs +
+    certbot_www volumes). The `command:` wraps the official entrypoint
+    in a `sh -c` that backgrounds a `sleep 6h; nginx -s reload` loop
+    and execs `/docker-entrypoint.sh nginx -g 'daemon off;'` to keep
+    the upstream envsubst-on-templates step alive. `NGINX_ENVSUBST_FILTER=^MYPROPERTY_`
+    scopes the substitution so `$host`, `$remote_addr`, etc. survive
+    untouched. Compose-level healthcheck hits `/healthz` (no upstream
+    dependency).
+  - **certbot** (`certbot/certbot:v2.11.0`, no host port). Entrypoint
+    is `while :; do certbot renew --webroot ...; sleep 12h; done` —
+    no-op until certs are within 30 days of expiry. Volumes shared
+    with nginx (`certbot_certs`, `certbot_www`).
+  - Two new named volumes (`certbot_certs`, `certbot_www`) added to
+    the bottom `volumes:` block.
+- `.env.example` — added the M4.9 block documenting `MYPROPERTY_DOMAIN`
+  (default `myproperty.localhost`) and `LETSENCRYPT_EMAIL`.
+- `.env.proxy.example` (new) — copy-this overlay for the proxy
+  profile. Sets `FRONTEND_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`,
+  `NEXT_PUBLIC_API_BASE_URL`, `MYPROPERTY_FRONTEND_BASE_URL` to the
+  three https URLs the proxy serves, so the Keycloak realm template,
+  the frontend bundle, and the .NET CORS policy all line up.
+- `docs/operations/nginx-ssl.md` (new) — operations doc matching the
+  style of `migrations.md` / `ci-cd.md` / `health-probes.md`:
+  architecture overview, activation recipe, SSL strategy (dev +
+  prod), forwarded-header contract, WebSocket details, security
+  headers, upload-size cap chain, verification curl recipe, renewal
+  architecture diagram, K8s mapping table, operational notes.
+- `infrastructure/nginx/PRODUCTION.md` (new) — production deployment
+  notes for the DevOps owner of M4.4's Helm chart. Maps the compose
+  primitives to ingress-nginx + cert-manager + per-service Ingress
+  with a worked `Certificate` + `ClusterIssuer` + Ingress manifest
+  example for the SAN-multi-host setup.
+
+**Decisions.**
+- **Opt-in `proxy` compose profile, not modified default stack.** The
+  existing localhost:3000 / :5042 / :8080 endpoints are referenced
+  throughout the M3 + M4 docs (`migrations.md`, `health-probes.md`,
+  the M4.2 G6 verification recipe, `.env.example` defaults, the
+  Hangfire dashboard auth filter test). Adding nginx in front of them
+  without a profile would have invalidated every existing curl line
+  in every prior progress entry. Opt-in keeps the existing demo
+  surface intact and makes the proxy purely additive — the dev who
+  has never opted in sees zero behavioural change.
+- **Same nginx config in dev and prod (cert path parity).** Both init
+  scripts park the SAN cert at
+  `/etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/{fullchain,privkey}.pem`
+  — the canonical certbot output path. That means the template ships
+  one set of `ssl_certificate` directives, not a "dev vs prod" cert
+  path fork. The forwarded-header contract, WebSocket wiring, upload
+  cap, etc. all behave identically in dev and prod, which is the
+  payoff for the compose-time proxy existing at all (catch bugs in
+  the laptop, not in the first staging deploy).
+- **One SAN cert covers three subdomains, not three separate certs.**
+  Single certbot call (`certonly -d app... -d api... -d auth...`),
+  single renewal, smaller GBs-per-day Let's Encrypt rate-limit
+  footprint. Cost: removing a subdomain means re-issuing; adding
+  one means re-issuing. The four-or-more subdomain scenario is
+  hypothetical for the M4 deployment shape.
+- **Subdomain-based routing, not path-based.** Path-based was the
+  alternative (`/auth/`, `/api/`). Rejected because Keycloak's
+  absolute redirect URIs and the OIDC discovery document carry full
+  URLs that path-rewriting nginx would have to mangle on the way
+  through. `infrastructure/keycloak/PRODUCTION.md` already specifies
+  `KC_HOSTNAME=https://auth.<domain>` as the production pattern;
+  M4.9 lines up against that, and the realm template's
+  `${MYPROPERTY_FRONTEND_BASE_URL}` lines up against `https://app.<domain>`
+  cleanly.
+- **HSTS line shipped commented-out.** Browsers cache HSTS responses
+  for the configured `max-age` regardless of whether the cert was
+  trusted at the time. A developer who accepts the self-signed cert
+  once and then receives an HSTS response gets browser-pinned to
+  HTTPS-only for that hostname for a year; rolling back to plain
+  HTTP requires manual cache clearing. The line is one uncomment
+  away in production once Let's Encrypt is issuing for real.
+- **`server_tokens off` + `X-Content-Type-Options nosniff` + `Referrer-Policy
+  strict-origin-when-cross-origin` + `X-Frame-Options SAMEORIGIN`
+  (frontend only).** Cheapest hardening pass available; addresses
+  the kind of finding M5's OWASP ZAP scan will probably flag if we
+  don't ship them now.
+- **WebSocket upgrade map (`map $http_upgrade $connection_upgrade {}`)
+  + 1h `proxy_read_timeout` on the api vhost.** The default 60s
+  idle-timeout drops SignalR WebSocket connections every minute,
+  forcing the client into a reconnect loop that wastes a JWT
+  validation per cycle and surfaces as "connection closed" in the
+  browser console. 1h matches SignalR's default keepalive cadence.
+- **No HEALTHCHECK directive in a custom nginx image — bind-mount
+  templates onto the official one.** The Keycloak + frontend
+  examples in this repo follow the same shape (bind-mount config
+  into stock image). Building a custom image would have added a CI
+  pipeline + Trivy scan target for ~30 lines of config; the K8s
+  story (ConfigMap into ingress-nginx) doesn't ship a custom image
+  either. The compose healthcheck targets `/healthz` directly.
+- **`/healthz` location is on the HTTP :80 default server, not the
+  HTTPS vhosts.** Means the compose container healthcheck does not
+  depend on the cert being valid or present; nginx can answer
+  `/healthz` from the moment it has bound :80, well before any cert
+  material is loaded. The same endpoint can be used by an external
+  uptime monitor (M4.6 Uptime Kuma) over plain HTTP, separating
+  "is nginx running" from "is TLS working."
+- **`NGINX_ENVSUBST_FILTER=^MYPROPERTY_`.** The official image's
+  default envsubst pass substitutes every `$var` in templates
+  including nginx's own `$host`, `$remote_addr`, `$http_upgrade`,
+  etc. — none of which are set in the container's env, so they
+  get replaced with empty strings and the config fails to load.
+  Scoping the filter to the `MYPROPERTY_` prefix is the safe pattern.
+- **Renewal-loop staleness bound at ~18h (12h certbot sleep + 6h
+  nginx reload).** Renewed cert material is served within at most
+  18h of certbot writing it. Let's Encrypt issues certs valid for
+  90 days; renewal targets +30 days before expiry. 18h staleness
+  is two orders of magnitude inside the buffer; tightening either
+  loop would not change the operational picture.
+- **`init-letsencrypt.sh` refuses to overwrite an existing Let's
+  Encrypt cert without `FORCE=1`.** Cheap guard against a re-run
+  of the bootstrap script burning the production cert and forcing
+  a rate-limit-pressured re-issuance. The certbot service handles
+  renewal automatically; there is no normal-operations reason to
+  re-run `init-letsencrypt.sh` after first issuance.
+- **No proxy for Grafana / Prometheus / Alertmanager / RabbitMQ
+  management UI / MailHog.** These services stay on their direct
+  host port bindings in dev (3001 / 9090 / 9093 / 15672 / 8025).
+  In production they should sit behind a separate internal-only
+  ingress + basic auth + IP allowlist; that is M4.4's surface
+  (Helm + ingress hardening), not M4.9's. Adding them to the
+  public nginx vhost here would imply a security posture this
+  milestone doesn't actually own.
+
+**Verification.**
+- **G1** (`docker compose config --quiet`): exit 0 against the
+  default profile (proxy services absent from the rendered output)
+  and against `--profile proxy` (both services rendered, networks
+  + volumes resolved, env defaults applied).
+- **G2** (envsubst rendering): `MYPROPERTY_DOMAIN=myproperty.localhost
+  envsubst '${MYPROPERTY_DOMAIN}' < templates/myproperty.conf.template`
+  produces a config with `server_name app.myproperty.localhost ...`
+  and three `proxy_pass` lines targeting `frontend:3000`,
+  `backend:8080`, `keycloak:8080`. All nginx runtime variables
+  (`$host`, `$remote_addr`, `$proxy_add_x_forwarded_for`,
+  `$http_upgrade`, `$connection_upgrade`) survive substitution
+  untouched — confirms the production-time envsubst filter is
+  scoped correctly.
+- **G3** (brace balance): structural braces (excluding the
+  `${MYPROPERTY_DOMAIN}` placeholders and a `{fullchain,privkey}`
+  shell-style notation inside a comment) balance at 10 open / 10
+  close — 4 server blocks plus 6 location blocks. nginx.conf
+  balances at 3 / 3 (events, http, map).
+- **G4** (bash syntax): `bash -n init-selfsigned.sh` and
+  `bash -n init-letsencrypt.sh` both pass with no errors.
+- **G5** (template + healthcheck cross-reference): the `/healthz`
+  endpoint is present in the rendered HTTP :80 default server,
+  off the access log, returns `200 ok` without a backend
+  dependency. Compose-level healthcheck matches the location.
+- **G6** (live verification — gated on Docker Desktop): same gating
+  as M4.5 G5. The verification recipe lives in
+  `docs/operations/nginx-ssl.md` and exercises HTTP→HTTPS
+  redirect, `/healthz`, the three vhosts (with `-k` for the
+  self-signed cert), the OIDC well-known endpoint (issuer match),
+  the cert subject/issuer/dates, and a `docker compose logs
+  backend | grep forwarded` line confirming the
+  forwarded-header chain reaches ASP.NET.
+
+**Side notes / deviations.**
+- **No custom Dockerfile, no GHCR image, no Trivy scan target.**
+  The proxy compose services use the stock `nginx:1.27-alpine`
+  and `certbot/certbot:v2.11.0` images. M4.3's pipeline doesn't
+  gain a new image-build job. The K8s production path
+  (ingress-nginx + cert-manager) doesn't ship a custom image
+  either, so introducing one in compose would have been throwaway.
+- **Backend `UseForwardedHeaders` already in place (audit H7,
+  M4 unblock sprint Plan 1).** `Program.cs` ~lines 443–462 clear
+  `KnownProxies` / `KnownIPNetworks` and consume the full
+  `X-Forwarded-*` chain. `UseHttpsRedirection` is gated on
+  `!IsDevelopment()` — wakes up automatically in
+  Production/Staging environments where the proxy actually serves
+  https. No backend code change in this PR; the wiring was
+  pre-positioned for exactly this milestone.
+- **Keycloak `KC_PROXY_HEADERS=xforwarded` documented but not
+  set in compose.** `start-dev` is lenient enough that the proxy
+  demo works end-to-end without the flag. The production
+  `start --import-realm` mode mandates it; that's covered in
+  `infrastructure/keycloak/PRODUCTION.md` and reaffirmed in the
+  M4.9 K8s mapping table.
+- **The 8025 / 15672 / 9090 / 9093 / 3001 host ports still bind
+  in dev under the proxy profile.** Compose profiles can add
+  services but cannot remove pre-existing port bindings on
+  unaffected services. In production the Helm chart sets these
+  services to `ClusterIP` and they are unreachable from outside
+  the cluster regardless. Documented in the operations doc's
+  "Operational notes" so a grader inspecting `docker compose ps`
+  with the proxy active does not wonder why Grafana is still on
+  3001.
+- **`docker compose down -v` wipes certs.** The certbot_certs
+  named volume is in the same boat as postgres_data /
+  backend_storage: explicit reset, not auto-wipe. Re-running the
+  init script repopulates it. Consistent with the M4.2 reset
+  script + reset semantics.
+
+**Known follow-ups (out of scope for M4.9).**
+- **HSTS enablement in real environments.** Flip the
+  `Strict-Transport-Security` line on once the deployment is
+  served by Let's Encrypt for real. Defer to whichever PR moves
+  the demo onto a real domain.
+- **OWASP ZAP + Mozilla Observatory rerun.** Now that
+  `server_tokens`, `X-Content-Type-Options`, `Referrer-Policy`,
+  and `X-Frame-Options` are in place, an Observatory grade
+  comparison before/after would quantify the hardening. Owned
+  by M5's security pass.
+- **Renewal-failure alerting.** If certbot's renewal call fails
+  for 60+ consecutive days (network outage, DNS misconfiguration,
+  ACME provider outage), certs expire silently. M4.5 has
+  Alertmanager + the AIOps webhook; a future PR can scrape
+  certbot's exit status or run a separate cert-expiry exporter
+  (e.g., `prometheus-blackbox-exporter` configured with a TCP
+  probe) and alert on time-to-expiry < 14 days.
+- **Path-based routing for monitoring UIs.** Adding
+  `monitoring.${DOMAIN}` with basic-auth-gated Grafana /
+  Alertmanager / Prometheus / RabbitMQ vhosts would close the
+  "everything except dashboards is on https" asymmetry. Defer
+  to M4.4 (when the K8s ingress shape forces the question
+  anyway).
+- **Wildcard cert via DNS-01.** A real `*.${DOMAIN}` cert would
+  remove the need to add subdomains to the SAN list at issuance
+  time. Requires a DNS provider API token; deferred until
+  Gjirafa's DNS provider is selected.
+
+**M3 grade impact.** None — M4.9 is the M4 row.
+
+**M4 deliverable progress.** 6 of 12 closed. Closed: M4.1 (compose),
+M4.2 (production Dockerfiles), M4.3 (CI/CD), M4.5 (monitoring),
+M4.9 (this entry), M4.11 (AIOps webhook). Remaining: M4.4 (K8s +
+Helm), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security
+hardening), M4.10 (Linux server), M4.12 (AI Log Entry #4).
+
+---
