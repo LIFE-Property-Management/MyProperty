@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.myproperty.works
+        - api.myproperty.works
+        - auth.myproperty.works
+      secretName: myproperty-tls
+  rules:
+    - host: app.myproperty.works
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
