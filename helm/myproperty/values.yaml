@@ -1,0 +1,2 @@
+# Default values for the myproperty Helm chart.
+# Single environment — no value layering. Override at deploy time with --set or --values.

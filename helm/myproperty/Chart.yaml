@@ -1,0 +1,9 @@
+apiVersion: v2
+name: myproperty
+description: MyProperty SaaS platform — backend API, frontend, Keycloak, data tier, monitoring
+type: application
+version: 0.1.0
+# appVersion is the SHA tag of the images deployed by this chart.
+# Phases 1-11 leave this as a placeholder; CD workflow sets image tags via --set at deploy time.
+# TODO(Phase 6): pin to specific SHA once kube-prometheus-stack dependency is added.
+appVersion: "latest"
