@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  # replicas: 1 — ReadWriteOnce PVC limits to single pod. M5 follow-up: migrate
+  # file storage to DO Spaces (S3-compatible) to remove this constraint.
+  replicas: {{ .Values.backend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "myproperty.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      serviceAccountName: {{ .Release.Name }}-backend
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        fsGroup: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: backend-storage-init
+          image: alpine:3.20
+          command:
+            - sh
+            - -c
+            - mkdir -p /var/myproperty/storage && chown -R 1654:1654 /var/myproperty/storage
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: backend-storage
+              mountPath: /var/myproperty/storage
+      containers:
+        - name: backend
+          image: {{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Credentials extracted first so they can be interpolated into ConnectionStrings__Postgres
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-db
+            - name: ConnectionStrings__Postgres
+              value: "Host=postgres;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+            - name: LokiUrl
+              value: "http://loki:3100"
+            - name: Keycloak__Authority
+              value: "https://auth.myproperty.works/realms/MyProperty"
+            - name: Keycloak__MetadataAddress
+              value: "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration"
+            - name: Cache__RedisConnection
+              value: "redis:6379"
+            - name: Cache__InstancePrefix
+              value: "myproperty:prod:"
+            - name: SignalR__UseRedisBackplane
+              value: "true"
+            - name: Cors__AllowedOrigins__0
+              value: "https://app.myproperty.works"
+            # MailHog not deployed in M4.4 — invite email flow degrades gracefully.
+            # Tracked as post-M4 follow-up (real SMTP or hosted MailDev).
+            - name: Smtp__Host
+              value: "mailhog"
+            - name: Smtp__Port
+              value: "1025"
+            - name: Smtp__UseStartTls
+              value: "false"
+            - name: Smtp__FromAddress
+              value: "no-reply@myproperty.works"
+            - name: Smtp__FromName
+              value: "MyProperty"
+            - name: Invites__PortalBaseUrl
+              value: "https://app.myproperty.works"
+            - name: Invites__ExpiryDays
+              value: "7"
+            - name: RabbitMq__Enabled
+              value: "true"
+            - name: RabbitMq__HostName
+              value: "rabbitmq"
+            - name: RabbitMq__Port
+              value: "5672"
+            - name: RabbitMq__UserName
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-rabbitmq
+                  key: rabbitmq-user
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-rabbitmq
+                  key: rabbitmq-password
+            - name: RabbitMq__VirtualHost
+              value: "/"
+            - name: RabbitMq__Exchange
+              value: "myproperty.events"
+            - name: FileStorage__LocalRoot
+              value: "/var/myproperty/storage"
+            - name: Anthropic__ApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-anthropic
+                  key: api-key
+            - name: Anthropic__Model
+              value: "claude-sonnet-4-5-20250929"
+            - name: Anthropic__TimeoutSeconds
+              value: "30"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/live
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 2
+            successThreshold: 1
+          resources:
+            requests:
+              cpu: {{ .Values.backend.resources.requests.cpu }}
+              memory: {{ .Values.backend.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.backend.resources.limits.cpu }}
+              memory: {{ .Values.backend.resources.limits.memory }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: backend-storage
+              mountPath: /var/myproperty/storage
+      volumes:
+        - name: backend-storage
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-backend-storage

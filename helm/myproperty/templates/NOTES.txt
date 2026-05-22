@@ -1,0 +1,16 @@
+MyProperty has been deployed to namespace {{ .Release.Namespace }}.
+
+Endpoints (once DNS + ingress are configured):
+  Frontend:  https://app.myproperty.works
+  API:       https://api.myproperty.works
+  Auth:      https://auth.myproperty.works
+
+Check rollout status:
+  kubectl rollout status deployment/{{ .Release.Name }}-backend -n {{ .Release.Namespace }}
+  kubectl rollout status deployment/{{ .Release.Name }}-frontend -n {{ .Release.Namespace }}
+  kubectl rollout status deployment/{{ .Release.Name }}-keycloak -n {{ .Release.Namespace }}
+
+View migration job logs:
+  kubectl logs job/{{ .Release.Name }}-migration -n {{ .Release.Namespace }}
+
+See docs/operations/k8s-deployment.md for the full operations runbook.
