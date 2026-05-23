@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ .Release.Name }}-promtail
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: promtail
+spec:
+  selector:
+    matchLabels:
+      {{- include "myproperty.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: promtail
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: promtail
+    spec:
+      serviceAccountName: {{ .Release.Name }}-promtail
+      # runAsUser: 0 — Promtail must read root-owned kubelet log files.
+      # Known exemption; M4.8 follow-up to investigate tightening.
+      securityContext:
+        runAsUser: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: promtail
+          image: {{ .Values.promtail.image.repository }}:{{ .Values.promtail.image.tag }}
+          args: ["-config.file=/etc/promtail/config.yml"]
+          ports:
+            - name: http
+              containerPort: 9080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: {{ .Values.promtail.resources.requests.cpu }}
+              memory: {{ .Values.promtail.resources.requests.memory }}
+            limits:
+              memory: {{ .Values.promtail.resources.limits.memory }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: promtail-config
+              mountPath: /etc/promtail
+            - name: pods-logs
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: containers-logs
+              mountPath: /var/log/containers
+              readOnly: true
+            - name: positions
+              mountPath: /tmp
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: promtail-config
+          configMap:
+            name: {{ .Release.Name }}-promtail-config
+        - name: pods-logs
+          hostPath:
+            path: /var/log/pods
+        - name: containers-logs
+          hostPath:
+            path: /var/log/containers
+        - name: positions
+          emptyDir: {}

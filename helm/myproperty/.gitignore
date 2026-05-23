@@ -1,0 +1,2 @@
+# Helm chart dependencies — populated by helm dependency update, not committed
+charts/
