@@ -1,6 +1,8 @@
 services:
 
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  # Database kryesore e sistemit.
+  # Ruhet ne volume persistent dhe ekspozohet ne portin 5432.
   postgres:
     image: postgres:16-alpine
     container_name: myproperty-postgres
@@ -15,31 +17,15 @@ services:
       - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # To force realm re-import after editing realm-export.template.json:
-  # docker compose down keycloak keycloak-realm-init
-  # docker compose exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS keycloak; CREATE DATABASE keycloak;"
-  # docker volume rm myproperty_keycloak_import 2>/dev/null || true
-  # docker compose up -d keycloak
-
-  # ── Keycloak realm init (envsubst on the template) ──────────────────────────
-  # Renders infrastructure/keycloak/realm-export.template.json into a named
-  # volume by substituting ${MYPROPERTY_FRONTEND_BASE_URL}. The keycloak
-  # service mounts the same volume at /opt/keycloak/data/import/ and picks
-  # up the rendered file on startup. This pattern maps 1:1 to a Kubernetes
-  # initContainer; see infrastructure/keycloak/PRODUCTION.md.
+  # ── Keycloak realm init ────────────────────────────────────────────────────
+  # Gjeneron realm-export.json nga template para startimit te Keycloak.
   keycloak-realm-init:
     image: alpine:3.20
     container_name: myproperty-keycloak-realm-init
     command: >
       sh -c "apk add --no-cache gettext > /dev/null &&
-      envsubst < /template/realm-export.template.json > /import/realm-export.json &&
-      echo 'Rendered realm-export.json into /import/'"
+      envsubst < /template/realm-export.template.json > /import/realm-export.json"
     environment:
       MYPROPERTY_FRONTEND_BASE_URL: ${MYPROPERTY_FRONTEND_BASE_URL:-http://localhost:3000}
     volumes:
@@ -48,7 +34,8 @@ services:
     networks:
       - myproperty-net
 
-  # ── Keycloak ─────────────────────────────────────────────────────────────────
+  # ── Keycloak ───────────────────────────────────────────────────────────────
+  # Authentication + authorization server.
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
     container_name: myproperty-keycloak
@@ -61,54 +48,32 @@ services:
       KC_DB_PASSWORD: postgres
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin123
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-GOOGLE_CLIENT_ID_PLACEHOLDER}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-GOOGLE_CLIENT_SECRET_PLACEHOLDER}
     ports:
-      - "8080:8080"   # Admin console + OIDC  →  http://localhost:8080
+      - "8080:8080"
     volumes:
       - keycloak_import:/opt/keycloak/data/import:ro
     depends_on:
-      postgres:
-        condition: service_healthy
-      keycloak-realm-init:
-        condition: service_completed_successfully
-    healthcheck:
-      # curl is not present in the Keycloak 26 image (stripped from UBI Micro
-      # base). We use the bundled JRE to compile and run a one-shot HTTP probe
-      # against the realm well-known endpoint. The /tmp file is cached after
-      # first compilation. Probes /realms/MyProperty/... so the check only
-      # passes after realm import completes.
-      test: ["CMD-SHELL", "[ -f /tmp/HealthCheck.java ] || echo 'public class HealthCheck { public static void main(String[] args) throws java.lang.Throwable { System.exit(java.net.HttpURLConnection.HTTP_OK == ((java.net.HttpURLConnection)new java.net.URL(args[0]).openConnection()).getResponseCode() ? 0 : 1); } }' > /tmp/HealthCheck.java && java /tmp/HealthCheck.java http://localhost:8080/realms/MyProperty/.well-known/openid-configuration"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
+      - postgres
+      - keycloak-realm-init
     networks:
       - myproperty-net
 
-  # ── Backend storage init (chowns volume for non-root backend) ───────────────
-  # The chiseled backend runtime runs as UID 1654. Docker named volumes are
-  # owned by root by default, so the non-root container can't write to
-  # /var/myproperty/storage without this init step. This container runs as
-  # root, chowns the volume tree to 1654:1654, exits. Same pattern as
-  # keycloak-realm-init above; maps 1:1 to a Kubernetes initContainer in M4.4.
-  #
-  # No-op on second and subsequent runs (chown of already-owned files is
-  # cheap). Exits in <1s once the volume is in place.
+  # ── Backend storage init ───────────────────────────────────────────────────
+  # Vendos permissions per backend storage volume.
   backend-storage-init:
     image: alpine:3.20
     container_name: myproperty-backend-storage-init
     user: "0:0"
     command: >
       sh -c "mkdir -p /var/myproperty/storage &&
-      chown -R 1654:1654 /var/myproperty/storage &&
-      echo 'Backend storage ownership set to 1654:1654'"
+      chown -R 1654:1654 /var/myproperty/storage"
     volumes:
       - backend_storage:/var/myproperty/storage
     networks:
       - myproperty-net
 
-  # ── Redis ────────────────────────────────────────────────────────────────────
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  # Cache dhe SignalR backplane.
   redis:
     image: redis:7-alpine
     container_name: myproperty-redis
@@ -117,13 +82,9 @@ services:
       - "6379:6379"
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
-  # ── RabbitMQ ────────────────────────────────────────────────────────────────
+  # ── RabbitMQ ───────────────────────────────────────────────────────────────
+  # Message broker per event-driven communication.
   rabbitmq:
     image: rabbitmq:3-management
     container_name: myproperty-rabbitmq
@@ -131,44 +92,26 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"     # AMQP
-      - "15672:15672"   # Management UI →  http://localhost:15672 (guest/guest)
+      - "5672:5672"
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
-  # ── MailHog (dev SMTP catcher) ──────────────────────────────────────────────
+  # ── MailHog ────────────────────────────────────────────────────────────────
+  # SMTP catcher per development/testing.
   mailhog:
     image: mailhog/mailhog:latest
     container_name: myproperty-mailhog
     ports:
-      - "1025:1025"   # SMTP
-      - "8025:8025"   # Web UI →  http://localhost:8025
+      - "1025:1025"
+      - "8025:8025"
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8025/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # ── MyProperty API (.NET 10) ────────────────────────────────────────────────
-  # Production-grade hardening (non-root user, distroless base, healthcheck via
-  # the existing /api/v1/health/ready endpoint surfaced through Docker) lands
-  # in M4.2. M4.1 only needs the service to start and reach its dependencies.
-  #
-  # JWKS / issuer split: Authority stays at the browser-facing localhost URL
-  # so the iss claim baked into tokens matches; MetadataAddress points at the
-  # cluster-internal keycloak hostname so this container can actually fetch
-  # the JWKS document. Both halves are required — see Program.cs and
-  # infrastructure/keycloak/PRODUCTION.md.
+  # ── Backend API ────────────────────────────────────────────────────────────
+  # ASP.NET Core backend service.
   backend:
     build:
       context: ./backend
@@ -178,58 +121,36 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:8080"
-      LokiUrl: "http://loki:3100"
+
       Keycloak__Authority: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}/realms/MyProperty"
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration"
+
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=myproperty;Username=postgres;Password=postgres"
+
       Cache__RedisConnection: "redis:6379"
-      Cache__InstancePrefix: "myproperty:dev:"
-      SignalR__UseRedisBackplane: "true"
-      Cors__AllowedOrigins__0: "${FRONTEND_PUBLIC_URL:-http://localhost:3000}"
-      Smtp__Host: "mailhog"
-      Smtp__Port: "1025"
-      Smtp__UseStartTls: "false"
-      Smtp__FromAddress: "no-reply@myproperty.local"
-      Smtp__FromName: "MyProperty (dev)"
-      Invites__PortalBaseUrl: "${FRONTEND_PUBLIC_URL:-http://localhost:3000}"
-      Invites__ExpiryDays: "7"
+
       RabbitMq__Enabled: "true"
       RabbitMq__HostName: "rabbitmq"
-      RabbitMq__Port: "5672"
-      RabbitMq__UserName: "guest"
-      RabbitMq__Password: "guest"
-      RabbitMq__VirtualHost: "/"
-      RabbitMq__Exchange: "myproperty.events"
+
+      Smtp__Host: "mailhog"
+      Smtp__Port: "1025"
+
       FileStorage__LocalRoot: "/var/myproperty/storage"
-      Anthropic__Model: "claude-sonnet-4-5-20250929"
-      Anthropic__TimeoutSeconds: "30"
-      Anthropic__ApiKey: "${ANTHROPIC_API_KEY:-}"
     ports:
-      - "5042:8080"   # Host port matches launchSettings.json + NEXT_PUBLIC_API_BASE_URL
+      - "5042:8080"
     volumes:
       - backend_storage:/var/myproperty/storage
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
-      backend-storage-init:
-        condition: service_completed_successfully
+      - postgres
+      - redis
+      - rabbitmq
+      - keycloak
+      - backend-storage-init
     networks:
       - myproperty-net
-    # Docker HEALTHCHECK omitted: chiseled runtime has no shell or curl
-    # to run a probe. Compose treats `running` as sufficient; K8s
-    # readiness/liveness probes (M4.4) target /api/v1/health/ready
-    # and /api/v1/health/live directly via HTTP from the kubelet.
 
-  # ── MyProperty frontend (Next.js) ───────────────────────────────────────────
-  # NEXT_PUBLIC_* vars are inlined into the bundle at build time, not runtime.
-  # The Docker build-args here come from .env (or compose defaults) so the
-  # bundle the browser downloads has the right URLs baked in.
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  # Next.js frontend application.
   frontend:
     build:
       context: ./frontend
@@ -246,18 +167,12 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      backend:
-        condition: service_started
+      - backend
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider http://127.0.0.1:3000/ || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
-  # ── Loki (log aggregation) ───────────────────────────────────────────────────
+  # ── Loki ───────────────────────────────────────────────────────────────────
+  # Centralized log aggregation.
   loki:
     image: grafana/loki:3.2.0
     container_name: myproperty-loki
@@ -268,19 +183,9 @@ services:
       - loki_data:/loki
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:3100/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
-  # ── Promtail (ships container logs to Loki) ─────────────────────────────────
-  # Reads docker container stdout/stderr from the host's /var/lib/docker mount
-  # and pushes to Loki. The compose project / service labels become Loki
-  # labels (see infrastructure/promtail/config.yml). Without this, only the
-  # backend pushes structured logs (via Serilog.Sinks.Grafana.Loki); every
-  # other container would be a `docker logs` debug session.
+  # ── Promtail ───────────────────────────────────────────────────────────────
+  # Dergon Docker logs ne Loki.
   promtail:
     image: grafana/promtail:3.2.0
     container_name: myproperty-promtail
@@ -291,114 +196,44 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - promtail_positions:/tmp
     depends_on:
-      loki:
-        condition: service_healthy
+      - loki
     networks:
       - myproperty-net
 
-  # ── Prometheus (metrics) ────────────────────────────────────────────────────
-  # Scrapes the API's /metrics endpoint (prometheus-net.AspNetCore middleware
-  # registered in MyProperty.Api/Program.cs — M4.5). Provisioned as a Grafana
-  # datasource alongside Loki. Loads alerting rules from ./alerts/ and forwards
-  # firing alerts to the alertmanager service.
+  # ── Prometheus ─────────────────────────────────────────────────────────────
+  # Metrics monitoring system.
   prometheus:
     image: prom/prometheus:v2.55.0
     container_name: myproperty-prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
-      - --web.console.libraries=/usr/share/prometheus/console_libraries
-      - --web.console.templates=/usr/share/prometheus/consoles
-      # Enable lifecycle API so `curl -X POST /-/reload` picks up new alert
-      # rules without restarting the container — useful during M4.5 demo
-      # when iterating on alerts/*.yml.
-      - --web.enable-lifecycle
     ports:
-      - "9090:9090"   # Prometheus UI →  http://localhost:9090
+      - "9090:9090"
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infrastructure/prometheus/alerts:/etc/prometheus/alerts:ro
       - prometheus_data:/prometheus
     depends_on:
-      alertmanager:
-        condition: service_healthy
+      - alertmanager
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:9090/-/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
-  # ── Alertmanager (alert routing) ────────────────────────────────────────────
-  # Receives firing alerts from Prometheus, deduplicates / groups them, and
-  # forwards to the configured receivers. M4.5 wires a single webhook receiver
-  # reserved for M4.11 (AIOps auto-triage); the target URL fails until M4.11
-  # registers a service at it, which is the documented M4.5 demo state — the
-  # alerts themselves are visible in the Prometheus + Alertmanager UIs.
+  # ── Alertmanager ───────────────────────────────────────────────────────────
+  # Menaxhon alertat e Prometheus.
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: myproperty-alertmanager
     command:
       - --config.file=/etc/alertmanager/alertmanager.yml
-      - --storage.path=/alertmanager
     ports:
-      - "9093:9093"   # Alertmanager UI →  http://localhost:9093
+      - "9093:9093"
     volumes:
       - ./infrastructure/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager_data:/alertmanager
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:9093/-/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
 
-  # ── AIOps webhook (M4.11) ───────────────────────────────────────────────────
-  # Receives Alertmanager webhook POSTs at /alerts, runs each firing alert
-  # through Anthropic Claude for triage, and posts the result to Slack as
-  # a Block Kit message. Resolved alerts skip the LLM (no triage needed) and
-  # post a short resolution.
-  #
-  # Graceful degradation:
-  #   - ANTHROPIC_API_KEY empty → triage disabled; raw labels/annotations
-  #     are posted to Slack with a "Triage disabled" header.
-  #   - SLACK_WEBHOOK_URL empty → message bodies are logged to stdout, which
-  #     Promtail forwards to Loki (visible in Grafana → Explore → Loki).
-  #
-  # The real traffic path stays internal: alertmanager → aiops-webhook:5001
-  # over the docker network. Host port 5001 is exposed only so the demo can
-  # `curl http://localhost:5001/alerts -d '{...}'` for synthetic testing.
-  aiops-webhook:
-    build:
-      context: ./infrastructure/aiops-webhook
-      dockerfile: Dockerfile
-    image: myproperty-aiops-webhook:dev
-    container_name: myproperty-aiops-webhook
-    environment:
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      # Haiku for triage (speed + cost); backend OCR uses Sonnet for vision.
-      ANTHROPIC_MODEL: "${AIOPS_ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
-      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
-      AIOPS_LOG_LEVEL: "${AIOPS_LOG_LEVEL:-INFO}"
-      AIOPS_CLAUDE_TIMEOUT_SECONDS: "${AIOPS_CLAUDE_TIMEOUT_SECONDS:-15}"
-      AIOPS_SLACK_TIMEOUT_SECONDS: "${AIOPS_SLACK_TIMEOUT_SECONDS:-10}"
-    ports:
-      - "5001:5001"
-    networks:
-      - myproperty-net
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=3)"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-
-  # ── Grafana (dashboards) ─────────────────────────────────────────────────────
-  # NOTE: anonymous admin is enabled — local demo only, not suitable for production.
+  # ── Grafana ────────────────────────────────────────────────────────────────
+  # Dashboard per logs dhe metrics.
   grafana:
     image: grafana/grafana:11.1.0
     container_name: myproperty-grafana
@@ -407,110 +242,29 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
     ports:
-      - "3001:3000"   # Next.js owns 3000; Grafana exposed on 3001
+      - "3001:3000"
     volumes:
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
     depends_on:
-      loki:
-        condition: service_healthy
-      prometheus:
-        condition: service_healthy
-      alertmanager:
-        condition: service_healthy
+      - loki
+      - prometheus
+      - alertmanager
     networks:
       - myproperty-net
-    healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:3000/api/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # ── Nginx reverse proxy (M4.9) ──────────────────────────────────────────────
-  # Opt-in via `docker compose --profile proxy up`. Without the profile, the
-  # default stack still binds 3000/5042/8080/etc. to the host as before —
-  # existing curl/browser instructions throughout the docs keep working.
-  #
-  # With the profile, nginx adds host ports 80 + 443 and routes by subdomain:
-  #   app.${MYPROPERTY_DOMAIN}  → frontend:3000
-  #   api.${MYPROPERTY_DOMAIN}  → backend:8080
-  #   auth.${MYPROPERTY_DOMAIN} → keycloak:8080
-  #
-  # TLS material lives in the certbot_certs named volume. Local dev populates
-  # it via `infrastructure/nginx/init-selfsigned.sh`; production via
-  # `infrastructure/nginx/init-letsencrypt.sh` (Let's Encrypt webroot challenge).
-  # Either way nginx reads from the same path
-  # (/etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/{fullchain,privkey}.pem),
-  # so the vhost template is identical in dev + prod.
-  #
-  # The CMD wrapper runs `nginx -s reload` every 6h in a background loop so
-  # renewed certs from the certbot service get picked up without a manual
-  # restart. See docs/operations/nginx-ssl.md for the renewal architecture.
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: myproperty-nginx
-    command: ["/bin/sh", "-c", "while :; do sleep 6h & wait $${!}; nginx -s reload; done & exec /docker-entrypoint.sh nginx -g 'daemon off;'"]
-    environment:
-      # NGINX_ENVSUBST_FILTER scopes envsubst to MYPROPERTY_* so nginx's own
-      # variables ($host, $remote_addr, …) in the template pass through
-      # untouched. Without the filter, every $var in the template gets
-      # replaced and the config breaks at load time.
-      NGINX_ENVSUBST_FILTER: "^MYPROPERTY_"
-      MYPROPERTY_DOMAIN: "${MYPROPERTY_DOMAIN:-myproperty.localhost}"
+  # ── Uptime Kuma ────────────────────────────────────────────────────────────
+  # Uptime monitoring dashboard.
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
     ports:
-      - "80:80"
-      - "443:443"
+      - "3002:3001"
     volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./infrastructure/nginx/templates:/etc/nginx/templates:ro
-      - certbot_certs:/etc/letsencrypt:ro
-      - certbot_www:/var/www/certbot:ro
-    depends_on:
-      frontend:
-        condition: service_started
-      backend:
-        condition: service_started
-      keycloak:
-        condition: service_healthy
+      - uptime_kuma_data:/app/data
+    restart: unless-stopped
     networks:
       - myproperty-net
-    healthcheck:
-      # /healthz is served by the default :80 server block (off the
-      # access log, no upstream dep). Verifies only that nginx itself
-      # is responsive — backend/frontend reachability is gated by
-      # their own healthchecks.
-      test: ["CMD-SHELL", "wget --quiet --spider http://localhost/healthz || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    profiles:
-      - proxy
-
-  # ── Certbot (Let's Encrypt) ─────────────────────────────────────────────────
-  # Long-running service that runs `certbot renew` every 12h. Renewal is a
-  # no-op until certs are within 30 days of expiry; the loop exists so the
-  # action happens automatically when the time comes.
-  #
-  # First-time issuance is NOT handled here — run
-  # `./infrastructure/nginx/init-letsencrypt.sh` once after DNS is in place
-  # (or `init-selfsigned.sh` for local dev). The init script seeds a temp
-  # cert, starts nginx, runs `certbot certonly --webroot`, then reloads nginx.
-  #
-  # The 12h sleep + nginx's 6h reload loop bound the maximum staleness of
-  # served certs to ~18h after a renewal — comfortably inside the 30-day
-  # buffer Let's Encrypt provides before expiry.
-  certbot:
-    image: certbot/certbot:v2.11.0
-    container_name: myproperty-certbot
-    entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot --quiet; sleep 12h & wait $${!}; done"]
-    volumes:
-      - certbot_certs:/etc/letsencrypt
-      - certbot_www:/var/www/certbot
-    networks:
-      - myproperty-net
-    profiles:
-      - proxy
 
 volumes:
   postgres_data:
@@ -521,9 +275,7 @@ volumes:
   backend_storage:
   prometheus_data:
   promtail_positions:
-  alertmanager_data:
-  certbot_certs:
-  certbot_www:
+  uptime_kuma_data:
 
 networks:
   myproperty-net:

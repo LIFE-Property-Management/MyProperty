@@ -834,3 +834,120 @@ Helm), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security
 hardening), M4.10 (Linux server), M4.12 (AI Log Entry #4).
 
 ---
+
+### 2026-05-22 — M4.6 Uptime Kuma monitoring
+
+**Scope.** Close M4.6 — "Uptime monitoring (Uptime Kuma)." Adds
+Uptime Kuma as a standalone uptime-monitoring service to the compose
+stack, documents the six monitors that cover every user-facing and
+infrastructure service, and ships a UI-exported backup so teammates
+can reproduce the monitor set in one import rather than re-adding
+each monitor manually.
+
+**Changes.**
+- `docker-compose.yml` — new `uptime-kuma` service
+  (`louislam/uptime-kuma:1`, host port `3002:3001`,
+  `uptime_kuma_data:/app/data` named volume, `restart: unless-stopped`,
+  attached to `myproperty-net`). Host port 3002 chosen because Grafana
+  already occupies 3001. No `depends_on` — Uptime Kuma is a passive
+  HTTP poller that must remain reachable independent of the services it
+  monitors; a dependency chain would cause it to fail-start whenever any
+  monitored service is unhealthy, which is exactly the scenario it exists
+  to detect. New named volume `uptime_kuma_data` added to the bottom
+  `volumes:` block.
+- `infrastructure/uptime-kuma/README.md` (new) — documents the six
+  monitors configured in the UI, their target URLs (using Docker service
+  names so they resolve inside `myproperty-net`), expected HTTP status,
+  and 60-second check interval. Serves as the runbook for any teammate
+  who starts from a fresh volume and needs to reproduce the monitor set
+  without the backup file.
+- `infrastructure/uptime-kuma/monitors-backup.json` (new) — JSON export
+  from **Settings → Backup → Export** inside the Uptime Kuma UI. Import
+  via **Settings → Backup → Restore** on a fresh instance to restore all
+  six monitors in one step.
+
+**Monitor set.**
+
+| Name | Type | Target URL | Expected |
+|---|---|---|---|
+| API — liveness | HTTP | `http://backend:8080/api/v1/health/live` | 200 |
+| API — readiness | HTTP | `http://backend:8080/api/v1/health/ready` | 200 |
+| Frontend | HTTP | `http://frontend:3000` | 200 |
+| Keycloak | HTTP | `http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration` | 200 |
+| RabbitMQ management | HTTP | `http://rabbitmq:15672` | 200 |
+| Grafana | HTTP | `http://grafana:3000/api/health` | 200 |
+
+Internal service names are used (not `localhost`) because Uptime Kuma
+runs as a container inside `myproperty-net` and resolves names via
+Docker's embedded DNS. The nginx `/healthz` endpoint (M4.9) is a
+natural addition once the proxy profile is in regular use — deferred
+because it is profile-gated and not part of the default stack.
+
+**Decisions.**
+- **No `depends_on` on any monitored service.** Uptime Kuma's value is
+  detecting when services are down; gating its own startup on those
+  services defeats the purpose. It boots independently, starts polling
+  immediately, and surfaces failures in its dashboard regardless of
+  compose startup order.
+- **Port 3002, not 3001.** Grafana occupies host port 3001 (mapped from
+  container 3000). 3002 is the next available sequential port in the
+  monitoring tier. Internal container port remains 3001 (Uptime Kuma's
+  default), so no application config is needed.
+- **Named volume, not bind mount.** Uptime Kuma stores its full state
+  (monitors, status history, alert rules, user credentials) in SQLite
+  inside `/app/data`. A named volume survives `docker compose down`
+  without losing data; the backup JSON covers the disaster-recovery case
+  (`docker compose down -v`). Bind-mounting `/app/data` to a host path
+  would require the host directory to exist and be writable by the
+  container user — unnecessary friction given the init-container pattern
+  is already in place for other services that need it.
+- **`louislam/uptime-kuma:1` tag, not a pinned digest.** M4.3 wired
+  Dependabot for Docker images across the four build Dockerfiles, but
+  Dependabot only tracks Dockerfiles, not compose `image:` references.
+  Pinning the digest here without automation would stale-pin silently.
+  Documented as a post-M4 follow-up (add `uptime-kuma` to a Dependabot
+  Docker entry or migrate to a renovate config that covers compose).
+
+**Verification.**
+- **G1** (`docker compose config --quiet`): exits 0 — new service and
+  volume are syntactically valid, env defaults resolve cleanly.
+- **G2** (volume section): `uptime_kuma_data:` present in the bottom
+  `volumes:` block alongside `postgres_data`, `grafana_data`, etc.
+- **G3** (live — gated on Docker Desktop):
+  1. `docker compose up -d uptime-kuma` — container reaches `running`.
+  2. `http://localhost:3002` renders the Uptime Kuma login page
+     (first run: create admin account).
+  3. After importing `monitors-backup.json` via Settings → Backup →
+     Restore, all six monitors appear and begin polling.
+  4. Each monitor shows status `Up` (requires the full stack to be
+     running; individual service stops flip the relevant monitor to
+     `Down` within one check interval).
+
+**Known follow-ups (out of scope for M4.6).**
+- **Uptime Kuma digest pinning.** Compose `image:` references are not
+  covered by Dependabot's Docker ecosystem entry (which only parses
+  `FROM` lines in Dockerfiles). Post-M4 options: add a Renovate config
+  that covers compose files, or add `uptime-kuma` to a custom
+  Dependabot Docker entry via `directories`.
+- **nginx `/healthz` monitor.** M4.9's nginx service exposes `/healthz`
+  on port 80 (off the access log, no upstream dependency — see M4.9
+  decisions). Adding it as a seventh monitor is a one-click addition
+  once the `proxy` profile is in regular use.
+- **Alert notifications.** Uptime Kuma supports notification channels
+  (Slack, email, webhook). Wiring a Slack notification into the M4.11
+  AIOps channel would give a unified alerting surface for both
+  Prometheus-sourced metric alerts and Uptime Kuma HTTP-probe failures.
+  Post-M4 cross-deliverable integration; not in M4.6 scope.
+- **Status page.** Uptime Kuma can serve a public-facing status page
+  at a configurable path. Relevant once the stack is deployed to a real
+  domain (M4.4); deferred.
+
+**M3 grade impact.** None — M4.6 is the M4 row.
+
+**M4 deliverable progress.** 7 of 12 closed. Closed: M4.1 (compose),
+M4.2 (production Dockerfiles), M4.3 (CI/CD), M4.5 (monitoring),
+M4.6 (this entry), M4.9 (Nginx + SSL), M4.11 (AIOps webhook).
+Remaining: M4.4 (K8s + Helm), M4.7 (Terraform), M4.8 (security
+hardening), M4.10 (Linux server), M4.12 (AI Log Entry #4).
+
+---
