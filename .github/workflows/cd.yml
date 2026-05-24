@@ -46,6 +46,7 @@ jobs:
             --atomic \
             --timeout 10m \
             --wait \
+            --set postgres.enabled=false \
             --set backend.image.tag=${{ github.sha }} \
             --set frontend.image.tag=${{ github.sha }} \
             --set migration.image.tag=${{ github.sha }} \
