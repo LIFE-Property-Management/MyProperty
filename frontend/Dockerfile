@@ -23,7 +23,7 @@
 #  • Distroless runtime — no shell, no busybox, no package manager.
 #    Same hardening posture as the chiseled backend image. K8s probes
 #    (httpGet from the kubelet) handle health checks in production;
-#    compose-level probe uses the bundled `node` to run healthcheck.js.
+#    compose-level probe uses the bundled `node` to run healthcheck.mjs.
 #  • Trivy CVE scanning is a CI quality gate. See .trivyignore at repo
 #    root for the triage workflow.
 #  • Local scan:  trivy image myproperty-frontend:dev
@@ -99,7 +99,11 @@ ENV NODE_ENV=production \
 COPY --from=builder --chown=65532:65532 /app/.next/standalone ./
 COPY --from=builder --chown=65532:65532 /app/.next/static ./.next/static
 COPY --from=builder --chown=65532:65532 /app/public ./public
-COPY --from=builder --chown=65532:65532 /app/healthcheck.js ./healthcheck.js
+# healthcheck.mjs is an ES module (.mjs extension is the explicit marker —
+# frontend/package.json has no "type": "module"). Compose invokes it via
+# the node binary at /nodejs/bin/node; the Node runtime selects the loader
+# based on the file extension.
+COPY --from=builder --chown=65532:65532 /app/healthcheck.mjs ./healthcheck.mjs
 
 # The base image already runs as `nonroot`; the explicit USER line is
 # kept for clarity and to satisfy security scanners that grep for it.
@@ -108,7 +112,7 @@ USER nonroot
 EXPOSE 3000
 
 # No HEALTHCHECK directive — distroless has no shell to run a CMD-SHELL
-# probe, and Docker's "CMD ["node", "healthcheck.js"]" form would shadow
+# probe, and Docker's "CMD ["node", "healthcheck.mjs"]" form would shadow
 # our actual entrypoint sequence. Compose-level healthcheck wires the
 # node-based probe externally; K8s probes (M4.4) run httpGet from the
 # kubelet. Same K8s-native pattern as the chiseled backend image.

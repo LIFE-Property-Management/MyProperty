@@ -101,7 +101,7 @@ attack-surface reduction is judged worth a third-party registry dependency.
   full toolset. Pod-level securityContext is inherited by the debug
   container.
 - **Compose-level healthchecks:** use a probe written in the language
-  already present in the image. Frontend uses `frontend/healthcheck.js`
+  already present in the image. Frontend uses `frontend/healthcheck.mjs`
   (Node-based HTTP probe). aiops-webhook uses `python -c 'urllib...'`.
   Backend (chiseled — no scripting language available at all) deliberately
   has no compose-level HEALTHCHECK; K8s probes hit the existing three-endpoint

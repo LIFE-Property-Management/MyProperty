@@ -1,4 +1,4 @@
-// healthcheck.js — Node-based liveness probe used by the compose-level
+// healthcheck.mjs — Node-based liveness probe used by the compose-level
 // healthcheck on the distroless image (M4.8).
 //
 // Why a Node script and not wget/curl:
@@ -10,6 +10,14 @@
 //   readiness probes (M4.4) is the production path; this script keeps the
 //   compose-level probe alive for local development parity.
 //
+// Why .mjs and not .js:
+//   The frontend package.json has no `"type": "module"` (Next.js project
+//   defaults; .js stays CommonJS for tooling compatibility). The .mjs
+//   extension marks this single file as an ES module unambiguously,
+//   without changing module resolution for the rest of the project. Using
+//   import syntax also satisfies the @typescript-eslint/no-require-imports
+//   rule the rest of the codebase enforces.
+//
 // Behavior: HTTP GET against 127.0.0.1:3000/ with a 3-second timeout.
 // Exits 0 on any 2xx response, non-zero on timeout / connection error /
 // non-2xx status. Uses 127.0.0.1 explicitly (not localhost) — Next.js
@@ -17,7 +25,7 @@
 // can return ::1 first on some musl/glibc configurations and refuse the
 // connection. See M4.2 scratch-log side note on the Alpine IPv6 bug.
 
-const http = require("node:http");
+import http from "node:http";
 
 const req = http.request(
   {
