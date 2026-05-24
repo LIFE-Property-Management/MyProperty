@@ -208,3 +208,91 @@ kube-prometheus-stack:
     create: true
     rules:
       node: false
+
+# ─────────────────────────────────────────────────────────────────────────
+# External Secrets Operator (M4.8 — Key Vault / Secret Manager).
+#
+# When `enabled: true`, this chart ships a SecretStore + one ExternalSecret
+# per application secret. ESO syncs values from the chosen cloud backend
+# into Kubernetes Secrets that the existing workload templates reference
+# unchanged.
+#
+# When `enabled: false` (default), no ESO resources are rendered. Operators
+# bootstrap Secrets via the `kubectl create secret` runbook in
+# docs/operations/k8s-deployment.md. This keeps the chart deployable on
+# clusters where ESO is not installed.
+#
+# Prerequisite: ESO controller installed cluster-wide (one-time, separate
+# from this release):
+#   helm repo add external-secrets https://charts.external-secrets.io
+#   helm install external-secrets external-secrets/external-secrets \
+#     -n external-secrets --create-namespace
+#
+# Backend selection: set `provider` to "gcp" or "azure"; only the matching
+# SecretStore is rendered. Pre-populate the cloud backend with the remote
+# secret names listed under `secretRefs` below.
+# ─────────────────────────────────────────────────────────────────────────
+externalSecrets:
+  enabled: false
+  provider: gcp           # "gcp" | "azure"
+  refreshInterval: 1h     # SecretStore polling cadence
+
+  gcp:
+    # GCP project ID hosting the Secret Manager secrets.
+    projectId: ""
+    # Pre-bootstrapped Kubernetes Secret containing the GCP service-account
+    # JSON for a SA with roles/secretmanager.secretAccessor.
+    #
+    # Bootstrap (one time, before `helm upgrade --install`):
+    #   kubectl -n myproperty create secret generic gcp-secret-manager-credentials \
+    #     --from-file=credentials.json=/path/to/sa.json
+    credentialsSecretName: gcp-secret-manager-credentials
+    credentialsSecretKey: credentials.json
+
+  azure:
+    # Azure Key Vault URL, e.g. https://myproperty-kv.vault.azure.net.
+    vaultUrl: ""
+    tenantId: ""
+    # Service principal credentials in a Kubernetes Secret with keys
+    # `client-id` and `client-secret`. Workload-identity is the better
+    # production path; SP creds documented here for school-demo simplicity.
+    authSecretName: azure-key-vault-credentials
+
+  # Mapping from in-cluster Secret key names to remote secret resource names.
+  # Override per environment via --set or values overlay. The Kubernetes
+  # Secret name and key shape are fixed (the workload templates reference
+  # them by name); only the remote side is configurable.
+  secretRefs:
+    postgresUser: myproperty-postgres-user
+    postgresPassword: myproperty-postgres-password
+    postgresDb: myproperty-postgres-db
+    rabbitmqUser: myproperty-rabbitmq-user
+    rabbitmqPassword: myproperty-rabbitmq-password
+    keycloakAdminUser: myproperty-keycloak-admin-user
+    keycloakAdminPassword: myproperty-keycloak-admin-password
+    googleOauthClientId: myproperty-google-oauth-client-id
+    googleOauthClientSecret: myproperty-google-oauth-client-secret
+    anthropicApiKey: myproperty-anthropic-api-key
+    discordWebhookUrl: myproperty-discord-webhook-url
+    grafanaAdminUser: myproperty-grafana-admin-user
+    grafanaAdminPassword: myproperty-grafana-admin-password
+
+# ─────────────────────────────────────────────────────────────────────────
+# NetworkPolicies (M4.8 — security hardening).
+#
+# When `enabled: true`, the chart ships a default-deny baseline plus
+# targeted allow rules for the full service mesh. Requires a CNI that
+# enforces NetworkPolicy (DOKS ships Cilium by default; check before
+# enabling on other distributions).
+# ─────────────────────────────────────────────────────────────────────────
+networkPolicies:
+  enabled: false
+  # Ingress controller namespace — pods carrying the
+  # `app.kubernetes.io/name: ingress-nginx` label inside this namespace are
+  # permitted to reach the public-facing workloads (frontend, backend,
+  # keycloak). Override if running a different controller / namespace.
+  ingressNamespace: ingress-nginx
+  # kube-prometheus-stack lives in the same release namespace by default
+  # because it ships as a chart dependency. If the chart is split out,
+  # override with the controller's namespace.
+  monitoringNamespace: myproperty
