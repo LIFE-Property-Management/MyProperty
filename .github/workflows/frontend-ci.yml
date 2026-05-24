@@ -174,7 +174,9 @@ jobs:
             NEXT_PUBLIC_KEYCLOAK_REALM=MyProperty
             NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=myproperty-frontend
 
-      - name: Trivy vulnerability scan
+      # M4.8 — Trivy CI quality gate. See .trivyignore at repo root for the
+      # triage workflow. Two-pass shape mirrors backend-ci.yml.
+      - name: Trivy SARIF report (non-blocking, CRITICAL+HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
@@ -183,6 +185,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -190,3 +193,30 @@ jobs:
         with:
           sarif_file: trivy-frontend.sarif
           category: trivy-frontend
+
+      - name: Trivy quality gate (blocking, CRITICAL only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+      - name: Generate SBOM (CycloneDX)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
+          format: cyclonedx
+          output: sbom-frontend.cdx.json
+          exit-code: '0'
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-frontend-${{ env.SHORT_SHA }}
+          path: sbom-frontend.cdx.json
+          retention-days: 90
