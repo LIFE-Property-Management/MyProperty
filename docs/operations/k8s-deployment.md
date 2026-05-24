@@ -30,6 +30,10 @@ M4.4 ships the Helm chart (`helm/myproperty`) and CD workflow (`.github/workflow
 
 ## Cluster prerequisites
 
+**Provisioning the cluster:** the DOKS cluster itself is provisioned by Terraform — see
+[`docs/operations/terraform.md`](./terraform.md). The bootstrap runbook below assumes
+`terraform apply` has completed and you have the Terraform outputs available locally.
+
 MyProperty requires the following to exist on the cluster before `helm install` runs.
 These are cluster-scoped one-shots — they are **not** owned by the app chart.
 
@@ -156,11 +160,14 @@ kubectl create secret docker-registry ghcr-pull-secret \
 One Secret per concern, grouped by workload:
 
 ```bash
-# Postgres credentials (consumed by backend, migration job, Keycloak)
+# Postgres credentials — values come from Terraform outputs captured in Step 0.
+# This Secret now has 5 keys (added postgres-host, postgres-port vs the 3-key form).
 kubectl create secret generic myproperty-postgres \
-  --from-literal=postgres-user=postgres \
-  --from-literal=postgres-password=<STRONG_PASSWORD> \
-  --from-literal=postgres-db=myproperty \
+  --from-literal=postgres-user="$DB_USER" \
+  --from-literal=postgres-password="$DB_PASSWORD" \
+  --from-literal=postgres-db="$DB_NAME" \
+  --from-literal=postgres-host="$DB_HOST" \
+  --from-literal=postgres-port="$DB_PORT" \
   --namespace myproperty
 
 # RabbitMQ credentials
@@ -205,10 +212,29 @@ kubectl create secret generic myproperty-grafana \
 Ordered execution sequence for first-time cluster setup. Execute each step in order;
 verify the expected output before continuing.
 
-### Step 1 — Provision the DOKS cluster
+### Step 0 — Terraform apply + capture outputs
 
-Run the M4.7 Terraform apply. Outputs the cluster name and kubeconfig.
-Expected: cluster in state `running`, `kubectl cluster-info` returns the API server URL.
+```bash
+cd infrastructure/terraform
+terraform output -json > /tmp/tf.json
+export DOKS_CLUSTER_NAME=$(jq -r .cluster_name.value /tmp/tf.json)
+export DB_HOST=$(jq -r .db_host.value /tmp/tf.json)
+export DB_PORT=$(jq -r .db_port.value /tmp/tf.json)
+export DB_NAME=$(jq -r .db_name.value /tmp/tf.json)
+export DB_USER=$(jq -r .db_user.value /tmp/tf.json)
+export DB_PASSWORD=$(terraform output -raw db_password)
+```
+
+Expected: every variable populated. Confirm `echo $DB_PASSWORD` returns a non-empty string.
+Do not paste these into a shell history file you commit.
+
+### Step 1 — Configure kubeconfig
+
+```bash
+doctl kubernetes cluster kubeconfig save $DOKS_CLUSTER_NAME
+kubectl cluster-info
+# Expected: Kubernetes control plane is running at https://<cluster-id>.k8s.ondigitalocean.com
+```
 
 ### Step 2 — Install ingress-nginx
 
@@ -280,6 +306,7 @@ helm upgrade --install myproperty ./helm/myproperty \
   --atomic \
   --timeout 10m \
   --wait \
+  --set postgres.enabled=false \
   --set backend.image.tag=<SHA> \
   --set frontend.image.tag=<SHA> \
   --set migration.image.tag=<SHA> \
@@ -298,6 +325,11 @@ STATUS: deployed
 ```
 
 From Step 8 onward, the CD workflow (`.github/workflows/cd.yml`) handles subsequent deploys automatically on push to `main` or `develop`.
+
+> **Teardown:** do not run `terraform destroy` without first completing Steps 1–3 of the
+> teardown recipe in [`docs/operations/terraform.md`](./terraform.md) (uninstall Helm releases,
+> delete PVCs). Destroying the cluster while PVCs exist leaves orphaned block-storage volumes
+> that keep billing.
 
 ---
 
