@@ -41,20 +41,42 @@ The migration bundle uses the same scheme via `backend/scripts/build-migration-b
 
 ## Trivy scanning
 
-Every image-build job runs Trivy after the push step:
+Every image-build job runs a **two-pass** Trivy scan after the push step
+(updated M4.8 — was single-pass non-blocking in M4.3).
 
+**Pass 1 — SARIF report (non-blocking):**
 - **Severities scanned:** `CRITICAL`, `HIGH`.
-- **`exit-code: 0`** — Trivy never fails the build. Results flow to the GitHub
-  Security tab via SARIF upload (`github/codeql-action/upload-sarif@v3`).
-- **`ignore-unfixed: true`** — vulnerabilities without a published fix are
-  filtered out (no actionable signal).
+- **`exit-code: '0'`** — never fails the build.
+- **Output:** SARIF, uploaded to the GitHub Security tab via
+  `github/codeql-action/upload-sarif@v4` so the Security tab keeps full
+  visibility into both severity levels.
 
-**Why non-blocking:** transitive dependencies in the .NET and Next.js
-ecosystems regularly carry HIGH-severity advisories that don't apply to our
-usage profile. Blocking the pipeline on every advisory would produce frequent
-false-positive build failures with no triage workflow in place. The
-non-blocking posture preserves visibility (everything lands in the Security
-tab) without blocking velocity. Tracked for post-M4 hardening — see below.
+**Pass 2 — quality gate (blocking):**
+- **Severities scanned:** `CRITICAL` only.
+- **`exit-code: '1'`** — fails the build on any unsuppressed finding.
+- **Output:** table format to the workflow log so the failure is debuggable
+  without leaving the run.
+
+Both passes honor `trivyignores: .trivyignore` at the repo root for triaged
+exceptions. The full triage workflow lives in
+[security-hardening.md](security-hardening.md#trivy-quality-gate).
+
+**Why blocking on CRITICAL only:** transitive dependencies in the .NET and
+Next.js ecosystems regularly carry HIGH-severity advisories that don't apply
+to our usage profile; blocking the pipeline on every HIGH would produce
+frequent false-positive failures. CRITICAL-only gating catches the
+genuinely actionable findings while leaving HIGH visible in the Security
+tab where they can be triaged on a schedule.
+
+**`ignore-unfixed: true`** applies to both passes — advisories without a
+published fix are filtered out (no actionable signal).
+
+## SBOM artifacts
+
+M4.8 added CycloneDX SBOM generation as a final step on each image-build
+job. The artifact is uploaded with a 90-day retention and named
+`sbom-<service>-<short-sha>.cdx.json`. Useful for downstream audits and for
+re-scanning a built image against a future CVE feed without rebuilding.
 
 ## Dependabot
 
@@ -80,16 +102,12 @@ updates as PRs.
 These were explicit decisions for the milestone — not oversights. All are
 documented for post-M4 follow-up.
 
-### Trivy posture: non-blocking → blocking
+### ~~Trivy posture: non-blocking → blocking~~ — CLOSED in M4.8
 
-The `exit-code: 0` flag is the carry-over to flip first post-M4. Steps to
-harden:
-
-1. Triage the current backlog of HIGH advisories surfaced in the Security tab
-   (one-time cleanup).
-2. Add a baseline `.trivyignore` for accepted advisories (with expiration
-   dates, not indefinite ignores).
-3. Flip `exit-code: 0` → `exit-code: 1` in all three image-build jobs.
+The two-pass model (non-blocking SARIF + blocking CRITICAL gate) plus a
+baseline `.trivyignore` was shipped in M4.8. See
+[security-hardening.md](security-hardening.md#trivy-quality-gate) for the
+triage workflow.
 
 ### Integration tests in CI
 
