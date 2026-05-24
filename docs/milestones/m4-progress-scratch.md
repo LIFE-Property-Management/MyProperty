@@ -834,120 +834,120 @@ Helm), M4.6 (Uptime Kuma), M4.7 (Terraform), M4.8 (security
 hardening), M4.10 (Linux server), M4.12 (AI Log Entry #4).
 
 ---
+### 2026-05-22 — M4.4 Kubernetes deployment via Helm
 
-### 2026-05-22 — M4.6 Uptime Kuma monitoring
-
-**Scope.** Close M4.6 — "Uptime monitoring (Uptime Kuma)." Adds
-Uptime Kuma as a standalone uptime-monitoring service to the compose
-stack, documents the six monitors that cover every user-facing and
-infrastructure service, and ships a UI-exported backup so teammates
-can reproduce the monitor set in one import rather than re-adding
-each monitor manually.
+**Scope.** Close M4.4 — "Deployed to K8s via Helm — Deployments, Services, Ingress, ConfigMaps, Secrets." Authors a flat Helm chart that translates the existing docker-compose stack to Kubernetes primitives, targeting DigitalOcean Kubernetes (DOKS) as the deployment substrate. Cluster itself is provisioned by M4.7 Terraform — M4.4 is the chart that runs on top. Closes the M4.3 "deploy + notify" gap from the deliverable text by shipping a CD workflow alongside the chart.
 
 **Changes.**
-- `docker-compose.yml` — new `uptime-kuma` service
-  (`louislam/uptime-kuma:1`, host port `3002:3001`,
-  `uptime_kuma_data:/app/data` named volume, `restart: unless-stopped`,
-  attached to `myproperty-net`). Host port 3002 chosen because Grafana
-  already occupies 3001. No `depends_on` — Uptime Kuma is a passive
-  HTTP poller that must remain reachable independent of the services it
-  monitors; a dependency chain would cause it to fail-start whenever any
-  monitored service is unhealthy, which is exactly the scenario it exists
-  to detect. New named volume `uptime_kuma_data` added to the bottom
-  `volumes:` block.
-- `infrastructure/uptime-kuma/README.md` (new) — documents the six
-  monitors configured in the UI, their target URLs (using Docker service
-  names so they resolve inside `myproperty-net`), expected HTTP status,
-  and 60-second check interval. Serves as the runbook for any teammate
-  who starts from a fresh volume and needs to reproduce the monitor set
-  without the backup file.
-- `infrastructure/uptime-kuma/monitors-backup.json` (new) — JSON export
-  from **Settings → Backup → Export** inside the Uptime Kuma UI. Import
-  via **Settings → Backup → Restore** on a fresh instance to restore all
-  six monitors in one step.
 
-**Monitor set.**
+*Chart structure.*
+- `helm/myproperty/` — flat Helm chart (single `Chart.yaml`, single `values.yaml`, `templates/` with subdirectories `app/`, `data/`, `monitoring/`, `ingress/`). Release name `myproperty`, deploys into namespace `myproperty` via `--create-namespace`.
+- `Chart.yaml` declares one dependency: `kube-prometheus-stack` from prometheus-community (Prometheus + Grafana + Alertmanager + kube-state-metrics + node-exporter trio; hand-rolling these as plain manifests was 3-4 hours of work that the upstream chart does better).
+- `values.yaml` covers every overridable knob per workload (image, replicas, storage, resources). Image tags ship as placeholders that the CD workflow overrides via `--set` with the commit SHA at deploy time.
+- `_helpers.tpl` defines `myproperty.fullname`, `myproperty.labels`, `myproperty.selectorLabels`, `myproperty.serviceAccountName` per upstream Helm convention.
 
-| Name | Type | Target URL | Expected |
-|---|---|---|---|
-| API — liveness | HTTP | `http://backend:8080/api/v1/health/live` | 200 |
-| API — readiness | HTTP | `http://backend:8080/api/v1/health/ready` | 200 |
-| Frontend | HTTP | `http://frontend:3000` | 200 |
-| Keycloak | HTTP | `http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration` | 200 |
-| RabbitMQ management | HTTP | `http://rabbitmq:15672` | 200 |
-| Grafana | HTTP | `http://grafana:3000/api/health` | 200 |
+*Data tier (`templates/data/`).*
+- `postgres-statefulset.yaml` + `postgres-service.yaml` — Postgres 16-alpine, 10Gi PVC on `do-block-storage`, `pg_isready` probes, runs as UID 999.
+- `redis-deployment.yaml` + `redis-service.yaml` — Redis 7-alpine, no persistence (cache + SignalR backplane; ephemeral by design, matching compose `--save "" --appendonly no`).
+- `rabbitmq-statefulset.yaml` + `rabbitmq-service.yaml` — RabbitMQ 3-management, 5Gi PVC for message durability, `rabbitmq-diagnostics ping` probes.
+- `keycloak-deployment.yaml` + `keycloak-service.yaml` + `keycloak-realm-configmap.yaml` — Production-mode Keycloak (`start --import-realm`, not `start-dev`), `KC_PROXY_HEADERS=xforwarded`, `KC_HOSTNAME=https://auth.myproperty.works`, `KC_HEALTH_ENABLED=true` so K8s probes hit the dedicated port-9000 management endpoints per `infrastructure/keycloak/PRODUCTION.md`'s recommendation. Realm template ships as a ConfigMap; an `initContainer` (alpine:3.20 + gettext) runs `envsubst` to render `${MYPROPERTY_FRONTEND_BASE_URL}` into an emptyDir volume that the main container reads on first boot. Same pattern as the compose `keycloak-realm-init` service — direct K8s translation as called out across multiple M4 unblock-sprint entries.
 
-Internal service names are used (not `localhost`) because Uptime Kuma
-runs as a container inside `myproperty-net` and resolves names via
-Docker's embedded DNS. The nginx `/healthz` endpoint (M4.9) is a
-natural addition once the proxy profile is in regular use — deferred
-because it is profile-gated and not part of the default stack.
+*Application tier (`templates/app/`).*
+- `backend-deployment.yaml` + `backend-service.yaml` — Backend Deployment with `backend-storage-init` initContainer (alpine:3.20 running as UID 0, chowns `/var/myproperty/storage` to 1654:1654 — identical pattern to compose). Authority/MetadataAddress split per M4.1 design: `Keycloak__Authority=https://auth.myproperty.works/realms/MyProperty` (public URL, matches JWT iss claim), `Keycloak__MetadataAddress=http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration` (cluster-internal, JWKS discovery). Probes per `docs/operations/health-probes.md`: liveness → `/api/v1/health/live` with 30s initial delay, readiness → `/api/v1/health/ready` with 10s initial delay.
+- `backend-storage-init-pvc.yaml` — 5Gi `do-block-storage` PVC, `ReadWriteOnce` access mode. Backend replicas fixed to 1 because DOKS block storage doesn't support RWX — see side note below.
+- `migration-job.yaml` — EF migration bundle as a Helm `pre-install,pre-upgrade` hook with `weight: -10` and delete policy `before-hook-creation,hook-succeeded`. Image is the separate `myproperty-migrations` published from M4 unblock Plan 5. `ConnectionStrings__Postgres` injected from `myproperty-postgres` Secret per `docs/operations/migrations.md`'s contract.
+- `frontend-deployment.yaml` + `frontend-service.yaml` — 2 replicas (stateless, no RWO constraint). Image initially references the existing `myproperty-frontend:<SHA>` published by `frontend-ci.yml`; the build-arg update happens in the same PR (Phase 9) so the first post-merge image build produces a deployable bundle with `https://api.myproperty.works` and `https://auth.myproperty.works` inlined.
+- `templates/monitoring/aiops-webhook-deployment.yaml` + `aiops-webhook-service.yaml` — AIOps webhook from M4.11. Discord webhook URL injected as `SLACK_WEBHOOK_URL` (Discord accepts Slack-compatible JSON payloads for plain text; code unchanged from M4.11). aiops-webhook Service is referenced by Alertmanager's webhook receiver config (Phase 6) at `http://aiops-webhook.myproperty.svc.cluster.local:5001/alerts`, closing the receiver loop the M4.5 entry deferred to M4.11.
+
+*Monitoring tier (`templates/monitoring/`).*
+- `loki-statefulset.yaml` + `loki-service.yaml` + `loki-configmap.yaml` — Single-binary Loki with 10Gi filesystem-backed PVC. Backend's existing `LokiUrl` env var points at `http://loki:3100` (cluster-internal). Loki + Promtail stays despite M4.5's deliverable text saying ELK — deviation already documented three times in the scratch log; the operations doc adds a fourth.
+- `promtail-daemonset.yaml` + `promtail-configmap.yaml` + `promtail-serviceaccount.yaml` + `promtail-rbac.yaml` — Promtail as DaemonSet, kubernetes_sd_configs for Pod-based log discovery (translates compose's Docker-socket discovery to the K8s-native equivalent). ServiceAccount + ClusterRole granting `get,list,watch` on Pods. Runs as UID 0 to read kubelet log files — known exemption, documented for M4.8 tightening.
+- `api-servicemonitor.yaml` — ServiceMonitor scrapes the backend `/metrics` endpoint every 15s. Labeled `release: myproperty` so the upstream Prometheus picks it up.
+- `api-prometheus-rule.yaml` — Ports the five M4.5 alert rules (`MyPropertyApiDown`, `MyPropertyApiHighErrorRate`, `MyPropertyApiHighLatencyP95`, `MyPropertyApiHighInFlightRequests`, `PrometheusTargetDown`) into a PrometheusRule CRD. Same thresholds, same severity labels, same runbook annotations as the compose-time rules.
+- `grafana-datasource-loki-configmap.yaml` — Loki datasource provisioned via the Grafana sidecar pattern (ConfigMap labeled `grafana_datasource: "1"`).
+- `grafana-dashboard-api-metrics-configmap.yaml` — M4.5 RED API metrics dashboard + Loki API logs dashboard shipped as ConfigMaps labeled `grafana_dashboard: "1"`.
+
+*Ingress tier (`templates/ingress/`).*
+- `frontend-ingress.yaml`, `api-ingress.yaml`, `keycloak-ingress.yaml` — Three Ingress resources, one per public hostname. All three reference the same `secretName: myproperty-tls` with overlapping `tls.hosts`; cert-manager issues a single SAN cert covering `app.myproperty.works`, `api.myproperty.works`, `auth.myproperty.works` per `infrastructure/nginx/PRODUCTION.md`'s mapping. API ingress carries `nginx.ingress.kubernetes.io/proxy-read-timeout: 3600` for SignalR WebSocket connections; Keycloak ingress carries `nginx.ingress.kubernetes.io/proxy-buffer-size: 16k` for the admin console asset bundle. Both annotations mirror the compose nginx vhost template.
+
+*Namespace + security.*
+- `templates/namespace.yaml` — `myproperty` namespace with PSS labels `pod-security.kubernetes.io/enforce: baseline` (permissive enough for the migration + promtail root exemptions) plus `audit: restricted` and `warn: restricted` so the cluster surfaces what M4.8 will need to tighten. Namespace template uses `helm.sh/hook: pre-install,pre-upgrade` so it applies before any resources that live in it.
+- Every Deployment, StatefulSet, DaemonSet, and Job gets pod-level `securityContext` (`runAsNonRoot: true`, per-workload `runAsUser`, `fsGroup`, `seccompProfile: RuntimeDefault`) + container-level `securityContext` (`allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `readOnlyRootFilesystem` where the image tolerates it). Per-workload UID table documented in operations doc.
+- Every workload has its own ServiceAccount with `automountServiceAccountToken: false` except promtail (needs the token for Pod discovery via the K8s API).
+
+*CI/CD.*
+- `.github/workflows/frontend-ci.yml` — `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_KEYCLOAK_URL` build args changed from placeholder URLs to `https://api.myproperty.works` and `https://auth.myproperty.works` respectively. First post-merge image build produces a deployable bundle.
+- `.github/workflows/cd.yml` (new) — Fires on push to `main` or `develop`, authenticates to DOKS via `doctl`, runs `helm upgrade --install` with all four image tags (`backend`, `frontend`, `migration`, `aiopsWebhook`) set to `${{ github.sha }}`. `--atomic` + `--timeout 10m` + `--wait` for safety. Discord notification on success and failure. Concurrency group keyed by `github.ref` so newer pushes cancel in-flight runs on the same branch. Closes the M4.3 "deploy + notify" deliverable gap.
+
+*Documentation.*
+- `docs/operations/k8s-deployment.md` (new) — Operations doc shaped like `ci-cd.md`, `migrations.md`, `health-probes.md`, `nginx-ssl.md`. Sections: Overview, Cluster prerequisites (with the install commands for ingress-nginx, cert-manager, ClusterIssuer, DNS records, GHCR pull Secret, app Secrets), Bootstrap runbook (ordered execution sequence), Install / Upgrade / Rollback recipes, Resources (explicit enumeration of every resource kind shipped per the M4.4 deliverable text), Values reference (hand-written; helm-docs not installed), Security primitives (per-workload UID table + PSS level rationale + documented exemptions), CD workflow (trigger, secrets, rollback behavior, SHA-tag race), Operational notes, Known follow-ups.
 
 **Decisions.**
-- **No `depends_on` on any monitored service.** Uptime Kuma's value is
-  detecting when services are down; gating its own startup on those
-  services defeats the purpose. It boots independently, starts polling
-  immediately, and surfaces failures in its dashboard regardless of
-  compose startup order.
-- **Port 3002, not 3001.** Grafana occupies host port 3001 (mapped from
-  container 3000). 3002 is the next available sequential port in the
-  monitoring tier. Internal container port remains 3001 (Uptime Kuma's
-  default), so no application config is needed.
-- **Named volume, not bind mount.** Uptime Kuma stores its full state
-  (monitors, status history, alert rules, user credentials) in SQLite
-  inside `/app/data`. A named volume survives `docker compose down`
-  without losing data; the backup JSON covers the disaster-recovery case
-  (`docker compose down -v`). Bind-mounting `/app/data` to a host path
-  would require the host directory to exist and be writable by the
-  container user — unnecessary friction given the init-container pattern
-  is already in place for other services that need it.
-- **`louislam/uptime-kuma:1` tag, not a pinned digest.** M4.3 wired
-  Dependabot for Docker images across the four build Dockerfiles, but
-  Dependabot only tracks Dockerfiles, not compose `image:` references.
-  Pinning the digest here without automation would stale-pin silently.
-  Documented as a post-M4 follow-up (add `uptime-kuma` to a Dependabot
-  Docker entry or migrate to a renovate config that covers compose).
+
+- **Flat chart over umbrella.** Considered umbrella with `kube-prometheus-stack` as the only dependency. Umbrella's benefits (independent versioning, encapsulation) pay off when multiple people own different subcharts or when release cadences diverge — neither applies on a deadline with one author. Flat keeps cognitive load low at the cost of a fuller `templates/` directory; M5 can refactor mechanically if it becomes warranted.
+- **Plain manifests for the stateful four, not Bitnami subcharts.** Bitnami's free public catalog effectively ended August 2025; chart maintenance moved to a paid Broadcom subscription. Charts technically still resolve but image references break. Plain StatefulSets are ~50 lines each and have no third-party trust dependency. CloudNativePG considered for Postgres; ruled out because M4.7 Terraform provisions managed Postgres on DigitalOcean as the "real cloud resource" Terraform deliverable — the in-cluster Postgres is throwaway demo infrastructure for the chart-shape demo. M5 can promote to operators.
+- **kube-prometheus-stack as the one chart dependency.** Hand-rolling Prometheus Operator + 30 default dashboards + the kube-state-metrics + node-exporter wiring is genuinely 3-4 hours of work that produces something measurably worse than the upstream chart. The "plain manifests" principle held for the stateful four (Postgres / Redis / RabbitMQ / Keycloak); monitoring is the deliberate exception. Documented explicitly in the operations doc.
+- **Single environment, no value layering.** `values.yaml` only, no `values.staging.yaml` / `values.prod.yaml`. One cluster, one namespace, both `main` and `develop` deploy to the same release. If a second environment ever exists (M5+), the chart is structured so a values overlay refactor is mechanical.
+- **Combined chart for app + monitoring.** Monitoring shares the chart's release lifecycle and namespace. Templates organized into subdirectories (`templates/app/`, `templates/data/`, `templates/monitoring/`, `templates/ingress/`) for mental separation without the cross-chart coordination cost of a hard split. M5 can carve along the same lines if it becomes warranted.
+- **CD on push to both `main` and `develop`, same release.** Considered routing develop to a separate namespace for staging-vs-prod isolation. Rejected: doubles setup cost (two sets of Secrets, two ingress hostnames, SAN cert with six SANs, frontend image per-environment build), pushes M4.4 from ~10h to ~15h, and the only-meaningful-difference (a bad develop push can't break prod) is mitigated by `--atomic` (helm rolls back to last successful release on failure). For one cluster with one author working under a deadline, the simpler model wins. Discord notifications make it obvious which branch deployed what.
+- **Helm `pre-upgrade,pre-install` hook for the migration Job.** Standard pattern documented in `docs/operations/migrations.md`. Considered separate `kubectl apply -f migration-job.yaml` invocation before `helm upgrade`; rejected because Helm's hook mechanism handles the "wait for job completion, fail the release if job fails" semantics natively, and the CD workflow stays as one `helm upgrade` invocation rather than a two-step bash script.
+- **Frontend rebuild path: update `frontend-ci.yml` build args to real production URLs, no per-environment workflow.** The original M4.3 design baked placeholder URLs because it assumed multi-environment; we're single-environment so the placeholders solve a problem we don't have. One-line workflow edit produces a deployable bundle. Documented in operations doc as a single-env simplification.
+- **Cluster prerequisites as runbook in operations doc, not Helm chart dependencies.** ingress-nginx and cert-manager are cluster-wide singletons (only one of each per cluster). Bundling them as chart dependencies would either collide with existing installs (if Gjirafa ever pre-installs them) or pollute the chart's release lifecycle with cluster-scoped resources. The runbook approach matches what `infrastructure/nginx/PRODUCTION.md` already documents.
+- **`kubectl create secret` runbook for secrets, not sealed-secrets or external-secrets-operator.** Sealed-secrets and external-secrets are M4.8 territory per the milestone deliverable text. M4.4 ships a runbook in the operations doc with the exact `kubectl create secret generic ...` commands grouped by workload concern. Chart references Secrets by name (never by literal value), so swapping to sealed-secrets in M4.8 is a Secret-creation-mechanism change, not a chart change.
+- **Security primitives split: M4.4 ships `securityContext` + PSS `baseline` + `automountServiceAccountToken: false`. NetworkPolicies + sealed-secrets + frontend distroless → M4.8.** The carving rationale: NetworkPolicies require a policy matrix (who can talk to whom) that is its own design exercise; doing it under M4.4 deadline pressure produces either a permissive policy (defeats the purpose) or a broken-by-default policy (NetworkPolicy is allow-only, so any policy existing means everything not allowed is denied — fast way to break the cluster). Pod-level `securityContext` is local to each Deployment and is cheap to add per-workload.
+- **PSS `baseline` enforcement, not `restricted`.** `restricted` forbids `runAsUser: 0` and reject the migration job (Debian-base aspnet:10.0, runs as root) and promtail (needs root to read kubelet logs). `baseline` is permissive enough for both exemptions while still blocking the kinds of things that matter (privileged containers, hostNetwork, hostPID). `audit: restricted` and `warn: restricted` give visibility into what M4.8 will need to fix.
+- **`kubernetes/ingress-nginx` despite the project being archived 2026-03-24.** The community chart was the assumed direction in `infrastructure/nginx/PRODUCTION.md` and switching to F5/NGINX's `nginx/kubernetes-ingress` (the actively-maintained alternative) means a different annotation prefix (`nginx.org/*` vs `nginx.ingress.kubernetes.io/*`), a different IngressClass name, and rewriting the PRODUCTION.md mapping. For a school-project deploy with a ~30 day lifetime and no plans to run this in production for years, the deprecated chart still functions; the operations doc + this scratch entry explicitly call out the deprecation and track migration as an M5 follow-up.
+- **DOKS managed Postgres goes to M4.7, not M4.4.** Considered using a managed Postgres for the M4.4 chart (no in-cluster StatefulSet, simpler ops, automatic backups). Rejected for M4.4: managed Postgres becomes the "real cloud resource" for M4.7 Terraform — that deliverable's text says "applied to live environment" and a managed database is a meatier Terraform resource than a DNS record. Splitting in-cluster Postgres (M4.4) from managed Postgres (M4.7) lets both milestones land cleanly on their own deliverable text. The chart's `values.postgres.enabled` is true; M5 can flip it false and point the backend at the managed instance via Secret override.
 
 **Verification.**
-- **G1** (`docker compose config --quiet`): exits 0 — new service and
-  volume are syntactically valid, env defaults resolve cleanly.
-- **G2** (volume section): `uptime_kuma_data:` present in the bottom
-  `volumes:` block alongside `postgres_data`, `grafana_data`, etc.
-- **G3** (live — gated on Docker Desktop):
-  1. `docker compose up -d uptime-kuma` — container reaches `running`.
-  2. `http://localhost:3002` renders the Uptime Kuma login page
-     (first run: create admin account).
-  3. After importing `monitors-backup.json` via Settings → Backup →
-     Restore, all six monitors appear and begin polling.
-  4. Each monitor shows status `Up` (requires the full stack to be
-     running; individual service stops flip the relevant monitor to
-     `Down` within one check interval).
 
-**Known follow-ups (out of scope for M4.6).**
-- **Uptime Kuma digest pinning.** Compose `image:` references are not
-  covered by Dependabot's Docker ecosystem entry (which only parses
-  `FROM` lines in Dockerfiles). Post-M4 options: add a Renovate config
-  that covers compose files, or add `uptime-kuma` to a custom
-  Dependabot Docker entry via `directories`.
-- **nginx `/healthz` monitor.** M4.9's nginx service exposes `/healthz`
-  on port 80 (off the access log, no upstream dependency — see M4.9
-  decisions). Adding it as a seventh monitor is a one-click addition
-  once the `proxy` profile is in regular use.
-- **Alert notifications.** Uptime Kuma supports notification channels
-  (Slack, email, webhook). Wiring a Slack notification into the M4.11
-  AIOps channel would give a unified alerting surface for both
-  Prometheus-sourced metric alerts and Uptime Kuma HTTP-probe failures.
-  Post-M4 cross-deliverable integration; not in M4.6 scope.
-- **Status page.** Uptime Kuma can serve a public-facing status page
-  at a configurable path. Relevant once the stack is deployed to a real
-  domain (M4.4); deferred.
+Phase-by-phase verification gates run locally — no cluster required.
 
-**M3 grade impact.** None — M4.6 is the M4 row.
+- **G1** (Phase 0). `helm version` (3.20.x), `kubeconform -v` (v0.6.7), `helm lint helm/myproperty` on empty skeleton — all exit 0.
+- **G2** (Phase 1). Operations doc parses as markdown; required sections present.
+- **G3** (Phase 2). `helm template helm/myproperty | kubeconform -strict -kubernetes-version 1.33.0 -ignore-missing-schemas` exits 0. Resource inventory matches expected (2 StatefulSet, 1 Deployment, 3 Service, 3 ServiceAccount for the data tier).
+- **G4** (Phase 3). Realm-init initContainer present with `envsubst` command + dual volumeMount. Realm ConfigMap contains the template with `${MYPROPERTY_FRONTEND_BASE_URL}` placeholder unsubstituted (substitution happens at pod startup, not at chart render).
+- **G5** (Phase 4). Migration Job has the three Helm hook annotations (`hook`, `hook-weight`, `hook-delete-policy`). Backend Deployment has the `backend-storage-init` initContainer with `runAsUser: 0` and the chown command. Frontend, backend, aiops-webhook all reference `ghcr-pull-secret`.
+- **G6** (Phase 5). Promtail DaemonSet present with ClusterRole + ClusterRoleBinding. Every rendered manifest passes `yaml.safe_load`.
+- **G7** (Phase 6). `helm dependency update` succeeds. ServiceMonitor + PrometheusRule rendered. Alertmanager config references `aiops-webhook.myproperty.svc.cluster.local:5001/alerts`. Both Grafana dashboard ConfigMaps present.
+- **G8** (Phase 7). Three Ingress resources, all referencing the same `cert-manager.io/cluster-issuer: letsencrypt-prod` annotation and same `secretName: myproperty-tls`. API ingress carries the SignalR WebSocket timeout annotation.
+- **G9** (Phase 8). Every workload pod spec has `runAsNonRoot: true` (except documented exemptions). Every container drops ALL capabilities. Namespace has PSS `baseline` enforce label.
+- **G10** (Phase 9). `frontend-ci.yml` YAML parses; no `placeholder.example` strings remain; `api.myproperty.works` + `auth.myproperty.works` both present.
+- **G11** (Phase 10). `cd.yml` YAML parses; triggers on `main` + `develop`; `--atomic`, `--timeout 10m`, `--wait` all present; all four image tag overrides present; Discord webhook secret referenced in both success and failure notify steps.
+- **G12** (Phase 11). Every operations-doc section header the plan promised is present.
+- **G13** (Phase 12). Scratch log entry appended without disturbing prior entries.
 
-**M4 deliverable progress.** 7 of 12 closed. Closed: M4.1 (compose),
-M4.2 (production Dockerfiles), M4.3 (CI/CD), M4.5 (monitoring),
-M4.6 (this entry), M4.9 (Nginx + SSL), M4.11 (AIOps webhook).
-Remaining: M4.4 (K8s + Helm), M4.7 (Terraform), M4.8 (security
-hardening), M4.10 (Linux server), M4.12 (AI Log Entry #4).
+**Live verification deferred to first deploy.** The chart is complete-by-construction up to `helm template | kubectl --dry-run=client apply -f -`. Server-side validation (admission webhooks, RBAC, real PVC provisioning, real cert issuance, real DNS resolution, real Let's Encrypt HTTP-01 challenge) fires on first deploy after M4.7 Terraform provisions the cluster. The chart is fixable post-submission if first-deploy reveals an issue — risk explicitly accepted per the deadline-vs-cluster-access tradeoff documented before plan execution.
+
+**Side notes / deviations.**
+
+- **Backend replicas: 1 (not 2) due to RWO PVC constraint.** DOKS block storage volumes are `ReadWriteOnce`-only — they can only mount to one pod at a time. Two backend replicas with a shared receipt-files PVC fails. Two real fixes: (a) set replicas to 1 and accept the loss of SignalR-backplane multi-pod testing in this environment, (b) move file storage to DO Spaces (S3-compatible, no RWX requirement). Shipping with (a) and tracking (b) as M5 follow-up because the compose stack's SignalR backplane wiring is already tested at the M3.6 close and the demo doesn't need horizontal scale.
+- **MailHog not shipped.** The compose stack runs MailHog for dev SMTP catching; the chart doesn't include it. Backend's `Smtp__Host=mailhog` env var resolves to nothing in-cluster, so the invite email flow degrades in the deployed environment. Backend pod still starts (Smtp config is bound on startup but only used when sending email — failure is at send time, not boot time). Hangfire's email send job retries-then-DLQs gracefully. Tracked as post-M4 follow-up: real SMTP (SendGrid free tier, Mailgun trial, or just leave it broken until M5 brings in a hosted mail solution). Not on any deliverable's critical path.
+- **Migration image is not chiseled.** M4.2 hardened `myproperty-api` to chiseled + non-root UID 1654; the migration image (`myproperty-migrations`, from M4 unblock Plan 5) is on Debian-base `mcr.microsoft.com/dotnet/aspnet:10.0` and runs as root. Documented in the M4.4 operations doc as a known hardening gap for M5 — the rebuild carries reflection-trimming risk for the EF Core migration assembly that needs dedicated testing.
+- **ingress-nginx is archived.** The `kubernetes/ingress-nginx` chart referenced in the bootstrap runbook was archived March 2026; existing deployments still function; no new releases or security patches. For a school-project demo with a 30-day lifetime this is acceptable, but the operations doc tracks migration to F5/NGINX's `nginx/kubernetes-ingress` (different annotation prefix, different IngressClass) or to Gateway API as an M5 follow-up.
+- **kube-prometheus-stack pulls a lot of CRDs.** Prometheus Operator owns `ServiceMonitor`, `PodMonitor`, `Prometheus`, `Alertmanager`, `PrometheusRule`, `ThanosRuler`, and several others. `kubeconform` doesn't recognize these by default — the verification command uses the `datreeio/CRDs-catalog` schema-location to load CRD schemas. First-time `kubeconform` runs over a fresh chart can take ~30s while it fetches schemas; cached afterward.
+- **Frontend bundle is broken until the post-Phase-9 image build lands.** Phase 9 updates `frontend-ci.yml` build args. The image already on GHCR (from before the update) has placeholder URLs inlined. Until the next CI run produces a new image with real URLs, the deployed frontend's bundle calls `https://api.placeholder.example` and fails. The plan's commit order ensures this gap is closed before the CD workflow first fires (Phase 9 happens before Phase 10), but on a fresh deploy the first frontend image pull may need a manual re-trigger of `frontend-ci.yml` to get the updated bundle. Documented in operations doc.
+- **Namespace template + `--create-namespace` interaction.** Helm doesn't create the namespace its resources live in unless `--create-namespace` is passed. The chart ships a Namespace template gated with a `pre-install,pre-upgrade` hook so it applies first regardless. Both CD workflow and the manual install recipe in the operations doc pass `--create-namespace` — belt-and-braces.
+- **Concurrency in CD workflow uses `github.ref` as the group key.** Pushing two commits to `main` in quick succession cancels the older run, which is the safer behavior (older deploy aborted; newer deploy is what lands). Pushing to `main` while a `develop` deploy is in flight does NOT cancel the `develop` run — they're different ref groups. Could conflict in theory (both helm upgrades against the same release), but `helm upgrade` is sequential at the cluster level (the helm release lock prevents concurrent operations on the same release) so the second one waits + applies after the first completes. Acceptable.
+- **`--set` in the CD workflow vs `values.yaml`.** Image tags are set via `--set` rather than templating into `values.yaml`. The reason: a chart-level Renovate/Dependabot bump can't know the right SHA per environment; the CD workflow knows it implicitly from `github.sha`. Image tag in `values.yaml` is the placeholder; CD overrides. Other values (resource limits, replicas, storage sizes) stay in `values.yaml`.
+
+**Known follow-ups (out of scope for M4.4).**
+
+- **NetworkPolicies** — M4.8. Requires designing the policy matrix (backend → postgres + redis + rabbitmq + keycloak; promtail → loki; alertmanager → aiops-webhook; everything else deny).
+- **Sealed-secrets / external-secrets** — M4.8 per deliverable text "Key Vault/Secret Manager."
+- **Frontend distroless base image** — M4.8 per deliverable text "distroless images."
+- **Trivy blocking gate flip** — M4.8 per deliverable text "Trivy as CI quality gate."
+- **Migration image chiseled rebuild** — M5, carries reflection-trimming risk.
+- **Backend file storage on DO Spaces (RWX)** — M5, enables `replicas > 1` for backend.
+- **CloudNativePG operator for Postgres** — M5, removes the in-cluster StatefulSet + backup story.
+- **Ingress controller migration off `kubernetes/ingress-nginx`** — M5; F5/NGINX's chart or Gateway API.
+- **MailHog or real SMTP in-cluster** — post-M4. Not on any deliverable's critical path.
+- **Helm chart Renovate config** — post-M4. Auto-bump `kube-prometheus-stack` + cert-manager + ingress-nginx subchart versions.
+- **GHCR image cleanup workflow** — post-M4. Branch-tagged images accumulate; scheduled cleanup prunes branch tags > 30 days old.
+- **kube-prometheus-stack value tuning for low-traffic demo** — post-M4. Default scrape intervals and retention are generous; could tighten to save PVC space.
+
+**M3 grade impact.** None — M4.4 is the M4 row. Closes the M4.3 "deploy + notify" gap from the deliverable text as a side benefit (CD workflow ships in this PR rather than as a separate M4.3 carry-over).
+
+**M4 deliverable progress.** 7 of 12 closed. Closed: M4.1 (compose), M4.2 (production Dockerfiles), M4.3 (CI/CD lint→test→build→push), M4.4 (this entry — chart + CD), M4.5 (monitoring), M4.9 (Nginx + SSL via compose; cluster-side cert-manager + ingress-nginx via M4.4), M4.11 (AIOps webhook). Remaining for M4: M4.6 (Uptime Kuma — teammate-owned, deploys into this chart's namespace), M4.7 (Terraform — provisions DOKS cluster + managed Postgres + DNS records), M4.8 (security hardening — NetworkPolicies, sealed-secrets, distroless, Trivy gate), M4.10 (Linux server, orthogonal to cluster), M4.12 (AI Log Entry #4).
 
 ---

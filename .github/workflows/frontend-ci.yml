@@ -165,12 +165,12 @@ jobs:
             ghcr.io/life-property-management/myproperty-frontend:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # NEXT_PUBLIC_* are inlined at build time. CI uses placeholder URLs
-          # for traceability; the image is NOT environment-ready as-built.
-          # M4.4 (Helm) rebuilds with real values per environment.
+          # NEXT_PUBLIC_* are inlined at build time (Next.js bakes them into the JS bundle).
+          # Single-environment simplification — no per-env workflow_dispatch parameterisation.
+          # Multi-env would parameterise these via workflow_dispatch inputs; deferred per M4.4 Decision #7.
           build-args: |
-            NEXT_PUBLIC_API_BASE_URL=https://api.myproperty.example
-            NEXT_PUBLIC_KEYCLOAK_URL=https://auth.myproperty.example
+            NEXT_PUBLIC_API_BASE_URL=https://api.myproperty.works
+            NEXT_PUBLIC_KEYCLOAK_URL=https://auth.myproperty.works
             NEXT_PUBLIC_KEYCLOAK_REALM=MyProperty
             NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=myproperty-frontend
 
