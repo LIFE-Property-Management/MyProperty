@@ -45,8 +45,18 @@ spec:
                 secretKeyRef:
                   name: myproperty-postgres
                   key: postgres-db
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-port
             - name: ConnectionStrings__Postgres
-              value: "Host=postgres;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)"
+              value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode=Require;Trust Server Certificate=true"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
