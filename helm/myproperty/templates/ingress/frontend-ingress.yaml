@@ -16,6 +16,7 @@ spec:
         - app.myproperty.works
         - api.myproperty.works
         - auth.myproperty.works
+        - {{ .Values.uptimeKuma.publicHost }}
       secretName: myproperty-tls
   rules:
     - host: app.myproperty.works

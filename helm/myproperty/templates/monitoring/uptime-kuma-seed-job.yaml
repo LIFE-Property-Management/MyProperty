@@ -1,0 +1,84 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-uptime-kuma-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: uptime-kuma-seed
+  annotations:
+    # Runs after the StatefulSet is rolled out (post-install / post-upgrade
+    # hook). The compose stack runs the same image as a one-shot sidecar
+    # with `depends_on: uptime-kuma: service_healthy`; this Job is the K8s
+    # equivalent. helm-hook before-hook-creation,hook-succeeded means the
+    # next upgrade replaces this Job rather than leaving it around.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: uptime-kuma-seed
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed
+          image: {{ .Values.uptimeKuma.seedImage.repository }}:{{ .Values.uptimeKuma.seedImage.tag }}
+          env:
+            - name: KUMA_BASE_URL
+              value: "http://uptime-kuma:3001"
+            - name: KUMA_PUBLIC_URL
+              value: {{ .Values.uptimeKuma.publicUrl | quote }}
+            - name: KUMA_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-uptime-kuma
+                  key: admin-username
+            - name: KUMA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-uptime-kuma
+                  key: admin-password
+            # Slack channel reuses the same secret as the M4.11 aiops-webhook.
+            # Empty value short-circuits the channel inside seed.py — no Job
+            # failure, just no Slack notifications until the secret is set.
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-discord
+                  key: webhook-url
+            - name: KUMA_SMTP_HOST
+              value: {{ .Values.uptimeKuma.smtp.host | quote }}
+            - name: KUMA_SMTP_PORT
+              value: {{ .Values.uptimeKuma.smtp.port | quote }}
+            - name: KUMA_SMTP_FROM
+              value: {{ .Values.uptimeKuma.smtp.from | quote }}
+            - name: KUMA_SMTP_TO
+              value: {{ .Values.uptimeKuma.smtp.to | quote }}
+            - name: KUMA_LOG_LEVEL
+              value: "INFO"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
