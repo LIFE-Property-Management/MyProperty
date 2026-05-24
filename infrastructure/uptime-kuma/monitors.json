@@ -1,0 +1,200 @@
+{
+  "_comment_": "Seed config consumed by infrastructure/uptime-kuma/seed.py. Read top-to-bottom: notifications first (referenced by name from monitors), then monitors, then the public status page that surfaces them. Notification names + monitor names are the idempotency keys — re-running the seed updates fields in place on a name match, never duplicates.",
+
+  "notifications": [
+    {
+      "name": "Slack (#alerts)",
+      "type": "slack",
+      "isDefault": true,
+      "applyExisting": true,
+      "comment": "Reuses SLACK_WEBHOOK_URL — same incoming webhook the M4.11 aiops-webhook posts to. When the env var is empty, seed.py skips creation entirely (the demo still works without a Slack workspace).",
+      "config": {
+        "slackchannelnotify": false,
+        "slackusername": "Uptime Kuma",
+        "slackiconemo": ":robot_face:"
+      }
+    },
+    {
+      "name": "Email (oncall)",
+      "type": "smtp",
+      "isDefault": true,
+      "applyExisting": true,
+      "comment": "Posts to the MailHog SMTP catcher already in the compose stack. Visible at http://localhost:8025 — demoable without an external SMTP provider. In K8s the smtp.host points at an outbound mail relay (SendGrid/Mailgun/SES).",
+      "config": {
+        "smtpSecure": false,
+        "smtpIgnoreTLSError": true
+      }
+    }
+  ],
+
+  "monitors": [
+    {
+      "name": "Frontend (Next.js)",
+      "type": "http",
+      "url": "http://frontend:3000/",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299", "300-399"],
+      "comment": "Next.js standalone often returns 307 from / when the auth-guard redirects to /dashboard — accept 3xx so the redirect doesn't read as DOWN."
+    },
+    {
+      "name": "Backend — live",
+      "type": "http",
+      "url": "http://backend:8080/api/v1/health/live",
+      "method": "GET",
+      "interval": 30,
+      "maxretries": 2,
+      "retryInterval": 15,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "Liveness probe — returns 200 if the ASP.NET host is responsive, no downstream checks. See docs/operations/health-probes.md."
+    },
+    {
+      "name": "Backend — ready",
+      "type": "http",
+      "url": "http://backend:8080/api/v1/health/ready",
+      "method": "GET",
+      "interval": 30,
+      "maxretries": 2,
+      "retryInterval": 15,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "Readiness probe — 200 only when Postgres is reachable. 503 means the API would refuse traffic in K8s."
+    },
+    {
+      "name": "Backend — diagnostics",
+      "type": "http",
+      "url": "http://backend:8080/api/v1/health/diagnostics",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "Full downstream picture — Postgres + Redis + RabbitMQ + Keycloak JWKS. A 503 here surfaces a brittle dependency before the readiness probe ever fires."
+    },
+    {
+      "name": "Keycloak — realm well-known",
+      "type": "http",
+      "url": "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "OIDC discovery endpoint — also gates Keycloak's own healthcheck. DOWN here means tokens won't issue."
+    },
+    {
+      "name": "Postgres",
+      "type": "postgres",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "databaseConnectionString": "postgres://postgres:postgres@postgres:5432/myproperty",
+      "databaseQuery": "SELECT 1",
+      "comment": "Connects via the same connection string the backend uses; runs SELECT 1 every minute. Kuma will reuse the connection across probes."
+    },
+    {
+      "name": "Redis",
+      "type": "redis",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "databaseConnectionString": "redis://redis:6379",
+      "comment": "Redis PING probe. The API tolerates brief Redis outages by design (cache + SignalR backplane fall back gracefully) — this monitor exists for visibility, not for paging."
+    },
+    {
+      "name": "RabbitMQ — management",
+      "type": "http",
+      "url": "http://rabbitmq:15672/api/health/checks/alarms",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"],
+      "authMethod": "basic",
+      "basic_auth_user": "guest",
+      "basic_auth_pass": "guest",
+      "comment": "Rabbit's built-in health/checks/alarms endpoint — green when there are no memory or disk alarms firing on any node. Basic auth uses the default guest creds (only reachable from inside the docker network)."
+    },
+    {
+      "name": "Loki",
+      "type": "http",
+      "url": "http://loki:3100/ready",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"]
+    },
+    {
+      "name": "Prometheus",
+      "type": "http",
+      "url": "http://prometheus:9090/-/ready",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"]
+    },
+    {
+      "name": "Alertmanager",
+      "type": "http",
+      "url": "http://alertmanager:9093/-/ready",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"]
+    },
+    {
+      "name": "AIOps webhook",
+      "type": "http",
+      "url": "http://aiops-webhook:5001/health",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "Closes the loop: if the AIOps triage service goes dark, this monitor alerts via Slack/email even though the AIOps webhook itself can't."
+    },
+    {
+      "name": "Grafana",
+      "type": "http",
+      "url": "http://grafana:3000/api/health",
+      "method": "GET",
+      "interval": 120,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"]
+    }
+  ],
+
+  "statusPage": {
+    "slug": "myproperty",
+    "title": "MyProperty — System Status",
+    "description": "Public health overview of MyProperty services. Updates every minute. Subscribe to the per-monitor RSS feeds for incident notifications.",
+    "theme": "auto",
+    "published": true,
+    "showTags": false,
+    "showPoweredBy": false,
+    "publicGroupName": "Core services",
+    "publicMonitors": [
+      "Frontend (Next.js)",
+      "Backend — live",
+      "Backend — ready",
+      "Keycloak — realm well-known",
+      "Postgres",
+      "Redis"
+    ],
+    "internalGroupName": "Infrastructure",
+    "internalMonitors": [
+      "Backend — diagnostics",
+      "RabbitMQ — management",
+      "Loki",
+      "Prometheus",
+      "Alertmanager",
+      "AIOps webhook",
+      "Grafana"
+    ]
+  }
+}
