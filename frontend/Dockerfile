@@ -1,12 +1,12 @@
 # =============================================================
 #  frontend/Dockerfile
 #
-#  STATUS: M4.2 — production-hardened.
+#  STATUS: M4.8 — distroless runtime.
 #
 #  Multi-stage build for the MyProperty Next.js frontend.
-#  Runtime is node:20-alpine running as non-root `node` user.
-#  Uses Next.js standalone output for ~90% smaller image vs
-#  shipping the full node_modules tree.
+#  Runtime is gcr.io/distroless/nodejs20-debian12 running as the
+#  built-in non-root `nonroot` user (UID 65532). Builder stages
+#  use node:20-alpine (full Node + npm + shell available there).
 #
 #  Build context: frontend/
 #  Build command:
@@ -18,14 +18,15 @@
 #      -f frontend/Dockerfile -t myproperty-frontend:dev frontend/
 #
 #  ─────────────────────────────────────────────────────────────
-#  KNOWN GAPS — closed in M4.3 or later, not M4.2:
+#  M4.8 hardening notes:
 #  ─────────────────────────────────────────────────────────────
-#  • Image digest pinning. Base images use tags, not @sha256 digests.
-#    M4.3 introduces Renovate/Dependabot to auto-bump digests, then
-#    pins these references.
-#  • Trivy CVE scanning. M4.3 wires Trivy as a CI gate in
-#    .github/workflows/frontend-ci.yml after the image build step.
-#    Local scan today:  trivy image myproperty-frontend:dev
+#  • Distroless runtime — no shell, no busybox, no package manager.
+#    Same hardening posture as the chiseled backend image. K8s probes
+#    (httpGet from the kubelet) handle health checks in production;
+#    compose-level probe uses the bundled `node` to run healthcheck.js.
+#  • Trivy CVE scanning is a CI quality gate. See .trivyignore at repo
+#    root for the triage workflow.
+#  • Local scan:  trivy image myproperty-frontend:dev
 #
 #  KNOWN GAPS — deferred indefinitely:
 #  • MockProvider/msw dead code in standalone bundle. Layouts import
@@ -72,35 +73,47 @@ COPY . .
 RUN npm run build
 
 # ── Stage 3: runtime ─────────────────────────────────────────
-# node:20-alpine ships a built-in non-root `node` user (UID 1000).
-# Standalone output emits a minimal server.js + only the node_modules
-# actually traced at build time. Static assets and public/ are
-# copied separately.
-FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS runner
+# Distroless nodejs20-debian12 ships only the Node runtime.
+# Ships a built-in `nonroot` user (UID 65532). No shell, no
+# busybox, no curl, no package manager. ENTRYPOINT defaults to
+# /nodejs/bin/node — pass the script path as CMD.
+#
+# Standalone output structure:
+#   /.next/standalone/         <- server.js + traced node_modules
+#   /.next/static/             <- static chunks (must be copied separately)
+#   /public/                   <- static assets (must be copied separately)
+# Digest pinning TODO: first post-merge Dependabot run will append the
+# @sha256:... digest. Tag-only references break the M4.3 supply-chain
+# convention but the alternative — making one up by hand — is worse.
+# A scheduled `docker pull gcr.io/distroless/nodejs20-debian12:nonroot
+# && docker inspect --format '{{index .RepoDigests 0}}' …` lookup and
+# manual pin is acceptable as an interim before Dependabot picks it up.
+FROM gcr.io/distroless/nodejs20-debian12:nonroot AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-# Standalone output structure:
-#   /.next/standalone/         <- server.js + traced node_modules
-#   /.next/static/             <- static chunks (must be copied separately)
-#   /public/                   <- static assets (must be copied separately)
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-COPY --from=builder --chown=node:node /app/public ./public
+# nonroot in distroless is UID 65532. Chown to that.
+COPY --from=builder --chown=65532:65532 /app/.next/standalone ./
+COPY --from=builder --chown=65532:65532 /app/.next/static ./.next/static
+COPY --from=builder --chown=65532:65532 /app/public ./public
+COPY --from=builder --chown=65532:65532 /app/healthcheck.js ./healthcheck.js
 
-USER node
+# The base image already runs as `nonroot`; the explicit USER line is
+# kept for clarity and to satisfy security scanners that grep for it.
+USER nonroot
 
 EXPOSE 3000
 
-# Dockerfile-level HEALTHCHECK — alpine has wget, so we keep this
-# alongside the compose-level probe. K8s probes (M4.4) take over in
-# production.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD wget --quiet --spider http://127.0.0.1:3000/ || exit 1
+# No HEALTHCHECK directive — distroless has no shell to run a CMD-SHELL
+# probe, and Docker's "CMD ["node", "healthcheck.js"]" form would shadow
+# our actual entrypoint sequence. Compose-level healthcheck wires the
+# node-based probe externally; K8s probes (M4.4) run httpGet from the
+# kubelet. Same K8s-native pattern as the chiseled backend image.
 
-# Standalone emits server.js at the working directory root.
-# No `npm start`, no package.json scripts — just node directly.
-CMD ["node", "server.js"]
+# Distroless nodejs ENTRYPOINT is the node binary, so CMD passes
+# server.js as the first argv to node. Standalone emits server.js at
+# the working directory root.
+CMD ["server.js"]
