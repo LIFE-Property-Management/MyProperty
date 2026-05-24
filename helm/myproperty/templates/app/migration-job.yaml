@@ -23,7 +23,16 @@ spec:
       automountServiceAccountToken: false
       imagePullSecrets:
         - name: ghcr-pull-secret
+      # M4.8 — migration image is now chiseled + non-root (UID 1654),
+      # matching the API image. Pod-level securityContext promotes the
+      # workload to runAsNonRoot so PodSecurity admission accepts it
+      # under PSS=restricted (currently namespace enforces baseline; the
+      # restricted-promotion path is documented in security-hardening.md).
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -51,4 +60,8 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
-            readOnlyRootFilesystem: false
+            # Chiseled image has no writable paths required at runtime
+            # (efbundle reads connection string from env, writes only
+            # to stdout/stderr). readOnlyRootFilesystem closes the
+            # final M4.8 hardening box for this workload.
+            readOnlyRootFilesystem: true
