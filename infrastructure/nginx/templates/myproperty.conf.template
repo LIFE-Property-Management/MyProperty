@@ -137,6 +137,59 @@ server {
     }
 }
 
+# ── HTTPS :443 — Uptime Kuma (status page + admin UI) ──────────────────────
+# Kuma's UI is socket.io-based: the entire dashboard (live monitor heartbeats,
+# notification settings, the status page itself) runs over a single long-lived
+# WebSocket. Without the upgrade headers + a long proxy_read_timeout the UI
+# falls back to long-polling and drops every ~60s, looking like a Kuma bug.
+#
+# Public status page lives at /status/<slug> (slug `myproperty` per
+# infrastructure/uptime-kuma/monitors.json); the admin UI lives at /
+# behind Kuma's own session auth. M5 hardening should fence the admin UI off
+# behind ingress-level basic auth + an IP allowlist — for now the admin
+# password (KUMA_ADMIN_PASSWORD in .env) is the only gate.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name status.${MYPROPERTY_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/app.${MYPROPERTY_DOMAIN}/chain.pem;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    # X-Frame-Options intentionally omitted — status pages are often
+    # embedded as iframes in product dashboards / wiki pages. Leaving it
+    # off here keeps that use case open without weakening the frontend
+    # vhost's clickjacking baseline.
+
+    location / {
+        set $upstream_uptime_kuma http://uptime-kuma:3001;
+        proxy_pass $upstream_uptime_kuma;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # socket.io upgrade — required for the dashboard + status page
+        # live-updates to work. Same map directive the api vhost uses.
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $connection_upgrade;
+
+        # Same 1h timeout as the api vhost (SignalR). Kuma's socket.io
+        # heartbeats are well inside this window in steady state; the
+        # cap exists to keep the connection alive across slow seed
+        # operations and long monitor edits.
+        proxy_read_timeout                 3600s;
+        proxy_send_timeout                 3600s;
+    }
+}
+
 # ── HTTPS :443 — Keycloak ───────────────────────────────────────────────────
 # Production Keycloak is configured with:
 #   KC_PROXY_HEADERS=xforwarded

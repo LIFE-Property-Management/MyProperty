@@ -108,6 +108,39 @@ aiopsWebhook:
       cpu: 200m
       memory: 256Mi
 
+uptimeKuma:
+  image:
+    repository: louislam/uptime-kuma
+    tag: 1.23.16-alpine
+  seedImage:
+    repository: ghcr.io/life-property-management/myproperty-uptime-kuma-init
+    # Set at deploy time via --set uptimeKuma.seedImage.tag=<SHA>
+    tag: latest
+  # Public hostname the status page lives at. Added to every Ingress's TLS
+  # host list so the SAN cert covers it. M4.4 single-environment pattern —
+  # parameterise per-env in M5 if multiple environments ever exist.
+  publicHost: status.myproperty.works
+  # Footer text on the status page links here. Set at install time via
+  # --set uptimeKuma.publicUrl=https://status.myproperty.works.
+  publicUrl: https://status.myproperty.works
+  storage:
+    size: 2Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+  # Email notification target — defaults are dev-only placeholders. Override
+  # to a real SMTP relay (SendGrid/Mailgun/SES) at deploy time.
+  smtp:
+    host: ""    # empty disables the email channel entirely
+    port: 587
+    from: uptime@myproperty.works
+    to: oncall@myproperty.works
+
 loki:
   image:
     repository: grafana/loki

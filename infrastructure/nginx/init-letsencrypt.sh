@@ -33,7 +33,7 @@ EMAIL="${LETSENCRYPT_EMAIL:?LETSENCRYPT_EMAIL must be set, e.g. admin@example.co
 STAGING="${STAGING:-0}"
 
 PRIMARY="app.${DOMAIN}"
-SUBDOMAINS=("app.${DOMAIN}" "api.${DOMAIN}" "auth.${DOMAIN}")
+SUBDOMAINS=("app.${DOMAIN}" "api.${DOMAIN}" "auth.${DOMAIN}" "status.${DOMAIN}")
 RSA_KEY_SIZE=4096
 CERT_DIR="/etc/letsencrypt/live/${PRIMARY}"
 
