@@ -2,6 +2,13 @@
 # Single environment — no value layering. Override at deploy time with --set or --values.
 
 postgres:
+  # When true (default), the chart renders an in-cluster Postgres StatefulSet,
+  # Service, and init-configmap. When false, those templates are skipped and
+  # the backend reads connection details (host, port) from the myproperty-postgres
+  # Secret — populated by the bootstrap runbook from Terraform outputs. The
+  # backend's connection string template is unchanged; only the Secret content
+  # differs between modes.
+  enabled: true
   image:
     repository: postgres
     tag: 16-alpine
@@ -14,6 +21,17 @@ postgres:
       memory: 256Mi
     limits:
       memory: 512Mi
+
+externalPostgres:
+  # Only consumed when postgres.enabled is false. The host and port live in the
+  # myproperty-postgres Secret alongside the other DB credentials — keeping all
+  # connection details in a single Secret. These values exist in values.yaml
+  # only as a documentation hint; the chart does NOT read them. The Secret is
+  # the source of truth.
+  # Example (do not set; create the Secret instead):
+  #   host: private-myproperty-db-xxx-do-user-xxxxx.b.db.ondigitalocean.com
+  #   port: 25060
+  enabled: false
 
 redis:
   image:

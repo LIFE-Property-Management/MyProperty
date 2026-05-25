@@ -48,6 +48,7 @@ spec:
             - -c
             - mkdir -p /var/myproperty/storage && chown -R 1654:1654 /var/myproperty/storage
           securityContext:
+            runAsNonRoot: false
             runAsUser: 0
             allowPrivilegeEscalation: false
             capabilities:
@@ -63,7 +64,12 @@ spec:
               containerPort: 8080
               protocol: TCP
           env:
-            # Credentials extracted first so they can be interpolated into ConnectionStrings__Postgres
+            # Credentials extracted first so they can be interpolated into ConnectionStrings__Postgres.
+            # Host and port come from the same Secret — same env var names regardless of whether the
+            # chart is deployed against in-cluster Postgres (Secret values: host=postgres, port=5432)
+            # or managed Postgres (Secret values: host=<private DO endpoint>, port=25060).
+            # SSL Mode=Require + Trust Server Certificate=true is a no-op against in-cluster Postgres
+            # (no TLS configured) and required against DO managed Postgres (TLS mandatory, self-signed CA).
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
@@ -79,8 +85,18 @@ spec:
                 secretKeyRef:
                   name: myproperty-postgres
                   key: postgres-db
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-port
             - name: ConnectionStrings__Postgres
-              value: "Host=postgres;Port=5432;Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD)"
+              value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode=Require;Trust Server Certificate=true"
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
             - name: LokiUrl

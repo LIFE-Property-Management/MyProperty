@@ -46,7 +46,19 @@ spec:
           env:
             - name: MYPROPERTY_FRONTEND_BASE_URL
               value: "https://app.myproperty.works"
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-google-oauth
+                  key: client-id
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-google-oauth
+                  key: client-secret
           securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
@@ -79,8 +91,18 @@ spec:
               value: "true"
             - name: KC_DB
               value: "postgres"
+            - name: KC_DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-host
+            - name: KC_DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-port
             - name: KC_DB_URL
-              value: "jdbc:postgresql://postgres:5432/keycloak"
+              value: "jdbc:postgresql://$(KC_DB_HOST):$(KC_DB_PORT)/keycloak"
             - name: KC_DB_USERNAME
               valueFrom:
                 secretKeyRef:
