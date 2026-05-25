@@ -104,7 +104,7 @@ def connect_with_retry() -> UptimeKumaApi:
     last_exc: Exception | None = None
     for attempt in range(1, CONNECT_MAX_ATTEMPTS + 1):
         try:
-            api = UptimeKumaApi(KUMA_BASE_URL, wait_timeout=15)
+            api = UptimeKumaApi(KUMA_BASE_URL, timeout=15)
             log.info("Connected to Kuma at %s (attempt %d)", KUMA_BASE_URL, attempt)
             return api
         except Exception as exc:

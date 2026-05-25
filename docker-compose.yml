@@ -456,11 +456,11 @@ services:
     # internal port. Restated here explicitly so the start_period accounts for
     # the SQLite migrations Kuma runs on a fresh volume (~30 s cold).
     healthcheck:
-      test: ["CMD", "extra/healthcheck"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 45s
+      test: [ "CMD", "node", "extra/healthcheck" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
 
   # ── Uptime Kuma seed (one-shot) ─────────────────────────────────────────────
   # First-run bootstrap: creates the admin user, the notification channels,

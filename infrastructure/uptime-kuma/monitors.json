@@ -46,7 +46,7 @@
       "method": "GET",
       "interval": 30,
       "maxretries": 2,
-      "retryInterval": 15,
+      "retryInterval": 20,
       "accepted_statuscodes": ["200-299"],
       "comment": "Liveness probe — returns 200 if the ASP.NET host is responsive, no downstream checks. See docs/operations/health-probes.md."
     },
@@ -57,7 +57,7 @@
       "method": "GET",
       "interval": 30,
       "maxretries": 2,
-      "retryInterval": 15,
+      "retryInterval": 20,
       "accepted_statuscodes": ["200-299"],
       "comment": "Readiness probe — 200 only when Postgres is reachable. 503 means the API would refuse traffic in K8s."
     },
