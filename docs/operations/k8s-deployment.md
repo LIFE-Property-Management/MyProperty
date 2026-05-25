@@ -295,6 +295,48 @@ kubectl get secrets -n myproperty
 #           myproperty-anthropic, myproperty-discord, myproperty-grafana
 ```
 
+### Step 7.5 — Bootstrap Postgres schema + create keycloak DB
+
+The managed Postgres user (`myproperty_app`) is not the database owner. On
+PG 15+, non-owners cannot create objects in the `public` schema, so the first
+EF migration fails with `42501: permission denied for schema public`.
+Keycloak additionally needs its own database — it does not auto-create one.
+
+DO firewalls block external connections to managed PG, so run psql from a
+throwaway pod *inside* the cluster's VPC. Capture the private URI as `doadmin`:
+
+```bash
+DB_ID=$(doctl databases list --format ID,Name --no-header | awk '$2=="myproperty-pg" {print $1}')
+DOADMIN_URI=$(doctl databases connection "$DB_ID" --private --format URI --no-header)
+```
+
+Then run the bootstrap statements:
+
+```bash
+kubectl run --rm -it psql-bootstrap \
+  --image=postgres:16-alpine \
+  --restart=Never \
+  --namespace myproperty \
+  -- psql "$DOADMIN_URI" <<'SQL'
+-- App DB: grant ownership of public schema to myproperty_app.
+\c myproperty
+GRANT ALL ON SCHEMA public TO myproperty_app;
+ALTER SCHEMA public OWNER TO myproperty_app;
+
+-- Keycloak DB: create it, then repeat the same grants.
+\c defaultdb
+CREATE DATABASE keycloak;
+\c keycloak
+GRANT ALL ON SCHEMA public TO myproperty_app;
+ALTER SCHEMA public OWNER TO myproperty_app;
+SQL
+```
+
+Keycloak reuses the `myproperty_app` user — one fewer Secret key to manage.
+M4.8 follow-up: codify this as `postgresql_grant` + `postgresql_database`
+resources via the `postgresql` Terraform provider (see
+[`terraform.md` § Known follow-ups](./terraform.md)).
+
 ### Step 8 — Helm install
 
 ```bash

@@ -48,6 +48,7 @@ spec:
             - -c
             - mkdir -p /var/myproperty/storage && chown -R 1654:1654 /var/myproperty/storage
           securityContext:
+            runAsNonRoot: false
             runAsUser: 0
             allowPrivilegeEscalation: false
             capabilities:
