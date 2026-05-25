@@ -3,8 +3,9 @@
 #
 # Generates a self-signed TLS cert into the Let's Encrypt directory layout
 # so the production nginx config works unchanged in local dev. Cert covers
-# the three subdomains the nginx vhost template serves
-# (app.${MYPROPERTY_DOMAIN}, api.${MYPROPERTY_DOMAIN}, auth.${MYPROPERTY_DOMAIN}).
+# the four subdomains the nginx vhost template serves
+# (app.${MYPROPERTY_DOMAIN}, api.${MYPROPERTY_DOMAIN}, auth.${MYPROPERTY_DOMAIN},
+# status.${MYPROPERTY_DOMAIN}).
 #
 # Run once after a clean clone (or after changing MYPROPERTY_DOMAIN):
 #   ./infrastructure/nginx/init-selfsigned.sh
@@ -26,7 +27,7 @@ VOLUME="myproperty_certbot_certs"
 NETWORK="myproperty_myproperty-net"
 
 echo "==> Self-signed cert init for ${DOMAIN}"
-echo "    Cert SAN: app.${DOMAIN}, api.${DOMAIN}, auth.${DOMAIN}"
+echo "    Cert SAN: app.${DOMAIN}, api.${DOMAIN}, auth.${DOMAIN}, status.${DOMAIN}"
 echo "    Volume:   ${VOLUME}"
 echo "    Path:     /etc/letsencrypt/live/${PRIMARY}/"
 echo
@@ -72,7 +73,8 @@ extendedKeyUsage  = serverAuth
 DNS.1 = ${PRIMARY}
 DNS.2 = api.${DOMAIN}
 DNS.3 = auth.${DOMAIN}
-DNS.4 = ${DOMAIN}
+DNS.4 = status.${DOMAIN}
+DNS.5 = ${DOMAIN}
 EOF
 
     openssl req \
@@ -96,6 +98,7 @@ echo "    1. Add to /etc/hosts (or %WINDIR%/System32/drivers/etc/hosts on Window
 echo "         127.0.0.1  app.${DOMAIN}"
 echo "         127.0.0.1  api.${DOMAIN}"
 echo "         127.0.0.1  auth.${DOMAIN}"
+echo "         127.0.0.1  status.${DOMAIN}"
 echo
 echo "    2. cp .env.proxy.example .env  (or merge into existing .env)"
 echo "    3. docker compose --profile proxy up -d --build"

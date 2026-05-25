@@ -426,6 +426,83 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Uptime Kuma (M4.6) ──────────────────────────────────────────────────────
+  # Self-hosted uptime monitor + public status page. Probes every other service
+  # in the stack on a recurring schedule, persists results to a SQLite DB on a
+  # named volume, and exposes a Vue.js UI + status page at
+  # http://localhost:3002 (host port).
+  #
+  # The seed sidecar (`uptime-kuma-init` below) provisions a fixed set of
+  # monitors + a public status page + Slack/email notification channels on
+  # first start via the Kuma socket.io API. Subsequent boots find the admin
+  # account already configured and exit no-op.
+  #
+  # Notifications:
+  #   - Slack: only created if SLACK_WEBHOOK_URL is set (same env var the
+  #     M4.11 aiops-webhook consumes; falls back to stdout-via-Loki there).
+  #   - Email: posts to the MailHog SMTP catcher already in this stack —
+  #     visible at http://localhost:8025. Demo-friendly without an external
+  #     SMTP account.
+  uptime-kuma:
+    image: louislam/uptime-kuma:1.23.16-alpine
+    container_name: myproperty-uptime-kuma
+    ports:
+      - "3002:3001"   # Host 3002 → container 3001 (Kuma's default; 3001 already used by Grafana)
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks:
+      - myproperty-net
+    # The official image ships an `extra/healthcheck` Node probe that hits the
+    # internal port. Restated here explicitly so the start_period accounts for
+    # the SQLite migrations Kuma runs on a fresh volume (~30 s cold).
+    healthcheck:
+      test: [ "CMD", "node", "extra/healthcheck" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  # ── Uptime Kuma seed (one-shot) ─────────────────────────────────────────────
+  # First-run bootstrap: creates the admin user, the notification channels,
+  # the monitors, and the public status page via Kuma's socket.io API.
+  # Subsequent runs detect the existing admin and short-circuit to a no-op,
+  # so `docker compose up` is safe to re-run without resetting any state.
+  #
+  # Same one-shot pattern as `keycloak-realm-init` and `backend-storage-init`:
+  # runs to completion, exits 0, never restarts. Maps 1:1 to a Kubernetes Job
+  # in the Helm chart (see helm/myproperty/templates/monitoring/uptime-kuma-*).
+  uptime-kuma-init:
+    build:
+      context: ./infrastructure/uptime-kuma
+      dockerfile: Dockerfile
+    image: myproperty-uptime-kuma-init:dev
+    container_name: myproperty-uptime-kuma-init
+    environment:
+      KUMA_BASE_URL: "http://uptime-kuma:3001"
+      KUMA_ADMIN_USERNAME: "${KUMA_ADMIN_USERNAME:-admin}"
+      KUMA_ADMIN_PASSWORD: "${KUMA_ADMIN_PASSWORD:-changeme-please-1234}"
+      # Public URL the status page will advertise in its "Powered by" link.
+      # The compose default points at the localhost host-port binding;
+      # .env.proxy.example overrides to https://status.${MYPROPERTY_DOMAIN}.
+      KUMA_PUBLIC_URL: "${KUMA_PUBLIC_URL:-http://localhost:3002}"
+      # Notification channels — both optional. Empty values short-circuit
+      # the corresponding channel; the demo runs without external accounts.
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      # MailHog runs in this stack on port 1025 — the email notification
+      # lands in the MailHog Web UI at http://localhost:8025, demoable
+      # without configuring an external SMTP provider.
+      KUMA_SMTP_HOST: "${KUMA_SMTP_HOST:-mailhog}"
+      KUMA_SMTP_PORT: "${KUMA_SMTP_PORT:-1025}"
+      KUMA_SMTP_FROM: "${KUMA_SMTP_FROM:-uptime@myproperty.local}"
+      KUMA_SMTP_TO: "${KUMA_SMTP_TO:-oncall@myproperty.local}"
+      KUMA_LOG_LEVEL: "${KUMA_LOG_LEVEL:-INFO}"
+    depends_on:
+      uptime-kuma:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+    restart: "no"   # One-shot — exits 0 after seeding (or no-op on re-run).
+
   # ── Nginx reverse proxy (M4.9) ──────────────────────────────────────────────
   # Opt-in via `docker compose --profile proxy up`. Without the profile, the
   # default stack still binds 3000/5042/8080/etc. to the host as before —
@@ -472,6 +549,11 @@ services:
         condition: service_started
       keycloak:
         condition: service_healthy
+      # uptime-kuma is loose-coupled: the status vhost still renders 502 if
+      # Kuma is down, but the rest of the proxy keeps serving. service_started
+      # is enough — the upstream block resolves at request time, not at boot.
+      uptime-kuma:
+        condition: service_started
     networks:
       - myproperty-net
     healthcheck:
@@ -524,6 +606,7 @@ volumes:
   alertmanager_data:
   certbot_certs:
   certbot_www:
+  uptime_kuma_data:
 
 networks:
   myproperty-net:
