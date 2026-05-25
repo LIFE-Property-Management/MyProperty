@@ -153,7 +153,13 @@ kubectl create secret docker-registry ghcr-pull-secret \
 
 ### 8. App Secrets
 
-One Secret per concern, grouped by workload:
+One Secret per concern, grouped by workload.
+
+> **Production path** (M4.8 onward): use External Secrets Operator + GCP Secret
+> Manager or Azure Key Vault instead of `kubectl create secret`. See
+> [security-hardening.md](security-hardening.md#external-secrets-operator-key-vault--secret-manager)
+> for the activation recipe. The runbook below remains the no-ESO bootstrap
+> path and is what the demo cluster currently uses.
 
 ```bash
 # Postgres credentials (consumed by backend, migration job, Keycloak)

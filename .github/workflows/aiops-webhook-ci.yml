@@ -110,7 +110,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy vulnerability scan
+      # M4.8 — Trivy CI quality gate. Same two-pass shape as backend-ci.yml.
+      - name: Trivy SARIF report (non-blocking, CRITICAL+HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/life-property-management/myproperty-aiops-webhook:${{ env.SHORT_SHA }}
@@ -119,6 +120,7 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -126,3 +128,30 @@ jobs:
         with:
           sarif_file: trivy-aiops.sarif
           category: trivy-aiops
+
+      - name: Trivy quality gate (blocking, CRITICAL only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-aiops-webhook:${{ env.SHORT_SHA }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+      - name: Generate SBOM (CycloneDX)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-aiops-webhook:${{ env.SHORT_SHA }}
+          format: cyclonedx
+          output: sbom-aiops.cdx.json
+          exit-code: '0'
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-aiops-${{ env.SHORT_SHA }}
+          path: sbom-aiops.cdx.json
+          retention-days: 90

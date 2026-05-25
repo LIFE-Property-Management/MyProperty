@@ -1,0 +1,37 @@
+# .trivyignore — Trivy CVE allowlist for the M4.8 CI quality gate.
+#
+# Two-pass scan model in CI:
+#   1. SARIF report at CRITICAL+HIGH severity, non-blocking, uploaded to
+#      GitHub Security tab. This file silences known-acceptable findings
+#      from the SARIF view to keep the inbox actionable.
+#   2. Blocking gate at CRITICAL severity. This file is honored here too —
+#      adding a CVE here suppresses the build failure as well as the SARIF
+#      report.
+#
+# ─────────────────────────────────────────────────────────────────────────
+# Triage workflow:
+#   1. CVE shows up in the Security tab. Click through to the advisory.
+#   2. Decide: is the vulnerable code path actually reachable from MyProperty?
+#      - Transitive dep we don't use directly → low risk; allowlist with date.
+#      - Direct dep with no fix yet → allowlist with date; bump when patched.
+#      - Direct dep with a fix → bump the dep instead of allowlisting.
+#   3. Add an entry below in the form:
+#        CVE-YYYY-NNNNN exp:YYYY-MM-DD  # short rationale
+#      The `exp:` annotation is read by humans, not Trivy. Review every entry
+#      monthly and re-evaluate when its `exp:` date passes.
+#
+# Severity-level tuning:
+#   - CRITICAL is the blocking gate. Allowlist a CVE here only with strong
+#     justification (e.g. confirmed not reachable, upstream advisory marks
+#     it as not-affected for the runtime).
+#   - HIGH appears in the SARIF report only. Allowlisting still cleans up
+#     the inbox but does not gate the build.
+#
+# References:
+#   - https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+#   - docs/operations/security-hardening.md  (full Trivy section)
+# ─────────────────────────────────────────────────────────────────────────
+
+# Initial baseline (M4.8 close): empty allowlist. Anything that surfaces in
+# the first post-merge scan goes here with a triage decision attached, or
+# gets fixed at the source.

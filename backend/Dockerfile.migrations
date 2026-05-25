@@ -1,6 +1,8 @@
 # =============================================================
 #  backend/Dockerfile.migrations
 #
+#  STATUS: M4.8 — chiseled + non-root.
+#
 #  Packages the EF Core migration bundle produced by
 #  `backend/scripts/build-migration-bundle.sh` into a runtime
 #  image consumed by the Helm pre-upgrade Job (DevOps-owned).
@@ -12,24 +14,61 @@
 #  Build context: backend/   (same as the API image)
 #  Built by:      backend/scripts/build-migration-bundle.sh
 #  Consumed by:   Helm pre-upgrade Job (see docs/operations/migrations.md)
+#
+#  ─────────────────────────────────────────────────────────────
+#  M4.8 hardening notes:
+#  ─────────────────────────────────────────────────────────────
+#  • Chiseled runtime — same Microsoft-blessed distroless equivalent
+#    used by backend/Dockerfile. No shell, no apt, no curl, no
+#    busybox. Closes the M4.4 "migration image is not chiseled" gap.
+#  • Runs as UID 1654 (the chiseled image's APP_UID). Closes the
+#    PSS=baseline exemption for the migration job — once promtail's
+#    root requirement is also resolved (M5), namespace PSS can flip
+#    to restricted.
+#  • Trivy CVE scanning runs against this image as part of the
+#    backend-ci.yml api-image job's Trivy gate flow (the migration
+#    bundle ships under the same backend/ workflow even though it
+#    has a separate Dockerfile). See .trivyignore at repo root.
+#
+#  KNOWN GAPS — out of scope for M4.8:
+#  • Reflection-trimming risk for the EF Core migration assembly
+#    if we ever move to <PublishTrimmed>true</PublishTrimmed>. Not
+#    in scope here — chiseled doesn't imply trimming, just a smaller
+#    runtime base.
 # =============================================================
 
 # Base image digests pinned for supply-chain integrity (M4.3).
 # Tags retained as human-readable labels; @sha256 is the contract.
 # Bumped via Dependabot (see .github/dependabot.yml) — do not hand-edit.
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:8c0b6857eab7b2aa57884c839bf4678414606bd7d17370f18a842ac5cf414711
+# Chiseled = Microsoft's distroless equivalent. Built on Ubuntu
+# 24.04 (Noble) chiseled base. Contains only the .NET runtime +
+# ASP.NET Core shared framework + libicu. No shell, no apt, no
+# busybox, no /bin, no /usr/bin tools. Same base as backend/Dockerfile
+# so the migration image and API image share their base layer
+# (improves registry cache locality).
+# Digest pinning TODO: first post-merge Dependabot run will append
+# the @sha256:... digest. Manual lookup recipe:
+#   docker pull mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
+#   docker inspect --format '{{index .RepoDigests 0}}' \
+#     mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
 
 WORKDIR /app
 
 # The bundle is produced by the script before `docker build` runs.
 # Build context is backend/, so the path is relative to that.
-COPY artifacts/migration-bundle/efbundle /app/efbundle
+# $APP_UID is provided by the chiseled base image (resolves to 1654).
+#
+# `--chmod=755` is a BuildKit COPY flag — it sets the file mode at
+# copy time, eliminating the need for `RUN chmod +x` (which can't run
+# in a chiseled image with no shell). Required because Docker on
+# Windows hosts strips the executable bit from copied files. CI
+# (Linux runners) preserves it; this flag covers both.
+# Requires BuildKit, which is default in Docker 24+ and buildx CI.
+COPY --chown=$APP_UID:$APP_UID --chmod=755 artifacts/migration-bundle/efbundle /app/efbundle
 
-# Make sure it's executable. `dotnet ef migrations bundle` already
-# produces an executable file, but this is belt-and-braces in case
-# the build context strips perms (rare but possible on Windows hosts).
-RUN chmod +x /app/efbundle
+USER $APP_UID
 
 # The bundle reads its connection string from the
 # ConnectionStrings__Postgres environment variable, injected at
