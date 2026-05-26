@@ -153,11 +153,11 @@ public class PaymentsController(SubmitPaymentHandler submit) : ControllerBase
 - **DbContext** lives in `Infrastructure/Persistence/AppDbContext.cs`. Entity configurations in `Infrastructure/Persistence/Configurations/<Entity>Configuration.cs` using `IEntityTypeConfiguration<T>`. **No** fluent API in the DbContext itself.
 - **Soft deletes** via global query filter on `BaseEntity`-derived entities.
 - **Indexes:** add explicitly in entity configurations. Required indexes (initial set):
-    - `Payment(LeaseId, Status)` — dashboard queries
-    - `Payment(DueDate) WHERE Status = 'Outstanding' AND DeletedAt IS NULL` — partial index for the recurring overdue-scan job. The unfiltered `(DueDate)` was demonstrably *slower* than no index (~74% of rows match `DueDate < today` so the planner walked nearly the whole table); the partial form covers ~24% of rows and answers the job's filter from the index alone. See `docs/performance/m3-sql-optimization/`.
-    - `Lease(LandlordId, Status)` — landlord dashboards
-    - `Invite(Token)` unique — invite lookup
-    - `Invite(ExpiresAt)` — orphan cleanup job
+  - `Payment(LeaseId, Status)` — dashboard queries
+  - `Payment(DueDate) WHERE Status = 'Outstanding' AND DeletedAt IS NULL` — partial index for the recurring overdue-scan job. The unfiltered `(DueDate)` was demonstrably *slower* than no index (~74% of rows match `DueDate < today` so the planner walked nearly the whole table); the partial form covers ~24% of rows and answers the job's filter from the index alone. See `docs/performance/m3-sql-optimization/`.
+  - `Lease(LandlordId, Status)` — landlord dashboards
+  - `Invite(Token)` unique — invite lookup
+  - `Invite(ExpiresAt)` — orphan cleanup job
 - **N+1 prevention:** every query that loads related data uses `.Include()` or projection (`.Select()`). The three slowest queries were profiled with `EXPLAIN (ANALYZE, BUFFERS)` for M3.4 — see `docs/performance/m3-sql-optimization/README.md`.
 
 ## Caching
@@ -172,18 +172,18 @@ public class PaymentsController(SubmitPaymentHandler submit) : ControllerBase
 
 - Hangfire with Postgres storage. Dashboard mounted at `/hangfire`, protected by `Admin` policy.
 - Jobs:
-    - **Send invite email** — fired from `CreateInviteHandler`. Retry policy: 5 attempts with exponential backoff. Dead-letter to a `failed_emails` table after final failure.
-    - **Mark expired invites** — recurring, every 1 hour. Sets `Status = Expired` on invites past `ExpiresAt`.
-    - **Orphan cleanup** — recurring, daily at 03:00 UTC. Deletes invites with `Status = Expired` and no associated lease, older than 30 days.
-    - **Mark overdue payments** — recurring, daily at 00:05 UTC. Computes overdue status from `DueDate` and `Status`.
+  - **Send invite email** — fired from `CreateInviteHandler`. Retry policy: 5 attempts with exponential backoff. Dead-letter to a `failed_emails` table after final failure.
+  - **Mark expired invites** — recurring, every 1 hour. Sets `Status = Expired` on invites past `ExpiresAt`.
+  - **Orphan cleanup** — recurring, daily at 03:00 UTC. Deletes invites with `Status = Expired` and no associated lease, older than 30 days.
+  - **Mark overdue payments** — recurring, daily at 00:05 UTC. Computes overdue status from `DueDate` and `Status`.
 - Jobs live in `Infrastructure/Jobs/`. Each job is a class with a single `ExecuteAsync` method, registered as scoped.
 
 ## Message Queue (RabbitMQ)
 
 - Events published end-to-end:
-    - `PaymentSubmitted` — fired by `SubmitPaymentHandler` after the payment record is persisted. Consumer triggers OCR Hangfire job + SignalR push to landlord.
-    - `PaymentConfirmed` / `PaymentRejected` — fired by `ConfirmPaymentHandler` / `RejectPaymentHandler`. Consumer triggers email Hangfire job + SignalR push to tenant.
-    - `InviteAccepted` / `InviteRejected` — fired by the invite acceptance handlers. Consumer triggers SignalR push to landlord.
+  - `PaymentSubmitted` — fired by `SubmitPaymentHandler` after the payment record is persisted. Consumer triggers OCR Hangfire job + SignalR push to landlord.
+  - `PaymentConfirmed` / `PaymentRejected` — fired by `ConfirmPaymentHandler` / `RejectPaymentHandler`. Consumer triggers email Hangfire job + SignalR push to tenant.
+  - `InviteAccepted` / `InviteRejected` — fired by the invite acceptance handlers. Consumer triggers SignalR push to landlord.
 - Publishers live in handlers; consumers live in `Infrastructure/Messaging/Consumers/` as hosted services.
 - **Pattern:** consumers do not contain business logic. They translate events into side effects: enqueue a Hangfire job (for retryable async work like email or OCR) and/or call `IHubContext<NotificationsHub>` to push a SignalR notification.
 - Library: `RabbitMQ.Client` directly. No MassTransit — too heavy for our event volume.
@@ -204,8 +204,8 @@ Each technology has a distinct role; do not blur them.
 2. `ConfirmPaymentHandler` updates `Payment.Status = Confirmed`, saves to DB.
 3. Handler publishes `PaymentConfirmedEvent` to RabbitMQ.
 4. `PaymentConfirmedConsumer` receives the event, triggers two side effects:
-    - Enqueues Hangfire job: send confirmation email to tenant.
-    - Calls `IHubContext<NotificationsHub>.Clients.Group($"tenant:{tenantId}").SendAsync("PaymentConfirmed", payload)`.
+  - Enqueues Hangfire job: send confirmation email to tenant.
+  - Calls `IHubContext<NotificationsHub>.Clients.Group($"tenant:{tenantId}").SendAsync("PaymentConfirmed", payload)`.
 5. Tenant's browser receives the SignalR event → invalidates the relevant TanStack Query → UI updates with fresh data from the API.
 
 ## Real-time (SignalR)
@@ -214,8 +214,8 @@ Each technology has a distinct role; do not blur them.
 - Single hub: `NotificationsHub` at `/hubs/notifications`, in `Api/Hubs/`.
 - JWT bearer auth — same scheme as the REST API. Token passed via query string for the WebSocket handshake (SignalR's standard pattern; configure `JwtBearerEvents.OnMessageReceived` to read from `?access_token=` only for hub paths).
 - On connect, the server places the connection into a group based on the authenticated user's role and ID:
-    - Tenants → `tenant:{userId}`
-    - Landlords → `landlord:{userId}`
+  - Tenants → `tenant:{userId}`
+  - Landlords → `landlord:{userId}`
 - Clients **do not** choose their group — the server assigns it from the JWT `sub` claim. Tenants cannot join landlord groups and vice versa.
 - The hub itself has **no client-callable methods** for business operations. All state changes still go through the REST API. The hub is server-push only.
 
@@ -269,10 +269,10 @@ Each technology has a distinct role; do not blur them.
 
 - **Token model.** Opaque random URL token (32 random bytes, URL-safe base64, ~43 chars). DB stores SHA256 hex (`TokenHash`, 64 chars, unique index). Plain token only ever lives in the invite email body, the Hangfire job arg, and the request URL — never in DB, never in logs.
 - **Endpoints** (all under `/api/v1/invites`):
-    - `POST /` — landlord-only. Creates invite, hashes token, persists, enqueues email via `IBackgroundJobQueue.EnqueueEmail`.
-    - `GET /by-token/{token}` — anonymous preview. Returns 404 for null / non-Pending / expired.
-    - `POST /{token}/accept` — authenticated. JWT email must match invite email — mismatch is 403 with `"This invite was sent to a different email address."`. Creates the `Lease` and marks invite `Accepted` in a single unit of work.
-    - `POST /{token}/reject` — anonymous. Marks invite `Rejected`. Returns 204.
+  - `POST /` — landlord-only. Creates invite, hashes token, persists, enqueues email via `IBackgroundJobQueue.EnqueueEmail`.
+  - `GET /by-token/{token}` — anonymous preview. Returns 404 for null / non-Pending / expired.
+  - `POST /{token}/accept` — authenticated. JWT email must match invite email — mismatch is 403 with `"This invite was sent to a different email address."`. Creates the `Lease` and marks invite `Accepted` in a single unit of work.
+  - `POST /{token}/reject` — anonymous. Marks invite `Rejected`. Returns 204.
 - **No 410 Gone.** Any invite that is not `Pending` or is past `ExpiresAt` returns 404 from preview/accept/reject. Frontend distinguishes UX from the 404 context.
 - **Lease creation at acceptance**, not at invite creation. Multiple active leases per tenant are allowed (no constraint).
 - **Unit-of-work owner.** `IInviteRepository.SaveChangesAsync` flushes the unit of work for accept. `ILeaseRepository.AddAsync` does not save. Both repos share the same scoped `AppDbContext`.
@@ -315,8 +315,8 @@ The dashboard, tenant detail page, and `GetActiveByTenantIdAsync` all assume a t
 - **Integration tests** use `WebApplicationFactory<Program>` with **Testcontainers** spinning up real Postgres + Keycloak per test run (a single `ApiCollection` shares the fixture across classes — container start + Keycloak realm seed runs once). EF Core migrations are applied to the container at fixture init.
 - **Auth is tested against live Keycloak**, not a stub. The fixture provisions a hermetic realm (`MyPropertyTest`), three realm roles, a public client with `directAccessGrants`, and four seed users (landlord×2, tenant×2). Tests mint real access tokens via the OAuth2 password grant; the API validates them via Keycloak's JWKS endpoint just like in production.
 - **Two narrow substitutions** in the test factory:
-    - `IDistributedCache` → `MemoryDistributedCache` (avoids depending on Redis; the cache code path through `RedisLandlordDashboardCache`/`ILandlordDashboardCache` is identical).
-    - `IBackgroundJobQueue` → `RecordingBackgroundJobQueue` (captures `EmailMessage`s for assertions; prevents Hangfire from enqueueing real jobs that would hammer the unreachable test SMTP).
+  - `IDistributedCache` → `MemoryDistributedCache` (avoids depending on Redis; the cache code path through `RedisLandlordDashboardCache`/`ILandlordDashboardCache` is identical).
+  - `IBackgroundJobQueue` → `RecordingBackgroundJobQueue` (captures `EmailMessage`s for assertions; prevents Hangfire from enqueueing real jobs that would hammer the unreachable test SMTP).
 - **The test environment is `Development`** so `RequireHttpsMetadata=false` on the JWT bearer scheme — Testcontainers' Keycloak only exposes HTTP. The production gate in `Program.cs` deliberately permits HTTP only in Development.
 - **Coverlet** wired via `coverlet.collector` for coverage runs (`dotnet test --collect:"XPlat Code Coverage"`). Target: meaningful coverage on handlers and validators; don't chase 100%.
 - Full suite (101 tests: 79 unit + 22 integration) runs in ~30 s once Postgres + Keycloak images are cached locally.
