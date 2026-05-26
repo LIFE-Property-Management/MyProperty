@@ -1,68 +1,7 @@
-# M4 progress — scratch log
+# Milestone 4 — Detailed entries
 
-Accumulating raw progress entries during the M4 unblock sprint and main M4 deliverables. Final `docs/m4-infrastructure-mvp.md` is assembled from this file when the milestone ships on May 22.
+Per-milestone deep-dives for [M4 — Deployment & Operations](./m4-deployment-ops.md). These are the primary execution record: scope, decisions, verification gates (G1..Gn), side notes, and known follow-ups per closed milestone. Listed in chronological order of close.
 
----
-
-## Sprint plan of record — M4 unblock sprint
-
-**Window.** May 13 → ~May 15. Two to three days. Closes before M4 main deliverables begin.
-
-**Why this sprint exists.** Most "M4 blockers" in `docs/audits/m3-m4/audit/dev-prod-gaps.md` are application-code changes, not DevOps work. If the application code is not fixed first, the DevOps teammate starts building Docker Compose / Dockerfiles / Helm / CI-CD against an app that produces CORS errors, redirect loops, missing env vars, and Keycloak auth failures the moment containers come up on separate origins. That is a guaranteed stall. This sprint runs ahead of the DevOps work to remove those failures, so the DevOps teammate begins against an app that already behaves correctly in a multi-origin, reverse-proxied, container-deployed setup.
-
-**Scope — 9 items from `docs/audits/m3-m4-audit/dev-prod-gaps.md`.**
-
-| Group | Items | Owner | Status at sprint start |
-|---|---|---|---|
-| Origin & routing (backend) | C1, H7, A1 backend | Erdi | Open |
-| Frontend build-time config | F1, F2, A2 (`.dockerignore`) | Erdi | Open |
-| Realm config | A6, E5 (decision-only this sprint) | Erdi + DevOps | A6 done; A1 realm done; E5 decision pending |
-| K8s readiness | H1 (readiness probe) | Erdi | Open |
-| Migration bundle | D2 | Erdi (artifact); DevOps (K8s wiring) | Open |
-
-Detail per item — fix shape, risk, and dependencies — lives in `docs/audits/dev-prod-gaps.md`. This file is the execution log, not the spec.
-
-**Out of scope.** Anything not in the 9 items above. In particular: Anthropic OCR retry hardening (H2), RabbitMQ correlation ID propagation (L3), Redis fallback strategy (H4), brute-force protection (A4), Postgres pool tuning (D3), rate-limit boundary tests (C2), multi-tenancy retrofit, OWASP ZAP findings, IDOR existence leak. All deferred to M4 main work or M5.
-
-**Sprint exit criteria — verification gate.** When all 9 items are closed, a multi-container `docker compose up` succeeds and a browser at `http://localhost:3000` can:
-1. Reach `http://localhost:5042/api/v1/health/live` without CORS errors.
-2. Initiate Keycloak login without redirect URI rejection.
-3. Complete a JWT-authenticated API call end-to-end.
-4. Have no `.env.local` content baked into the frontend production image.
-
-When all four pass, message DevOps teammate that app-code blockers are cleared and M4 main deliverables are green-lit.
-
-**Decisions already made (do not re-litigate during the sprint).**
-- Loki + Grafana stays. No migration to ELK. Will document the deviation in the M5 architecture doc.
-- Multi-tenancy work is deferred to M5. Global-query-filter retrofit during M4 risks breaking the Docker / Helm / CI work.
-- OCR table extraction (`PaymentReceiptOcr`) deferred to M5, batched with multi-tenancy migration.
-- IDOR existence leak (foreign payment ID → 403 instead of 404) deferred to M5 — fixing it after the OWASP ZAP scan produces a better paper trail.
-- CI/CD scope is lint → test → build → push. "Deploy via pipeline" is out of scope; manual `helm upgrade` for the demo is acceptable.
-- K8s deployment target is the real cluster provided by Gjirafa. No local kind / k3d / minikube.
-- Linear stays as the project board.
-
-**Order of execution within the sprint.**
-1. **Plan 1 — backend origin & routing** (C1, H7, A1 backend). Most likely to surface unknowns; ships first. *Completed 2026-05-13.*
-2. **Plan 2 — frontend build-time config** (F1, F2, A2). One decision (Docker build-arg injection for `NEXT_PUBLIC_*`) executed twice plus a static `.dockerignore` file.
-3. **Plan 3 — realm + decision items** (A6 verification, E5 decision). A6 is already shipped on this branch; E5 is a documented decision for DevOps teammate, no code.
-4. **Plan 4 — K8s readiness** (H1).
-5. **Plan 5 — migration bundle artifact** (D2 artifact; K8s integration is DevOps teammate's M4 work).
-
-Each plan is scoped to be reviewable as a single commit and verifiable against a concrete curl / build / test command.
-
-
-## Post-lease tenant visibility on Tenants page
-
-Per `portals.md`: "Tenants with any prior active lease are never auto-deleted. Post-lease accounts persist with read-only access — show as read-only, not inactive or deleted."
-
-The current `GetLandlordTenantsHandler` filters to active leases only, which means tenants whose leases have ended (status `ReadOnly`) disappear from the Tenants page. This contradicts portals.md.
-
-**Required work:**
-1. Decide where read-only tenants surface: same Tenants page with a status badge, or a separate "Past Tenants" / archived view.
-2. If same page: replace `ListActiveTenantsByLandlordAsync` with a tenant-centric query (likely on `ITenantRepository` or `IUserRepository`) that returns distinct users with any lease relationship to the landlord, plus a derived current-status column.
-3. Update `LandlordTenantDto` to expose tenant account status, not just lease status.
-
-**Why deferred:** product decision on where post-lease tenants render still open. Path A (active-only) ships first to unblock the Tenants page.
 ---
 
 ### 2026-05-13 — M4 unblock sprint, Plan 2 (F1, F2, A2)
@@ -285,7 +224,7 @@ This deviation is also surfaced in the M5 architecture doc (per the original dec
 
 ---
 
-## 2026-05-19 — M4.2 Production Dockerfile hardening
+### 2026-05-19 — M4.2 Production Dockerfile hardening
 
 **Scope.** Replace the M4.1 "verification-grade" Dockerfiles for the .NET API and Next.js frontend with production-hardened versions. Backend moves to a chiseled (Ubuntu Noble Chiseled) runtime running as non-root UID 1654; frontend moves to Next.js standalone output running as non-root `node` user. Adds a `backend-storage-init` compose service to fix volume ownership for the non-root backend container — same init-container pattern as the existing `keycloak-realm-init`. Adds `scripts/reset-dev-stack.sh` for atomic teardown of stateful volumes.
 
@@ -1129,5 +1068,95 @@ Live verification deferred to first deploy. Same scope-split-acceptance rational
 **M3 grade impact.** None — M4.8 is the M4 row.
 
 **M4 deliverable progress.** 9 of 12 closed. Closed: M4.1 (compose), M4.2 (production Dockerfiles), M4.3 (CI/CD lint→test→build→push), M4.4 (chart + CD), M4.5 (monitoring), M4.6 (Uptime Kuma), M4.8 (this entry), M4.9 (Nginx + SSL), M4.11 (AIOps webhook). Remaining: M4.7 (Terraform — provisions DOKS + managed Postgres + DNS), M4.10 (Linux server), M4.12 (AI Log Entry #4).
+
+---
+
+### 2026-05-25 — M4.7 Terraform (DOKS + managed Postgres + Spaces)
+
+**Scope.** Close M4.7 — "Cloud infrastructure provisioned declaratively." Stand up the production-shaped DigitalOcean stack the Helm chart from M4.4 deploys onto: a Kubernetes cluster, a managed Postgres, and a Spaces bucket for the M5 file-storage path. Make the chart deploy interchangeably against in-cluster Postgres (M4.4 default) or the managed Postgres provisioned here, gated by a single Helm value.
+
+**Changes.**
+
+*Bootstrap module — `infrastructure/terraform/bootstrap/`.*
+- `main.tf` — `random_id` suffix + `digitalocean_spaces_bucket.tfstate` (versioned, no `force_destroy`) + outputs. Holds its own state in local `terraform.tfstate` by design; it provisions the remote-state bucket itself, so the chicken-and-egg is resolved by keeping bootstrap state local and committing nothing.
+- `versions.tf` — same provider set as the main module but **no backend block** (local state).
+- `variables.tf`, `terraform.tfvars.example` — `do_token`, `spaces_access_id`, `spaces_secret_key`, `region`, `bucket_name_prefix`.
+- `cluster-issuer.yaml` — staged cert-manager `ClusterIssuer` manifest for the post-bootstrap one-shot `kubectl apply` (cert-manager itself remains a manual helm install per the k8s runbook; provisioning the issuer here keeps the artifact discoverable next to its companions).
+- `README.md` — one-shot recipe.
+
+*Root module — `infrastructure/terraform/`.*
+- `cluster.tf` — `digitalocean_kubernetes_cluster.myproperty`. Region `fra1`, version `1.34.8-do.0`, fixed pool of 2× `s-2vcpu-4gb` nodes. Autoscaling deliberately off — bursting cost is unbounded in the demo window.
+- `database.tf` — `digitalocean_database_cluster` (PG 16, `db-s-1vcpu-1gb`, single node, same VPC as the cluster) + `digitalocean_database_db.myproperty` + `digitalocean_database_user.myproperty_app` (non-admin; DO generates the password) + `digitalocean_database_firewall` with a `type = "k8s"` rule keyed to the cluster ID — only the DOKS cluster can reach the DB.
+- `spaces.tf` — `random_id` suffix + `digitalocean_spaces_bucket.receipts` + `digitalocean_spaces_key.receipts` (scoped read/write to that bucket). Pre-provisioned for the M5 receipts migration; the M3.9 `IFileStorage` contract already maps to the S3 API.
+- `outputs.tf` — cluster endpoint + name + ID, DB private host/port/user/password/database, receipts bucket name + key/secret. Credentials marked `sensitive`.
+- `versions.tf` — `digitalocean/digitalocean ~> 2.46` (resolves to 2.87.0, locked via `.terraform.lock.hcl`), `random ~> 3.5`, S3 backend block targeting the bootstrap bucket (`REPLACE_WITH_BOOTSTRAP_OUTPUT` placeholder so the file is committable; bucket name passed at `init` time via `-backend-config`).
+- `variables.tf`, `terraform.tfvars.example` — three required credentials, flat per-knob variables for region/sizes/names with safe defaults. Nested objects rejected because they force whole-block overrides for single-field changes.
+- `README.md` — five-line pointer to the operations doc.
+- `.gitignore` — `*.tfstate*`, `.terraform/`, `terraform.tfvars`, `plan.bin`.
+
+*Helm chart toggle for managed Postgres.*
+- `helm/myproperty/values.yaml` — new `postgres.enabled` flag (default `true`, preserving M4.4 behaviour). When `false`, the chart skips the in-cluster Postgres StatefulSet/Service/ConfigMap entirely and the backend reads `POSTGRES_HOST` / `POSTGRES_PORT` from the bootstrap-provisioned `myproperty-postgres` Secret instead of the static `postgres:5432` service name.
+- `templates/data/postgres-{statefulset,service,init-configmap}.yaml` — wrapped in `{{- if .Values.postgres.enabled }}` guards.
+- `templates/app/backend-deployment.yaml` + `templates/app/migration-job.yaml` — host/port pulled from Secret keys (`postgres-host`, `postgres-port`) instead of constants. Connection-string template gained `SSL Mode=Require;Trust Server Certificate=true` so managed PG (TLS-required, self-signed CA) and in-cluster PG (plaintext, SSL flags no-op) both work without separate templates.
+- `templates/data/keycloak-deployment.yaml` — managed-PG fixes (DB host wiring + a `keycloak` schema-grant note in the runbook); known follow-up: `KC_DB_URL` is still hardcoded to `jdbc:postgresql://postgres:5432/keycloak`, breaks under `postgres.enabled=false`. Documented in the M4.8 follow-ups too; fix is a Step 7.5 patch on the next deploy.
+- `templates/namespace.yaml` deleted. Helm's default `before-hook-creation` delete-policy on the existing `pre-install,pre-upgrade` hook caused the namespace to be deleted-and-recreated on every install, wiping Secrets pre-created by the bootstrap runbook. Install now uses `--create-namespace`; pod-security labels are an operator step in the runbook (and a known follow-up to codify via the `kubernetes` provider).
+
+*CD wiring.*
+- `.github/workflows/cd.yml` — `--set postgres.enabled=false` on the cluster deploy step. CD targets managed PG; local compose / kind / school-grader paths keep the in-cluster default.
+
+*Realm + ops docs.*
+- `infrastructure/keycloak/realm-export.template.json` — minor adjustment for the managed-PG keycloak path (envsubst flow unchanged).
+- `docs/operations/terraform.md` (new, 503 lines) — full Terraform runbook. Sections: overview matrix (what Terraform owns vs what stays manual), prerequisites (Terraform, doctl, DO PAT scopes, Spaces key pair), file structure, variable strategy + defaults table, secrets handling (three categories: tfvars / remote state / k8s Secrets), bootstrap recipe (state bucket → wire backend → apply main → capture outputs → hand off to k8s runbook), day-2 apply recipe, teardown recipe (ordered: helm uninstall → ingress-nginx uninstall → PVC delete → terraform destroy main → terraform destroy bootstrap, with the "destroy without cleaning PVCs leaves orphaned volumes billing" trap called out), Terraform-vs-manual rationale table, M4.4 chart integration handoff (the exact `kubectl create secret` command sourcing from `terraform output -json`), cost summary (~$3/day live, ~$15 for 5-day demo window), operational notes (state drift, provider pinning, private vs public host, why no PgBouncer, SSL flags rationale, default-VPC sharing), known follow-ups list.
+- `docs/operations/k8s-deployment.md` (+88 lines) — new "Step 7.5 — DB bootstrap for managed Postgres" runbook entry covering the `GRANT ALL ON SCHEMA public` workaround for the non-owner app user; new "Terraform handoff" cross-reference at the top of the runbook.
+
+**Decisions.**
+
+- **DOKS as the managed-cluster target.** Gjirafa provides the production cluster but has not granted kubectl access during the M4 window; M4.10 (self-managed Linux server) was descoped because it duplicates the deployment-practice surface without learning value. DOKS is the cheapest managed K8s on a provider whose object storage (Spaces) already satisfies the M3.9 `IFileStorage` contract. AKS/GKE were considered; both cost more on the demo window and don't ship S3-compatible object storage in the same UI.
+- **Managed Postgres 16, not Postgres in-cluster.** `postgres.enabled=false` on the cluster deploy. A stateful workload on a 2-node demo cluster is operationally fragile (PVC binding races during destroy/recreate, no backups, manual restore practice). Managed PG removes the backup/upgrade/HA burden for the demo and matches what a real deploy would do. The in-cluster path stays as the default so local compose and school-grader environments still work unchanged.
+- **One chart, `postgres.enabled` toggle — not separate value-files.** Single chart renders both topologies via one boolean. Separate value-files would have meant duplicated YAML drift and two CI rendering surfaces. Cost: the chart templates carry both code paths; benefit: one source of truth, switch is one `--set`.
+- **Separate bootstrap stack for the state bucket.** Standard chicken-and-egg pattern — the bucket holding remote state can't itself live in remote state. Bootstrap state stays local + gitignored; the bucket is created once and rarely touched again.
+- **Pre-provision the receipts Spaces bucket now (M5 path).** The M5 file-storage migration is a one-template Helm change once the bucket and access key exist. Provisioning the bucket inside M4.7 means M5 starts at the consumer wiring, not at the cloud-resource creation. The bucket starts empty; the cost is the flat Spaces minimum (~$5/month, identical to the state bucket).
+- **Provider pin `~> 2.46`, lockfile committed.** Allows minor bumps but blocks 3.x silent breakage at `terraform init`. `.terraform.lock.hcl` is committed so CI and every contributor resolve to the exact same provider binary.
+- **`private_host` from the cluster, not public.** `outputs.tf` exposes `digitalocean_database_cluster.myproperty.private_host`. Cluster and DB share the default `fra1` VPC; private-host traffic stays inside DO's network, faster and tighter firewall posture. Switching to public host would require widening the DB firewall to allow internet IPs — unnecessary.
+- **`SSL Mode=Require;Trust Server Certificate=true`.** DO managed PG requires TLS and signs with a self-signed CA. Validating the CA properly requires shipping DO's CA bundle as a ConfigMap mounted into backend + migration-job pods — non-trivial work and not justified while traffic stays inside the private VPC. Documented as a post-M4 hardening follow-up.
+- **Port 25060 (direct), not 25061 (PgBouncer transaction pooling).** Npgsql has its own pool. PgBouncer in transaction mode breaks server-side cursors and prepared-statement features EF Core uses. No benefit at demo traffic volumes for a single-pod backend.
+- **DNS stays manual at Name.com.** The community `namedotcom` provider has no HashiCorp backing — extra fragility on a deadline. Three A records added by hand after the load balancer's IP is known. Tracked as a known follow-up.
+- **Kubernetes Secrets stay manual (`kubectl create secret`) — not via the `kubernetes` provider.** That provider needs to connect to the cluster, creating a circular dependency in `terraform apply` (cluster must exist before the provider can authenticate). The bootstrap runbook keeps the pattern explicit; M4.8's ESO path supersedes it for production, sealed-secrets is the fallback.
+
+**Verification.**
+
+- **G1** (terraform syntax): `terraform fmt -check -recursive infrastructure/terraform/` exits 0; `terraform validate` clean in both `bootstrap/` and root modules after `init`.
+- **G2** (chart renders defaults): `helm template helm/myproperty | grep -c 'kind: StatefulSet'` ≥ 1 — in-cluster Postgres path preserved when `postgres.enabled` defaults to `true`. Backend-deployment env block resolves `postgres-host`/`postgres-port` against the chart's own ConfigMap-backed values.
+- **G3** (chart renders managed-PG mode): `helm template helm/myproperty --set postgres.enabled=false | grep -E 'postgres-statefulset|postgres-service|postgres-init'` returns zero matches; backend-deployment + migration-job still render and pull `postgres-host`/`postgres-port` from the `myproperty-postgres` Secret.
+- **G4** (live apply): per `[M4.7 deploy state]` memory — bootstrap state bucket created, main `terraform apply` produced cluster + DB + receipts bucket in ~10 minutes (DOKS ~3–5 min to `running`, managed PG ~5 min to `online`). Outputs captured via `terraform output -json` and consumed by the `kubectl create secret myproperty-postgres` step from the runbook.
+- **G5** (docs cross-references): `docs/operations/terraform.md` ↔ `docs/operations/k8s-deployment.md` link both ways (Terraform handoff at top of k8s runbook, k8s runbook reference at end of Terraform bootstrap recipe).
+- **G6** (CD wiring): `cd.yml`'s `helm upgrade --install` invocation contains `--set postgres.enabled=false` — verified by grep.
+
+**Live-deploy validation deferred to first post-merge CD run.** Same gating as M4.4 / M4.8: the chart is complete-by-construction up to `helm template | kubectl --dry-run=client apply -f -`; the migration-job actually connecting through TLS to the managed DB and the backend pod actually resolving the Secret-driven host/port are exercised on the next cluster deploy. The currently-known blocker — `keycloak`'s hardcoded `KC_DB_URL` — is captured as a follow-up rather than gating this milestone.
+
+**Side notes / deviations.**
+
+- **`terraform output -raw` is unsafe inside shell `$()` captures.** Terraform writes warnings and ANSI-decorated diagnostics to stdout; a `-raw` capture interleaved that into a password and produced an Npgsql parser error at index 125 of the connection string during initial bootstrap. Runbook examples standardize on `terraform output -json <name> | jq -r` — the JSON path is decoration-free. (Already memorialized in `[Terraform output capture]` memory so it doesn't recur.)
+- **Postgres `public` schema grant — manual one-shot, not declarative.** On PG 15+, a non-owner DB user (the app user, here) cannot create objects in `public`. The first EF migration fails with `42501: permission denied for schema public`. Manual fix tonight: throwaway in-cluster psql pod connecting as `doadmin` (DB firewall blocks external access), `GRANT ALL ON SCHEMA public TO myproperty_app; ALTER SCHEMA public OWNER TO myproperty_app;`. Codifying via the `postgresql` provider is a known follow-up so fresh `terraform apply` lands a working DB without the runbook step.
+- **Receipts bucket idle.** Bucket + access key exist; no consumer ships in M4.7. The M5 file-storage migration is a one-template Helm change plus a `FileStorage__S3*` Secret populated from Terraform outputs. Provisioning early was deliberate — moves the M5 work off the cloud-resource-creation critical path.
+- **`templates/namespace.yaml` deletion.** A Helm `pre-install,pre-upgrade` hook on the namespace template with the default `before-hook-creation` delete-policy was wiping pre-bootstrapped Secrets on every install. Removing the template fixed it; pod-security labels are now an operator step in the runbook. Codifying via `kubernetes_namespace` is a known follow-up; the right place for it is Terraform (declarative labels) rather than Helm (lifecycle-coupled to releases).
+- **No Workload Identity for ESO (M4.8 carry-forward).** DOKS doesn't ship federated-credential workload identity. The bootstrap-secret path documented in M4.8 is the one that actually works on this provider; switching to workload-identity requires moving off DOKS or waiting for DO's roadmap.
+
+**Known follow-ups (out of scope for M4.7).**
+
+- **Keycloak `KC_DB_URL` templated from the Postgres Secret.** Line 83 of `keycloak-deployment.yaml` hardcodes `jdbc:postgresql://postgres:5432/keycloak`, which 404s under `postgres.enabled=false`. Two paths: (a) keep a minimal in-cluster Postgres for keycloak's separate DB even in managed-PG mode, (b) template `KC_DB_URL` from the `myproperty-postgres` Secret host/port and create a `keycloak` database + user with grants on the managed cluster. Path (b) is cleaner; deferred to the next deploy.
+- **CD short-SHA bug.** `.github/workflows/cd.yml` passes `${{ github.sha }}` (40-char) to `--set <component>.image.tag`, but CI tags images with the 7-char `SHORT_SHA`. Auto-deploys on push to `develop`/`main` cannot pull the images CI just published — every "successful" deploy was actually a manual one. Fix: compute `SHORT_SHA` in `cd.yml` and use it in the `--set` flags, or additionally push the full-SHA tag from CI.
+- **`terraform apply` in CI/CD.** Provisioning is manual; CD assumes cluster + DB exist. Adding a `terraform plan` PR-comment job + a gated `apply` on merge requires DO credentials in GHA secrets, plan-approval workflow, and remote-state locking. Post-M4.
+- **Terraform-managed DNS.** Three A records currently provisioned by hand at Name.com. Move into Terraform once the deadline pressure is off; `namedotcom` provider quality decides whether it's worth the move.
+- **Terraform-managed Kubernetes Secrets.** Use the `kubernetes` provider (or SealedSecrets per M4.8) so the bootstrap runbook drops the `kubectl create secret` step. Currently blocked on the cluster-must-exist-first circular dependency; resolved by splitting the stack into two stages.
+- **Postgres schema grants via the `postgresql` provider.** Codify the `GRANT ALL ON SCHEMA public` workaround so a fresh `terraform apply` lands a working DB.
+- **TLS CA validation for managed PG.** Replace `Trust Server Certificate=true` with `VerifyFull` + a mounted DO CA bundle ConfigMap. 30–45 min of work; defer until the cert-validation gap matters operationally (it doesn't while traffic stays inside the private VPC).
+- **CloudNativePG operator instead of managed Postgres.** Reverses the in-cluster vs managed direction once multi-tenancy + backups + PITR + connection pooling matter at the operator level. M5 conversation.
+- **Provider-version Dependabot/renovate for the Terraform lockfile.** Auto-bump `digitalocean/digitalocean` minor versions like the .NET / Node lockfiles already do.
+- **Nightly cluster teardown for cost.** Each day live costs ~$3; forgotten cluster runs through the month at ~$90. Wire a scheduled GitHub Action (`terraform destroy` main module, with manual approval gate) so the cluster only exists during active demo windows.
+
+**M3 grade impact.** None — M4.7 is the M4 row.
+
+**M4 deliverable progress.** 11 of 12 closed. Closed: M4.1 (compose), M4.2 (production Dockerfiles), M4.3 (CI/CD lint→test→build→push), M4.4 (chart + CD), M4.5 (monitoring), M4.6 (Uptime Kuma), M4.7 (this entry — Terraform DOKS + managed PG + Spaces), M4.8 (security hardening), M4.9 (Nginx + SSL), M4.11 (AIOps webhook). Not pursued: M4.10 (Linux server — superseded; Gjirafa-provided cluster + M4.7's DOKS provisioning cover the same deployment-practice surface). Remaining: M4.12 (AI Log Entry #4 — owned outside the milestone-docs branch).
 
 ---
