@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Leases.Queries.GetTenantLease;
 using MyProperty.Application.Users.Queries.GetMe;
 using Swashbuckle.AspNetCore.Annotations;
 
@@ -21,6 +22,7 @@ namespace MyProperty.Api.Controllers.V1;
 [EnableRateLimiting("authenticated")]
 public sealed class MeController(
     IUserRepository userRepository,
+    GetTenantLeaseHandler getTenantLease,
     ICurrentUser currentUser) : ControllerBase
 {
     /// <summary>
@@ -74,5 +76,27 @@ public sealed class MeController(
             Phone: user.Phone,
             AccountStatus: user.AccountStatus,
             Roles: currentUser.Roles));
+    }
+
+    /// <summary>
+    /// Returns the active lease for the authenticated tenant.
+    /// Returns 204 if the tenant has no active lease.
+    /// </summary>
+    [HttpGet("lease")]
+    [Authorize(Policy = "RequireTenant")]
+    [SwaggerOperation(
+        Summary = "Active lease for current tenant",
+        Description = "Returns the tenant's active lease summary, or 204 if none exists.")]
+    [ProducesResponseType(typeof(TenantLeaseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<TenantLeaseDto>> Lease(CancellationToken ct)
+    {
+        var user = await userRepository.GetOrSyncFromClaimsAsync(User, ct);
+        var result = await getTenantLease.Handle(new GetTenantLeaseQuery(), ct);
+        if (result is null)
+            return NoContent();
+        return Ok(result);
     }
 }

@@ -1,0 +1,65 @@
+# =============================================================
+#  infrastructure/alertmanager/alertmanager.yml
+#
+#  M4.5 Alertmanager config. Receives firing alerts from Prometheus
+#  (configured in infrastructure/prometheus/prometheus.yml), groups
+#  them, and forwards to receivers.
+#
+#  Receiver shape: a single webhook receiver wired to the M4.11 AIOps
+#  pipeline (Webhook → LLM → Slack auto-triage). The webhook URL targets
+#  the internal `aiops-webhook` service on the compose docker network.
+#  The firing alert is visible in:
+#    - http://localhost:9090/alerts          (Prometheus)
+#    - http://localhost:9093/#/alerts        (Alertmanager UI)
+#    - the "Active alerts" Grafana panel     (M4.5 dashboard)
+#    - Slack (or stdout → Loki when SLACK_WEBHOOK_URL is unset)
+# =============================================================
+
+global:
+  # If a resolved alert is not re-fired within this window, Alertmanager
+  # considers it resolved and stops notifying. 5m matches the longest `for:`
+  # in our rules so we do not flap resolved/firing.
+  resolve_timeout: 5m
+
+# Routing tree — Alertmanager walks this top-down; first matching node wins.
+# The single default route catches everything since we have one receiver.
+# When M4.11 adds severity-based routing (critical → page, warning → digest),
+# the structure converts to a `routes:` list under the top-level route.
+route:
+  receiver: aiops-webhook
+  # Group alerts that share the same alertname + service so a burst of "API
+  # down" alerts across replicas produces one notification, not N.
+  group_by: ["alertname", "service"]
+  # Wait this long after the first alert in a new group before notifying,
+  # so co-arriving alerts in the same group ride along in the same payload.
+  group_wait: 30s
+  # After the first notification for a group, throttle further notifications
+  # for the same group to this cadence (covers new alerts joining the group).
+  group_interval: 1m
+  # If a group stays firing, re-notify every this often. 4h is a sensible
+  # default for non-critical; M4.11 will tighten this for critical via a
+  # routes: subnode.
+  repeat_interval: 4h
+
+receivers:
+  - name: aiops-webhook
+    # M4.11 registered the AIOps webhook receiver service at this URL.
+    # Override via Helm value in K8s to point at the deployed AIOps webhook.
+    webhook_configs:
+      - url: http://aiops-webhook:5001/alerts
+        # send_resolved=true so the AIOps receiver also gets a "resolved"
+        # payload when an alert clears — needed for the auto-triage flow
+        # to update an existing Slack thread instead of opening a new one.
+        send_resolved: true
+
+# Inhibition rules let one alert suppress others — e.g. while the whole API
+# is down, do not also page on "high error rate" / "high latency" derived
+# from the same outage. Keeps the AIOps inbox readable.
+inhibit_rules:
+  - source_matchers:
+      - alertname = "MyPropertyApiDown"
+    target_matchers:
+      - service = "api"
+    # Inhibit any other alert from the same service group; the root cause
+    # is already in the firing critical alert.
+    equal: ["service"]

@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-uptime-kuma
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: uptime-kuma
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Kuma's UI is socket.io-based — same long-lived WebSocket story as the
+    # SignalR backend ingress. Without these timeouts the dashboard reconnects
+    # every ~60s and looks like a Kuma bug. Match the M4.9 nginx api vhost.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.myproperty.works
+        - api.myproperty.works
+        - auth.myproperty.works
+        - {{ .Values.uptimeKuma.publicHost }}
+      secretName: myproperty-tls
+  rules:
+    - host: {{ .Values.uptimeKuma.publicHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: uptime-kuma
+                port:
+                  name: http

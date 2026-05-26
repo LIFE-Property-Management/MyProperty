@@ -34,13 +34,13 @@ public sealed class RabbitMqConnectionProvider(IOptions<RabbitMqOptions> options
 
             var factory = new ConnectionFactory
             {
-                HostName             = _options.HostName,
-                Port                 = _options.Port,
-                UserName             = _options.UserName,
-                Password             = _options.Password,
-                VirtualHost          = _options.VirtualHost,
+                HostName = _options.HostName,
+                Port = _options.Port,
+                UserName = _options.UserName,
+                Password = _options.Password,
+                VirtualHost = _options.VirtualHost,
                 AutomaticRecoveryEnabled = true,
-                TopologyRecoveryEnabled  = true,
+                TopologyRecoveryEnabled = true,
             };
 
             _connection = await factory.CreateConnectionAsync(ct);

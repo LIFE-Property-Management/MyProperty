@@ -1,5 +1,6 @@
 using MyProperty.Domain.Common;
 using MyProperty.Domain.Enums;
+using MyProperty.Domain.Exceptions;
 
 namespace MyProperty.Domain.Entities;
 
@@ -18,7 +19,13 @@ public class Lease : BaseEntity
     public required DateOnly EndDate { get; set; }
     public required decimal MonthlyRent { get; set; }
     public required string Currency { get; set; }
-    public required LeaseStatus Status { get; set; } = LeaseStatus.Active;
+    public LeaseStatus Status { get; private set; } = LeaseStatus.Active;
 
+    public void Terminate()
+    {
+        if (Status == LeaseStatus.Terminated)
+            throw new LeaseAlreadyTerminatedException(Id);
+        Status = LeaseStatus.Terminated;
+    }
     public ICollection<Payment> Payments { get; set; } = [];
 }

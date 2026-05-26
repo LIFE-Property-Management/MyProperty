@@ -28,17 +28,17 @@ public sealed class GetInviteByTokenHandler(
             throw new NotFoundException("Invite", "token");
 
         return new InvitePreviewDto(
-            PropertyName:        invite.Property!.Name,
-            PropertyAddress:     invite.Property.Address,
-            LandlordFullName:    $"{invite.Landlord!.FirstName} {invite.Landlord.LastName}",
-            TenantFirstName:     invite.FirstName,
-            TenantLastName:      invite.LastName,
-            TenantEmail:         invite.Email,
-            ProposedStartDate:   invite.ProposedStartDate,
-            ProposedEndDate:     invite.ProposedEndDate,
+            PropertyName: invite.Property!.Name,
+            PropertyAddress: invite.Property.Address,
+            LandlordFullName: $"{invite.Landlord!.FirstName} {invite.Landlord.LastName}",
+            TenantFirstName: invite.FirstName,
+            TenantLastName: invite.LastName,
+            TenantEmail: invite.Email,
+            ProposedStartDate: invite.ProposedStartDate,
+            ProposedEndDate: invite.ProposedEndDate,
             ProposedMonthlyRent: invite.ProposedMonthlyRent,
-            Currency:            invite.Currency,
-            ExpiresAt:           invite.ExpiresAt);
+            Currency: invite.Currency,
+            ExpiresAt: invite.ExpiresAt);
     }
 
     private static string HashToken(string plainToken)

@@ -20,27 +20,27 @@ import Spinner from '@/components/ui/Spinner'
 export type ColumnAlign = 'left' | 'right' | 'center'
 
 export interface Column<T> {
-    key: string
-    header: string
-    accessor: (row: T) => ReactNode
-    align?: ColumnAlign
-    /**
-     * Tailwind width class (e.g. "w-32", "w-1/4"). Concatenated into the cell's
-     * className. CSS values like "120px" will NOT work — pass a Tailwind class.
-     */
-    width?: string
-    className?: string
+  key: string
+  header: string
+  accessor: (row: T) => ReactNode
+  align?: ColumnAlign
+  /**
+   * Tailwind width class (e.g. "w-32", "w-1/4"). Concatenated into the cell's
+   * className. CSS values like "120px" will NOT work — pass a Tailwind class.
+   */
+  width?: string
+  className?: string
 }
 
 export interface DataTableProps<T> {
-    columns: Column<T>[]
-    data: T[]
-    isLoading?: boolean
-    emptyMessage?: string
-    getRowKey: (row: T, index: number) => string
-    onRowClick?: (row: T) => void
-    caption?: string
-    className?: string
+  columns: Column<T>[]
+  data: T[]
+  isLoading?: boolean
+  emptyMessage?: string
+  getRowKey: (row: T, index: number) => string
+  onRowClick?: (row: T) => void
+  caption?: string
+  className?: string
 }
 
 const WRAPPER_CLASSES =
@@ -71,113 +71,113 @@ const TD_BASE_CLASSES = 'px-4 py-3 text-primary-text'
 const STATE_CELL_CLASSES = 'px-4 py-8 text-center text-muted-text'
 
 const ALIGN_CLASSES: Record<ColumnAlign, string> = {
-    left: 'text-left',
-    right: 'text-right',
-    center: 'text-center',
+  left: 'text-left',
+  right: 'text-right',
+  center: 'text-center',
 }
 
 function DataTable<T>({
-                          columns,
-                          data,
-                          isLoading = false,
-                          emptyMessage = 'No data',
-                          getRowKey,
-                          onRowClick,
-                          caption,
-                          className,
+                        columns,
+                        data,
+                        isLoading = false,
+                        emptyMessage = 'No data',
+                        getRowKey,
+                        onRowClick,
+                        caption,
+                        className,
                       }: DataTableProps<T>) {
-    const wrapperClasses =
-        WRAPPER_CLASSES + (className ? ' ' + className : '')
+  const wrapperClasses =
+      WRAPPER_CLASSES + (className ? ' ' + className : '')
 
-    const renderBody = () => {
-        if (isLoading) {
-            return (
-                <tr>
-                    <td colSpan={columns.length} className={STATE_CELL_CLASSES}>
+  const renderBody = () => {
+    if (isLoading) {
+      return (
+          <tr>
+            <td colSpan={columns.length} className={STATE_CELL_CLASSES}>
             <span className="inline-flex items-center justify-center">
               <Spinner size="md" />
             </span>
-                    </td>
-                </tr>
-            )
-        }
-
-        if (data.length === 0) {
-            return (
-                <tr>
-                    <td colSpan={columns.length} className={STATE_CELL_CLASSES}>
-                        {emptyMessage}
-                    </td>
-                </tr>
-            )
-        }
-
-        return data.map((row, index) => {
-            const rowKey = getRowKey(row, index)
-            const rowClasses =
-                ROW_BASE_CLASSES + (onRowClick ? ' ' + ROW_CLICKABLE_CLASSES : '')
-
-            const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
-                if (!onRowClick) return
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    onRowClick(row)
-                }
-            }
-
-            return (
-                <tr
-                    key={rowKey}
-                    className={rowClasses}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    onKeyDown={onRowClick ? handleKeyDown : undefined}
-                    tabIndex={onRowClick ? 0 : undefined}
-                    role={onRowClick ? 'button' : undefined}
-                >
-                    {columns.map((column) => {
-                        const alignClass = ALIGN_CLASSES[column.align ?? 'left']
-                        const tdClasses =
-                            TD_BASE_CLASSES +
-                            ' ' +
-                            alignClass +
-                            (column.width ? ' ' + column.width : '') +
-                            (column.className ? ' ' + column.className : '')
-                        return (
-                            <td key={column.key} className={tdClasses}>
-                                {column.accessor(row)}
-                            </td>
-                        )
-                    })}
-                </tr>
-            )
-        })
+            </td>
+          </tr>
+      )
     }
 
-    return (
-        <div className={wrapperClasses}>
-            <table className={TABLE_CLASSES}>
-                {caption && <caption className="sr-only">{caption}</caption>}
-                <thead>
-                <tr className={THEAD_ROW_CLASSES}>
-                    {columns.map((column) => {
-                        const alignClass = ALIGN_CLASSES[column.align ?? 'left']
-                        const thClasses =
-                            TH_BASE_CLASSES +
-                            ' ' +
-                            alignClass +
-                            (column.width ? ' ' + column.width : '')
-                        return (
-                            <th key={column.key} scope="col" className={thClasses}>
-                                {column.header}
-                            </th>
-                        )
-                    })}
-                </tr>
-                </thead>
-                <tbody>{renderBody()}</tbody>
-            </table>
-        </div>
-    )
+    if (data.length === 0) {
+      return (
+          <tr>
+            <td colSpan={columns.length} className={STATE_CELL_CLASSES}>
+              {emptyMessage}
+            </td>
+          </tr>
+      )
+    }
+
+    return data.map((row, index) => {
+      const rowKey = getRowKey(row, index)
+      const rowClasses =
+          ROW_BASE_CLASSES + (onRowClick ? ' ' + ROW_CLICKABLE_CLASSES : '')
+
+      const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+        if (!onRowClick) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onRowClick(row)
+        }
+      }
+
+      return (
+          <tr
+              key={rowKey}
+              className={rowClasses}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              onKeyDown={onRowClick ? handleKeyDown : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              role={onRowClick ? 'button' : undefined}
+          >
+            {columns.map((column) => {
+              const alignClass = ALIGN_CLASSES[column.align ?? 'left']
+              const tdClasses =
+                  TD_BASE_CLASSES +
+                  ' ' +
+                  alignClass +
+                  (column.width ? ' ' + column.width : '') +
+                  (column.className ? ' ' + column.className : '')
+              return (
+                  <td key={column.key} className={tdClasses}>
+                    {column.accessor(row)}
+                  </td>
+              )
+            })}
+          </tr>
+      )
+    })
+  }
+
+  return (
+      <div className={wrapperClasses}>
+        <table className={TABLE_CLASSES}>
+          {caption && <caption className="sr-only">{caption}</caption>}
+          <thead>
+          <tr className={THEAD_ROW_CLASSES}>
+            {columns.map((column) => {
+              const alignClass = ALIGN_CLASSES[column.align ?? 'left']
+              const thClasses =
+                  TH_BASE_CLASSES +
+                  ' ' +
+                  alignClass +
+                  (column.width ? ' ' + column.width : '')
+              return (
+                  <th key={column.key} scope="col" className={thClasses}>
+                    {column.header}
+                  </th>
+              )
+            })}
+          </tr>
+          </thead>
+          <tbody>{renderBody()}</tbody>
+        </table>
+      </div>
+  )
 }
 
 export { DataTable }

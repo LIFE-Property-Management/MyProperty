@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-migration
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      # M4.8 — migration image is now chiseled + non-root (UID 1654),
+      # matching the API image. Pod-level securityContext promotes the
+      # workload to runAsNonRoot so PodSecurity admission accepts it
+      # under PSS=restricted (currently namespace enforces baseline; the
+      # restricted-promotion path is documented in security-hardening.md).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: efbundle
+          image: {{ .Values.migration.image.repository }}:{{ .Values.migration.image.tag }}
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-db
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-port
+            - name: ConnectionStrings__Postgres
+              value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode=Require;Trust Server Certificate=true"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            # Chiseled image has no writable paths required at runtime
+            # (efbundle reads connection string from env, writes only
+            # to stdout/stderr). readOnlyRootFilesystem closes the
+            # final M4.8 hardening box for this workload.
+            readOnlyRootFilesystem: true

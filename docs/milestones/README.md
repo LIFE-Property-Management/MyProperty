@@ -7,7 +7,8 @@ Index of milestone records. Each milestone has its own file: completed milestone
 | Milestone | Window | Status | File |
 |---|---|---|---|
 | M2 — Frontend MVP | through April 17, 2026 | ✅ Complete (with documented debt) | [`m2-frontend-mvp.md`](./m2-frontend-mvp.md) |
-| M3 — Backend MVP | April 23 – May 8, 2026 | 🟢 Active | [`m3-backend-mvp.md`](./m3-backend-mvp.md) |
+| M3 — Backend MVP | April 23 – May 8, 2026 | ✅ Complete | [`m3-backend-mvp.md`](./m3-backend-mvp.md) |
+| M4 — Deployment & Operations | May 13 – May 25, 2026 | ✅ Complete | [`m4-deployment-ops.md`](./m4-deployment-ops.md) |
 
 ## Conventions
 

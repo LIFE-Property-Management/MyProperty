@@ -1,0 +1,61 @@
+# =============================================================
+#  infrastructure/prometheus/prometheus.yml
+#
+#  Local-only metrics scrape config for the docker compose stack.
+#  Wires Prometheus into Grafana via Grafana datasource provisioning
+#  (see infrastructure/grafana/provisioning/datasources/prometheus.yaml)
+#  and into Alertmanager via the alerting block below.
+#
+#  Rule files live in ./alerts/ (mounted at /etc/prometheus/alerts in
+#  the container). New alert groups go in their own file inside that
+#  directory — Prometheus loads everything matching alerts/*.yml on
+#  startup and on SIGHUP / config reload.
+# =============================================================
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: myproperty-dev
+
+# Rule files are evaluated every `evaluation_interval` (15s above).
+# Each file may contain one or more `groups`; each group has its own
+# `rules:` list of alerting / recording rules.
+rule_files:
+  - alerts/*.yml
+
+# Alertmanager fan-out. Prometheus pushes firing alerts here; Alertmanager
+# owns grouping / deduplication / routing to receivers. The webhook
+# receiver wired in infrastructure/alertmanager/alertmanager.yml is the
+# integration seam for M4.11 (AIOps webhook → LLM → Slack auto-triage).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  # Prometheus self-monitoring — useful baseline for a Grafana sanity dashboard
+  # and powers the generic PrometheusTargetDown alert.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # MyProperty API. /metrics is exposed by prometheus-net.AspNetCore middleware
+  # registered in MyProperty.Api/Program.cs (M4.5). The endpoint is AllowAnonymous
+  # so the scrape does not need a JWT.
+  - job_name: myproperty-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8080"]
+        labels:
+          service: api
+
+  # Alertmanager self-scrape — Alertmanager exposes /metrics by default. Lets
+  # the same Grafana stack visualise alert-firing rate alongside API metrics
+  # and gives the GenericTargetDown alert a way to detect Alertmanager itself
+  # going dark.
+  - job_name: alertmanager
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["alertmanager:9093"]

@@ -1,0 +1,157 @@
+name: AIOps Webhook CI
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "infrastructure/aiops-webhook/**"
+      - ".github/workflows/aiops-webhook-ci.yml"
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "infrastructure/aiops-webhook/**"
+      - ".github/workflows/aiops-webhook-ci.yml"
+
+concurrency:
+  group: aiops-webhook-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: infrastructure/aiops-webhook
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: infrastructure/aiops-webhook/requirements-dev.txt
+
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Ruff lint
+        run: ruff check .
+
+  unit-tests:
+    name: Unit tests (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: infrastructure/aiops-webhook/requirements-dev.txt
+
+      - name: Install runtime + dev dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: pytest -v
+
+  webhook-image:
+    name: Build and publish webhook image
+    needs: [lint, unit-tests]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    # Note: image-build steps below use 'uses:' actions with explicit 'context:',
+    # so the file-level defaults.run.working-directory does not affect them.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+        working-directory: ${{ github.workspace }}
+
+      - name: Build and push webhook image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infrastructure/aiops-webhook
+          file: ./infrastructure/aiops-webhook/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/life-property-management/myproperty-aiops-webhook:${{ env.SHORT_SHA }}
+            ghcr.io/life-property-management/myproperty-aiops-webhook:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # M4.8 — Trivy CI quality gate. Same two-pass shape as backend-ci.yml.
+      - name: Trivy SARIF report (non-blocking, CRITICAL+HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-aiops-webhook:${{ env.SHORT_SHA }}
+          format: sarif
+          output: trivy-aiops.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-aiops.sarif
+          category: trivy-aiops
+
+      - name: Trivy quality gate (blocking, CRITICAL only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-aiops-webhook:${{ env.SHORT_SHA }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+      - name: Generate SBOM (CycloneDX)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-aiops-webhook:${{ env.SHORT_SHA }}
+          format: cyclonedx
+          output: sbom-aiops.cdx.json
+          exit-code: '0'
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-aiops-${{ env.SHORT_SHA }}
+          path: sbom-aiops.cdx.json
+          retention-days: 90

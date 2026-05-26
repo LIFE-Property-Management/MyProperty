@@ -1,0 +1,67 @@
+name: CD — deploy to DOKS
+
+on:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: helm upgrade
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.20.0
+
+      - name: Configure kubeconfig
+        run: doctl kubernetes cluster kubeconfig save myproperty-cluster
+
+      - name: Update Helm dependencies
+        run: |
+          cd helm/myproperty
+          helm dependency update
+
+      - name: Helm upgrade
+        id: helm
+        run: |
+          helm upgrade --install myproperty ./helm/myproperty \
+            --namespace myproperty \
+            --create-namespace \
+            --atomic \
+            --timeout 10m \
+            --wait \
+            --set postgres.enabled=false \
+            --set backend.image.tag=${{ github.sha }} \
+            --set frontend.image.tag=${{ github.sha }} \
+            --set migration.image.tag=${{ github.sha }} \
+            --set aiopsWebhook.image.tag=${{ github.sha }}
+
+      - name: Notify Discord (success)
+        if: success()
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+            -d "{\"content\": \"✅ **deploy** \`${{ github.ref_name }}\` → cluster\n• release: myproperty\n• sha: \`${{ github.sha }}\`\n• actor: ${{ github.actor }}\n• run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Notify Discord (failure)
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-Type: application/json' \
+            -d "{\"content\": \"❌ **deploy failed** \`${{ github.ref_name }}\` → cluster\n• sha: \`${{ github.sha }}\`\n• actor: ${{ github.actor }}\n• run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n_helm rolled back to previous release (--atomic flag)_\"}" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}

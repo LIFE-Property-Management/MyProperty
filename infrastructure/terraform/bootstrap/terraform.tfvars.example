@@ -1,0 +1,4 @@
+do_token          = "dop_v1_xxxxxxxxxxxxxxxx"
+spaces_access_id  = "DOxxxxxxxxxxxxxxxxxx"
+spaces_secret_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+region            = "fra1"

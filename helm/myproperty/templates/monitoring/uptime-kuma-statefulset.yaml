@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-uptime-kuma
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: uptime-kuma
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-uptime-kuma
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: uptime-kuma
+spec:
+  serviceName: uptime-kuma
+  # Single replica — the upstream image stores all state (monitor history,
+  # admin credentials, status page config) in a SQLite DB on disk. Kuma 1.x
+  # does not support clustered deployments; scale-out is an M5 follow-up
+  # once Kuma 2.x's PostgreSQL backend is GA. The official image already
+  # ships an integer-PK SQLite schema that doesn't multi-write safely.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "myproperty.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: uptime-kuma
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: uptime-kuma
+    spec:
+      serviceAccountName: {{ .Release.Name }}-uptime-kuma
+      automountServiceAccountToken: false
+      # Kuma's upstream image runs as root by default (the Node process binds
+      # an unprivileged port, but the entrypoint runs migrations + sets file
+      # ownership on /app/data). fsGroup is enough to let the SQLite DB on the
+      # PVC be writable; we drop capabilities + privilege escalation per M4.4
+      # baseline. M4.8 follow-up: switch to an upstream-provided non-root
+      # entrypoint once Kuma ships one — currently tracked at
+      # https://github.com/louislam/uptime-kuma/issues/3713.
+      securityContext:
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: uptime-kuma
+          image: {{ .Values.uptimeKuma.image.repository }}:{{ .Values.uptimeKuma.image.tag }}
+          ports:
+            - name: http
+              containerPort: 3001
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command: ["extra/healthcheck"]
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["extra/healthcheck"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.uptimeKuma.resources.requests.cpu }}
+              memory: {{ .Values.uptimeKuma.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.uptimeKuma.resources.limits.cpu }}
+              memory: {{ .Values.uptimeKuma.resources.limits.memory }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: uptime-kuma-data
+              mountPath: /app/data
+  volumeClaimTemplates:
+    - metadata:
+        name: uptime-kuma-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.uptimeKuma.storage.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.uptimeKuma.storage.size }}

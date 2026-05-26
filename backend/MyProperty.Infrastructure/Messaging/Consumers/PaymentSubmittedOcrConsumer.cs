@@ -20,7 +20,7 @@ public sealed class PaymentSubmittedOcrConsumer(
     ILogger<PaymentSubmittedOcrConsumer> logger)
     : IntegrationEventConsumerBase<PaymentSubmittedEvent>(connections, scopeFactory, options, logger)
 {
-    protected override string QueueName  => "myproperty.payment.submitted.ocr";
+    protected override string QueueName => "myproperty.payment.submitted.ocr";
     protected override string RoutingKey => "payment.submitted";
 
     protected override Task HandleAsync(

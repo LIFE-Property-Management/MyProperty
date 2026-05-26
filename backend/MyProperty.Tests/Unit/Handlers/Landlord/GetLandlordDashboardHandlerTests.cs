@@ -18,11 +18,11 @@ public sealed class GetLandlordDashboardHandlerTests
         var landlordId = Guid.NewGuid();
         var cached = new LandlordDashboardDto(
             TotalProperties: 3,
-            ActiveLeases:    2,
-            ActiveTenants:   2,
+            ActiveLeases: 2,
+            ActiveTenants: 2,
             PendingPayments: 1,
             OverduePayments: 0,
-            GeneratedAt:     DateTime.UtcNow);
+            GeneratedAt: DateTime.UtcNow);
 
         _cache.Setup(c => c.GetAsync(landlordId, It.IsAny<CancellationToken>()))
               .ReturnsAsync(cached);

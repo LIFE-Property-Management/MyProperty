@@ -1,0 +1,9 @@
+# Local Python artifacts — never commit
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/

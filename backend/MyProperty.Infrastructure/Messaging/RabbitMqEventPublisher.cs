@@ -38,26 +38,26 @@ public sealed class RabbitMqEventPublisher(
 
             await channel.ExchangeDeclareAsync(
                 exchange: _options.Exchange,
-                type:     ExchangeType.Topic,
-                durable:  true,
+                type: ExchangeType.Topic,
+                durable: true,
                 autoDelete: false,
                 cancellationToken: ct);
 
             var properties = new BasicProperties
             {
-                ContentType  = "application/json",
+                ContentType = "application/json",
                 DeliveryMode = DeliveryModes.Persistent,
-                Type         = typeof(T).Name,
-                MessageId    = Guid.NewGuid().ToString("N"),
-                Timestamp    = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+                Type = typeof(T).Name,
+                MessageId = Guid.NewGuid().ToString("N"),
+                Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
             };
 
             await channel.BasicPublishAsync(
-                exchange:    _options.Exchange,
-                routingKey:  routingKey,
-                mandatory:   false,
+                exchange: _options.Exchange,
+                routingKey: routingKey,
+                mandatory: false,
                 basicProperties: properties,
-                body:        body,
+                body: body,
                 cancellationToken: ct);
 
             logger.LogInformation(

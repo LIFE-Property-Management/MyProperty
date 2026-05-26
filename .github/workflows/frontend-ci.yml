@@ -26,8 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -40,8 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -54,8 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -65,7 +65,7 @@ jobs:
         run: npm test -- --ci --reporters=default --maxWorkers=2
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jest-coverage
           path: frontend/coverage
@@ -77,8 +77,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -86,7 +86,7 @@ jobs:
       - run: npm ci
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -107,7 +107,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: frontend/playwright-report
@@ -116,8 +116,107 @@ jobs:
 
       - name: Upload test artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-failures
           path: frontend/test-results
           retention-days: 7
+
+  frontend-image:
+    name: Build and publish frontend image
+    needs: [lint, typecheck, unit-tests]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    # Override default working-directory for steps that don't run in frontend/.
+    # (The job-level 'defaults.run.working-directory' set at the top of the
+    # file applies to 'run:' steps; uses: steps are unaffected.)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
+            ghcr.io/life-property-management/myproperty-frontend:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # NEXT_PUBLIC_* are inlined at build time (Next.js bakes them into the JS bundle).
+          # Single-environment simplification — no per-env workflow_dispatch parameterisation.
+          # Multi-env would parameterise these via workflow_dispatch inputs; deferred per M4.4 Decision #7.
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://api.myproperty.works
+            NEXT_PUBLIC_KEYCLOAK_URL=https://auth.myproperty.works
+            NEXT_PUBLIC_KEYCLOAK_REALM=MyProperty
+            NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=myproperty-frontend
+
+      # M4.8 — Trivy CI quality gate. See .trivyignore at repo root for the
+      # triage workflow. Two-pass shape mirrors backend-ci.yml.
+      - name: Trivy SARIF report (non-blocking, CRITICAL+HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+
+      - name: Trivy quality gate (blocking, CRITICAL only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+      - name: Generate SBOM (CycloneDX)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-frontend:${{ env.SHORT_SHA }}
+          format: cyclonedx
+          output: sbom-frontend.cdx.json
+          exit-code: '0'
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-frontend-${{ env.SHORT_SHA }}
+          path: sbom-frontend.cdx.json
+          retention-days: 90

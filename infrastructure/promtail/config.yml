@@ -1,0 +1,47 @@
+# =============================================================
+#  infrastructure/promtail/config.yml
+#
+#  Ships docker container stdout/stderr to Loki. Without a shipper,
+#  the only logs that reach Loki are the ones the backend itself
+#  pushes via Serilog.Sinks.Grafana.Loki (configured via LokiUrl).
+#  Adding promtail means *every* container in the compose stack
+#  contributes logs — useful when triaging Keycloak / Postgres /
+#  RabbitMQ during the M4 demo without exec-ing into containers.
+#
+#  Promtail reads /var/lib/docker/containers/*/*.log via a docker
+#  bind mount in docker-compose.yml; no extra agent inside other
+#  containers.
+# =============================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  # Tracks where we last shipped each file so a restart doesn't
+  # re-send the entire backlog. Mapped to a named volume in compose.
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      # Use the container name (without the leading "/") as the
+      # primary label so Loki's "Live" mode in Grafana shows
+      # myproperty-api / myproperty-postgres etc.
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: logstream
+      # Compose project label — useful filter when running multiple
+      # stacks on the same host.
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: compose_project
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: compose_service

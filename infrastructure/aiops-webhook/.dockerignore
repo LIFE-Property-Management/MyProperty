@@ -1,0 +1,25 @@
+# Local Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.python-version
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Tests / coverage
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Misc
+.git/
+.gitignore
+*.md
+.dockerignore
+.DS_Store

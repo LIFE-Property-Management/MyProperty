@@ -17,8 +17,8 @@ export default function KeycloakInit() {
 
     if (isDevAuthBypass && process.env.NODE_ENV === "production") {
       console.warn(
-          "[KeycloakInit] NEXT_PUBLIC_DEV_AUTH_BYPASS is enabled in a production " +
-          "build. This bypasses authentication and is unsafe outside local dev."
+        "[KeycloakInit] NEXT_PUBLIC_DEV_AUTH_BYPASS is enabled in a production " +
+        "build. This bypasses authentication and is unsafe outside local dev."
       );
     }
 
