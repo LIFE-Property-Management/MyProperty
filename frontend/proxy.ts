@@ -4,6 +4,11 @@ import type { NextRequest } from "next/server";
 const AUTH_COOKIE = "kc_token";
 const MOCK_TOKEN = "mock.dev.token";
 const IS_DEV = process.env.NODE_ENV === "development";
+// Mock-auth toggle paired with the client-side short-circuit in
+// app/dashboard/_components/KeycloakInit.tsx and app/(tenant)/_components/KeycloakInit.tsx.
+// One flag controls both halves so local docker-compose stacks (NODE_ENV=production)
+// can run end-to-end without a real Keycloak. Must never be "true" in CI or deployed envs.
+const IS_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
 
 const PUBLIC_PATHS = new Set<string>(["/"]);
 const PUBLIC_PREFIXES = ["/invite/"];
@@ -17,7 +22,7 @@ export default function middleware(req: NextRequest) {
   const token = req.cookies.get(AUTH_COOKIE);
   if (token) return NextResponse.next();
 
-  if (IS_DEV) {
+  if (IS_DEV || IS_AUTH_BYPASS) {
     const res = NextResponse.next();
     res.cookies.set(AUTH_COOKIE, MOCK_TOKEN, {
       path: "/",
