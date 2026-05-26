@@ -239,10 +239,16 @@ services:
         NEXT_PUBLIC_KEYCLOAK_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
         NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:-MyProperty}
         NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-myproperty-frontend}
+        # Local-only mock-auth toggle. Read by proxy.ts (middleware) and the two
+        # KeycloakInit components. Never set this in CI or deployed environments.
+        NEXT_PUBLIC_DEV_AUTH_BYPASS: "true"
     image: myproperty-frontend:dev
     container_name: myproperty-frontend
     environment:
       NODE_ENV: production
+      # Local-only mock-auth toggle, runtime side. Must match the build arg above
+      # so the middleware (server) and the inlined bundle (client) agree.
+      NEXT_PUBLIC_DEV_AUTH_BYPASS: "true"
     ports:
       - "3000:3000"
     depends_on:
