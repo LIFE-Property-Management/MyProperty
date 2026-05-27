@@ -7,3 +7,4 @@ export {
   upcomingPaymentsFixture,
   buildUpcomingPaymentsResponse,
 } from "./landlordDashboard";
+export { propertiesFixture, buildPropertiesResponse } from "./properties";
