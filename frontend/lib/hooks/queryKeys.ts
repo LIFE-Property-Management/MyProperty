@@ -28,5 +28,11 @@ export const queryKeys = {
         [...queryKeys.landlord.property.all(), "list", { page, pageSize }] as const,
       detail: (id: string) => [...queryKeys.landlord.property.all(), "detail", id] as const,
     },
+    tenant: {
+      all: () => [...queryKeys.landlord.all, "tenant"] as const,
+      list: (page: number, pageSize: number) =>
+        [...queryKeys.landlord.tenant.all(), "list", { page, pageSize }] as const,
+      detail: (id: string) => [...queryKeys.landlord.tenant.all(), "detail", id] as const,
+    },
   },
 } as const;
