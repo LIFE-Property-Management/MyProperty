@@ -10,8 +10,10 @@ export const ENDPOINTS = {
   acceptInvite: (token: string) => `/invites/${encodeURIComponent(token)}/accept`,
   landlordDashboard: "/landlord/dashboard",
   landlordUpcomingPayments: "/landlord/payments/upcoming",
-  landlordProperties: "/properties",
-  landlordPropertyById: (id: string) => `/properties/${encodeURIComponent(id)}`,
+  properties: "/properties",
+  // TODO(backend): no GET /api/v1/properties/{id} endpoint exists yet.
+  // Add it on PropertiesController before wiring the detail page.
+  propertyById: (id: string) => `/properties/${encodeURIComponent(id)}`,
   landlordTenants: "/landlord/tenants",
   landlordTenantById: (id: string) => `/landlord/tenants/${encodeURIComponent(id)}`,
 } as const;

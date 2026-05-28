@@ -38,6 +38,7 @@ public sealed class PropertiesController(
         return CreatedAtAction(nameof(List), new { }, result);
     }
 
+    // TODO: add GetById endpoint for the landlord property detail page.
     /// <summary>Returns a paginated list of properties owned by the authenticated landlord.</summary>
     [HttpGet]
     [SwaggerOperation(Summary = "List landlord properties")]
@@ -46,7 +47,7 @@ public sealed class PropertiesController(
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResult<PropertyDto>>> List(
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20,
+        [FromQuery] int pageSize = 10,
         CancellationToken ct = default)
     {
         var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
