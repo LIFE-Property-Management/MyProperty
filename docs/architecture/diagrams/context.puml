@@ -1,0 +1,37 @@
+@startuml
+!include <C4/C4_Context>
+
+LAYOUT_WITH_LEGEND()
+SHOW_PERSON_OUTLINE()
+
+title MyProperty Platform — System Context (C4 Level 1)
+
+' ====== Actors ======
+Person(tenant,   "Tenant",   "End user with the Tenant role. Pays rent, uploads receipts, reads notifications.")
+Person(landlord, "Landlord", "End user with the Landlord role. Manages properties, leases, payments, dashboards.")
+Person(admin,    "Admin",    "Internal admin with the Admin role. Operates the Hangfire dashboard and the Keycloak realm.")
+
+' ====== System under design ======
+System(myproperty, "MyProperty Platform", "Multi-tenant property-management SaaS. Web app, REST API, real-time notifications, background jobs, AI-assisted receipt OCR.")
+
+' ====== External systems ======
+System_Ext(keycloak,    "Keycloak",            "Self-hosted OIDC + OAuth2 Identity Provider. Issues JWTs, hosts user federation, exposes JWKS for token validation.")
+System_Ext(anthropic,   "Anthropic API",       "Claude vision model (receipt OCR) and Claude Haiku (AIOps alert triage).")
+System_Ext(spaces,      "DigitalOcean Spaces", "S3-compatible object storage. Holds uploaded payment receipts (production deployment only).")
+System_Ext(slack,       "Slack",               "Receives AIOps-triaged alert notifications via an incoming webhook.")
+System_Ext(letsencrypt, "Let's Encrypt",       "ACME-based public Certificate Authority. Issues TLS certificates for HTTPS endpoints.")
+
+' ====== Relationships ======
+Rel(tenant,   myproperty, "Uses (web app)",      "HTTPS")
+Rel(landlord, myproperty, "Uses (web app)",      "HTTPS")
+Rel(admin,    myproperty, "Operates dashboards", "HTTPS")
+Rel(admin,    keycloak,   "Administers realm",   "HTTPS")
+
+Rel(myproperty, keycloak,    "OIDC login + JWKS token validation", "HTTPS")
+Rel(myproperty, anthropic,   "Vision + chat completions",          "HTTPS")
+Rel(myproperty, spaces,      "S3 PUT / GET (receipts)",            "HTTPS")
+Rel(myproperty, slack,       "Webhook POST",                       "HTTPS")
+Rel(myproperty, letsencrypt, "ACME HTTP-01 challenge",             "HTTPS")
+
+SHOW_LEGEND()
+@enduml

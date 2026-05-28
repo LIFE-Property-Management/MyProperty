@@ -1,0 +1,106 @@
+@startuml
+title CI/CD pipeline - GitHub Actions -> GHCR -> DOKS
+
+skinparam BackgroundColor #FAFAFA
+skinparam ActivityBackgroundColor #EFF6FF
+skinparam ActivityBorderColor #1168bd
+skinparam ActivityArrowColor #555
+skinparam PartitionBorderColor #999
+skinparam PartitionBackgroundColor #FFFFFF
+skinparam NoteBackgroundColor #FFF8DC
+
+start
+:Developer pushes commit or PR\n(branches: feature/*, main, develop);
+note right
+  GitHub Actions runs the CI workflow whose
+  path filter matches the changed files; cd.yml
+  runs only on push to **main** or **develop**.
+end note
+
+fork
+  partition "**backend-ci.yml**\n(push/PR on backend/**, MyProperty.sln)" {
+    :actions/checkout + setup-dotnet@v5;
+    :dotnet restore;
+    :dotnet format --verify-no-changes;
+    :dotnet build -c Release -warnaserror;
+    :dotnet test\n(xUnit + WebApplicationFactory + Testcontainers\n79 unit + 22 integration = 101 tests, ~30s);
+    :docker/setup-buildx + docker/login (GHCR);
+    :docker buildx build (chiseled .NET 10)\nmyproperty-api:{sha} + :{branch};
+    :docker buildx build (migration bundle)\nmyproperty-migrations:{sha};
+    :Trivy SARIF (HIGH+CRITICAL, non-blocking)\n-> GitHub Security tab;
+    if (CRITICAL CVE?) then (yes)
+      #FF6961:fail build;
+      kill
+    else (no)
+    endif
+    :CycloneDX SBOM (90d retention);
+    :docker push (GHCR);
+  }
+fork again
+  partition "**frontend-ci.yml**\n(push/PR on frontend/**)" {
+    :checkout + setup-node@v6;
+    :npm ci;
+    :ESLint;
+    :tsc --noEmit (typecheck);
+    :Jest + jest-axe a11y (RTL unit);
+    :Playwright e2e (chromium, auto-spawn dev server,\nMSW + dev-auth bypass);
+    :Bundle build (Next.js standalone)\nupload bundle analyzer reports;
+    :docker build (distroless Node 20)\nmyproperty-frontend:{sha} + :{branch};
+    :Trivy SARIF + CycloneDX SBOM;
+    if (CRITICAL CVE?) then (yes)
+      #FF6961:fail build;
+      kill
+    else (no)
+    endif
+    :docker push (GHCR);
+  }
+fork again
+  partition "**aiops-webhook-ci.yml**\n(push/PR on infrastructure/aiops-webhook/**)" {
+    :checkout + setup-python@v6 (3.14);
+    :pip install -e .[dev];
+    :ruff check + ruff format --check;
+    :pytest;
+    :docker build (python:3.14-slim, multi-stage venv)\nmyproperty-aiops-webhook:{sha} + :{branch};
+    :Trivy SARIF + CycloneDX SBOM;
+    if (CRITICAL CVE?) then (yes)
+      #FF6961:fail build;
+      kill
+    else (no)
+    endif
+    :docker push (GHCR);
+  }
+end fork
+
+:Three images now in **ghcr.io/life-property-management/***\nwith tags {short-sha} + {branch};
+
+if (Pushed to main or develop?) then (yes)
+  partition "**cd.yml**\n(triggered on push to main/develop)" {
+    :checkout;
+    :digitalocean/action-doctl@v2\n(secret: DIGITALOCEAN_ACCESS_TOKEN);
+    :azure/setup-helm@v5 (v3.20.0);
+    :doctl kubernetes cluster kubeconfig save\nmyproperty-cluster;
+    :cd helm/myproperty && helm dependency update\n(pulls kube-prometheus-stack 65.2.0);
+    :helm upgrade --install myproperty ./helm/myproperty\n--namespace myproperty --create-namespace\n--atomic --wait --timeout 10m\n--set postgres.enabled=false\n--set backend.image.tag=$SHA\n--set frontend.image.tag=$SHA\n--set migration.image.tag=$SHA\n--set aiopsWebhook.image.tag=$SHA;
+    note right
+      `postgres.enabled=false` -> prod uses
+      **DO Managed PostgreSQL** (Terraform-provisioned);
+      the in-cluster StatefulSet template is skipped.
+
+      `--atomic` -> failed upgrade rolls back to the
+      previous release. Migration job runs as a
+      pre-upgrade Helm Hook; if it fails, the chart
+      rolls back without touching app pods.
+    end note
+    if (Helm exit 0?) then (yes)
+      :Discord webhook (success)\nrelease + sha + actor + run URL;
+    else (no)
+      #FF6961:Discord webhook (failure)\n--atomic auto-rolled back to previous release;
+    endif
+  }
+else (no)
+  :Stop after CI;
+  stop
+endif
+
+stop
+@enduml

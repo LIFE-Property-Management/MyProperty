@@ -1,0 +1,117 @@
+@startuml
+!include <C4/C4_Component>
+
+LAYOUT_TOP_DOWN()
+
+title MyProperty Platform - Components inside the API process (C4 Level 3)
+
+' ====== Peer containers (drawn but not decomposed) ======
+Container(fe, "Frontend", "Next.js 16", "Browser-side caller")
+Container(kc, "Keycloak 26.2", "OIDC IdP", "JWT issuer + JWKS")
+ContainerDb(pg, "PostgreSQL 16", "Database", "App + Hangfire + Keycloak schemas")
+ContainerDb(redis, "Redis 7", "Cache + backplane", "Cache-aside + SignalR")
+ContainerQueue(mq, "RabbitMQ 3", "Event bus", "'myproperty.events' topic exchange")
+
+Container_Ext(anthropic, "Anthropic API", "LLM SaaS", "Vision + chat completions")
+Container_Ext(smtp, "SMTP server", "External", "MailHog (dev) / TBD (prod)")
+Container_Ext(spaces, "DO Spaces", "External", "S3-compatible (prod only)")
+
+' ====== The API process - decomposed by Clean Architecture project ======
+Container_Boundary(apiproc, "API process (.NET 10, single OS process)") {
+
+    ' ---- Api project ----
+    Container_Boundary(apiProj, "MyProperty.Api") {
+        Component(controllers,    "Controllers (v1)",   "ASP.NET Core MVC", "Invites, Properties, Tenants, Leases, Payments, Landlord, Me")
+        Component(hub,            "NotificationsHub",    "SignalR + Redis backplane", "Server-push; groups tenant:{id} / landlord:{id}")
+        Component(middleware,     "Middleware pipeline", "ASP.NET Core", "CorrelationId -> Serilog -> Forwarded -> CORS -> Auth -> RateLimiter -> Authz")
+        Component(hangfireDash,   "Hangfire dashboard",  "Hangfire UI", "/hangfire, RequireAdmin policy")
+        Component(notifDispatcher,"SignalRNotificationDispatcher", "Impl of INotificationDispatcher", "Wraps IHubContext<NotificationsHub>")
+    }
+
+    ' ---- Application project ----
+    Container_Boundary(appProj, "MyProperty.Application") {
+        Component(handlers,    "CQRS handlers",     "Scoped services", "SubmitPaymentHandler, ConfirmPaymentHandler, CreateInviteHandler, AcceptInviteHandler, GetLandlordDashboardQuery handler, ...")
+        Component(validators,  "FluentValidation",  "Validators",      "Per command/query")
+        Component(mappers,     "Entity <-> DTO mapping",  "Hand-rolled today",      "Each handler builds its return DTO inline.\nMapperly source-gen retrofit planned post-M3.\nNo AutoMapper.")
+        Component(absRepos,    "I*Repository",      "Interfaces",      "IPayment, ILease, ITenant, IInvite, ILandlord, IUserRepository")
+        Component(absDisp,     "INotificationDispatcher", "Interface",  "Abstracts SignalR away from Infrastructure consumers")
+        Component(absEmail,    "IEmailSender",     "Interface",       "")
+        Component(absOcr,      "IReceiptOcrService","Interface",       "")
+        Component(absFile,     "IFileStorage",      "Interface",       "")
+        Component(absJobs,     "IBackgroundJobQueue","Interface",      "EnqueueEmail(EmailMessage)")
+    }
+
+    ' ---- Domain project ----
+    Container_Boundary(domainProj, "MyProperty.Domain") {
+        Component(baseEntity, "BaseEntity",         "Abstract", "Id, CreatedAt, UpdatedAt, DeletedAt, CreatedBy, UpdatedBy")
+        Component(aggregates, "Aggregate roots",    "Pure C#",  "Tenant, Landlord, Property, Lease, Invite, Payment, FailedEmail")
+        Component(events,     "Integration events", "Pure C#",  "PaymentSubmitted, PaymentConfirmed, PaymentRejected, InviteAccepted, InviteRejected, LeaseExpiringSoon")
+    }
+
+    ' ---- Infrastructure project ----
+    Container_Boundary(infraProj, "MyProperty.Infrastructure") {
+        Component(dbContext, "AppDbContext + AuditingInterceptor", "EF Core 10",   "Soft-delete query filter; audit fields from JWT sub")
+        Component(repos,     "Repository implementations",         "EF Core",      "Per-aggregate, materialised results (no IQueryable leak)")
+        Component(rmqProd,   "RabbitMqEventPublisher",             "RabbitMQ.Client 7", "Publishes events; routing key derived from event type name")
+        Component(rmqCons,   "5 RabbitMQ consumers",               "Hosted services","PaymentSubmitted, PaymentSubmittedOcr, PaymentConfirmed, PaymentRejected, PaymentCreated")
+        Component(hfJobs,    "Hangfire ad-hoc jobs",               "Scoped",       "SendEmailJob (retry x5 + DLQ to FailedEmails table), ReceiptOcrJob.\nRecurring scans (mark expired invites, orphan cleanup, overdue, lease-expiring) are\nM3 follow-ups - not yet scheduled.")
+        Component(anthropicSvc,"AnthropicReceiptOcrService",       "anthropic SDK","Vision -> {amount, date, merchant}")
+        Component(emailSvc,  "MailKitEmailSender",                "MailKit 4",    "SMTP send")
+        Component(fileSvc,   "LocalFileStorage",                   "Filesystem",   "{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}; Spaces impl pending (M5)")
+        Component(redisCache,"RedisLandlordDashboardCache",        "IDistributedCache","60s TTL; cache-aside; invalidated on writes")
+        Component(kcAuth,    "Keycloak JWKS + RolesTransformer",   "JwtBearer + IClaimsTransformation", "Validates JWT; realm_access.roles -> ASP.NET role claims")
+    }
+}
+
+' ====== Request flow ======
+Rel(fe, controllers, "REST /api/v1/*", "HTTPS")
+Rel(fe, hub,        "WSS (planned)",  "WSS")
+Rel(middleware, kcAuth, "Validate JWT", "in-process")
+Rel(kcAuth, kc,         "JWKS fetch",   "HTTPS")
+
+' ====== Controller -> Handler ======
+Rel(controllers, handlers,   "Invoke Handle(cmd/query, ct)")
+Rel(controllers, validators, "Pipeline filter validates inputs")
+Rel(handlers, mappers,       "Entity <-> DTO mapping")
+Rel(handlers, aggregates,    "Mutate aggregates")
+Rel(aggregates, baseEntity,  "Inherit")
+
+' ====== Handler -> Application interfaces ======
+Rel(handlers, absRepos,  "Persist / query")
+Rel(handlers, absJobs,   "Enqueue email work")
+Rel(handlers, absFile,   "Upload / download receipts")
+
+' ====== Handler -> RabbitMQ producer ======
+Rel(handlers, rmqProd, "Publish IIntegrationEvent")
+Rel(rmqProd, mq,       "AMQP publish")
+Rel(events, rmqProd,   "Serialized payload")
+
+' ====== Infra impls of Application interfaces ======
+Rel(absRepos, repos,     "Implemented by")
+Rel(absEmail, emailSvc,  "Implemented by")
+Rel(absOcr,   anthropicSvc, "Implemented by")
+Rel(absFile,  fileSvc,   "Implemented by")
+Rel(absDisp,  notifDispatcher, "Implemented in Api")
+Rel(absJobs,  hfJobs,    "Backed by Hangfire")
+
+' ====== Repos / cache / migrations -> Postgres ======
+Rel(repos, dbContext,    "Query / SaveChanges")
+Rel(dbContext, pg,       "Npgsql")
+Rel(redisCache, redis,   "GET / SET")
+
+' ====== RabbitMQ consumer side effects ======
+Rel(rmqCons, mq,          "Consume (AMQP)")
+Rel(rmqCons, absJobs,     "Enqueue Hangfire job (email / OCR)")
+Rel(rmqCons, absDisp,     "Push SignalR notification")
+Rel(notifDispatcher, hub, "Hub group push")
+
+' ====== Hangfire jobs -> external systems ======
+Rel(hfJobs, anthropicSvc, "OCR call")
+Rel(hfJobs, emailSvc,     "Send email")
+Rel(anthropicSvc, anthropic, "HTTPS")
+Rel(emailSvc, smtp,        "SMTP via MailKit")
+Rel(fileSvc, spaces,       "S3 PUT/GET (prod swap)")
+
+' (Recurring scan -> repos edge removed: scans not yet scheduled.)
+
+@enduml

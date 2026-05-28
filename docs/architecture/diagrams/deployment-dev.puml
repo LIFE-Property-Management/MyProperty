@@ -1,0 +1,93 @@
+@startuml
+!include <C4/C4_Deployment>
+
+LAYOUT_TOP_DOWN()
+
+title MyProperty Platform - Dev deployment (Docker Compose, host: developer workstation)
+
+Deployment_Node(host, "Developer workstation", "Docker Engine 29", "docker compose up [-d] [--profile proxy]") {
+
+    Deployment_Node(net, "myproperty-net", "Docker bridge network") {
+
+        Deployment_Node(data, "Data tier", "long-lived") {
+            ContainerDb(pg,    "postgres",  "postgres:16-alpine | host :5432 | vol postgres_data", "App + Keycloak + Hangfire schemas")
+            ContainerDb(redis, "redis",     "redis:7-alpine | host :6379 | --save '' --appendonly no", "No persistence by design")
+            ContainerQueue(mq, "rabbitmq",  "rabbitmq:3-management | :5672 AMQP + :15672 UI | vol rabbitmq_data", "guest/guest")
+        }
+
+        Deployment_Node(auth, "Auth", "Keycloak realm boot") {
+            Container(kcInit, "keycloak-realm-init", "alpine:3.20 (one-shot)", "envsubst -> keycloak_import volume; same pattern as a K8s initContainer")
+            Container(kc,     "keycloak",            "quay.io/keycloak/keycloak:26.2 | host :8080 | vol keycloak_import (ro)", "start-dev --import-realm; reads from the rendered import volume")
+        }
+
+        Deployment_Node(app, "Application", "built locally") {
+            Container(beInit, "backend-storage-init", "alpine:3.20 (one-shot, root)", "chown /var/myproperty/storage -> UID 1654")
+            Container(be,     "backend",              "myproperty-api:dev (chiseled .NET 10) | host :5042 -> :8080 | UID 1654 | vol backend_storage", "REST + SignalR + Hangfire (single process)")
+            Container(fe,     "frontend",             "myproperty-frontend:dev (distroless nodejs20-debian12:nonroot) | host :3000 | UID 65532", "Next.js standalone bundle; NEXT_PUBLIC_DEV_AUTH_BYPASS=true")
+        }
+
+        Deployment_Node(mail, "Mail (dev only)", "Local SMTP catcher") {
+            Container(mh, "mailhog", "mailhog/mailhog:latest | host :1025 SMTP + :8025 UI", "Captures every outbound MailKit message")
+        }
+
+        Deployment_Node(obs, "Observability", "Loki + Prometheus + Grafana stack") {
+            Container(loki,     "loki",         "grafana/loki:3.2.0 | host :3100 | vol loki_data", "")
+            Container(promtail, "promtail",     "grafana/promtail:3.2.0 | vol promtail_positions | mounts /var/lib/docker/containers + /var/run/docker.sock (ro)", "Tails ALL container stdout via Docker socket SD")
+            Container(prom,     "prometheus",   "prom/prometheus:v2.55.0 | host :9090 | vol prometheus_data | alerts dir mounted ro | --web.enable-lifecycle", "")
+            Container(am,       "alertmanager", "prom/alertmanager:v0.27.0 | host :9093 | vol alertmanager_data", "Routes to AIOps webhook")
+            Container(graf,     "grafana",      "grafana/grafana:11.1.0 | host :3001 -> :3000 | vol grafana_data | anonymous Admin (dev only!)", "")
+        }
+
+        Deployment_Node(mon, "Monitoring", "Uptime probes") {
+            Container(uk,     "uptime-kuma",      "louislam/uptime-kuma:1.23.16-alpine | host :3002 -> :3001 | vol uptime_kuma_data", "SQLite-backed; status page")
+            Container(ukInit, "uptime-kuma-init", "myproperty-uptime-kuma-init:dev (one-shot, restart: no)", "Seeds monitors + status page + notify channels via socket.io API")
+        }
+
+        Deployment_Node(aiops, "AIOps", "Alert triage") {
+            Container(aw, "aiops-webhook", "myproperty-aiops-webhook:dev (python:3.14-slim, non-root) | host :5001 | env: ANTHROPIC_API_KEY + SLACK_WEBHOOK_URL", "FastAPI; graceful degradation if keys empty")
+        }
+
+        Deployment_Node(edge, "Edge (compose profile: proxy)", "opt-in via --profile proxy") {
+            Container(nx, "nginx",   "nginx:1.27-alpine | host :80 + :443 | vol certbot_certs (ro) + certbot_www (ro) | nginx -s reload every 6h", "envsubst on MYPROPERTY_DOMAIN; routes 4 subdomains")
+            Container(cb, "certbot", "certbot/certbot:v2.11.0 | vol certbot_certs (rw) + certbot_www (rw) | renew every 12h", "Let's Encrypt; first-time issuance via init-letsencrypt.sh")
+        }
+    }
+}
+
+' === Init-container ordering (one-shots that gate other services) ===
+Rel(kcInit, kc,  "Volume hand-off (keycloak_import)", "service_completed_successfully")
+Rel(beInit, be,  "Ownership hand-off (backend_storage)", "service_completed_successfully")
+Rel(ukInit, uk,  "Seeds via socket.io API", "after uptime-kuma is healthy")
+
+' === Data dependencies ===
+Rel(be, pg,    "Npgsql", "TCP :5432")
+Rel(be, redis, "Cache-aside + SignalR backplane", "TCP :6379")
+Rel(be, mq,    "Publish + consume", "AMQP :5672")
+Rel(be, kc,    "JWKS validate", "HTTP :8080")
+Rel(be, mh,    "SMTP", "TCP :1025")
+Rel(kc, pg,    "Realm + user DB", "TCP :5432")
+Rel(fe, be,    "REST + WSS planned", "HTTP :8080")
+Rel(fe, kc,    "OIDC login", "HTTP :8080")
+
+' === Observability scrape + push paths ===
+Rel(prom, be,       "Scrape /metrics", "HTTP :8080")
+Rel(prom, am,       "Fire alerts",     "HTTP :9093")
+Rel(promtail, loki, "Push container logs", "HTTP :3100")
+Rel(graf, prom,     "Query",           "HTTP :9090")
+Rel(graf, loki,     "Query",           "HTTP :3100")
+Rel(graf, am,       "Alert state",     "HTTP :9093")
+Rel(am, aw,         "Webhook POST",    "HTTP :5001")
+
+' === Edge proxy (only when profile=proxy) ===
+Rel(nx, fe, "app.X",    "HTTP :3000")
+Rel(nx, be, "api.X",    "HTTP :8080")
+Rel(nx, kc, "auth.X",   "HTTP :8080")
+Rel(nx, uk, "status.X", "HTTP :3001")
+
+' === Uptime probes ===
+Rel(uk, fe, "Probe app.X",    "HTTPS")
+Rel(uk, be, "Probe api.X",    "HTTPS")
+Rel(uk, kc, "Probe auth.X",   "HTTPS")
+Rel(uk, mh, "Optional SMTP probe", "TCP")
+
+@enduml

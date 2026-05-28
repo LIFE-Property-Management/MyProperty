@@ -1,0 +1,49 @@
+@startuml
+title SignalR notification push - tenant learns of payment confirmation
+
+skinparam BackgroundColor #FAFAFA
+skinparam sequenceMessageAlign center
+
+queue       "RabbitMQ\n'myproperty.events'"  as mq
+participant "PaymentConfirmedConsumer\n(hosted service in API)" as consumer
+participant "IBackgroundJobQueue\n(Hangfire)"                  as jobq
+participant "Hangfire server"                                  as hf
+participant "SendEmailJob\n+ MailKitEmailSender"              as emailjob
+queue       "SMTP"                                             as smtp
+participant "INotificationDispatcher\n(SignalRNotificationDispatcher)" as dispatcher
+participant "NotificationsHub\n(IHubContext)"                  as hub
+database    "Redis backplane\n('myproperty.signalr')"          as redis
+participant "Browser (Tenant)"                                 as browser
+participant "TanStack Query"                                   as tq
+
+autonumber
+
+mq -> consumer: deliver PaymentConfirmedEvent\nrouting key: payment.confirmed
+
+== Side effect 1 - durable email job ==
+consumer -> jobq: EnqueueEmail(EmailMessage { to=tenant, subject, body })
+jobq -> hf: enqueue SendEmailJob (queue "emails")
+hf -> emailjob: execute (retry x5, exp backoff)
+emailjob -> smtp: SMTP MAIL FROM / RCPT TO / DATA
+smtp --> emailjob: 250 OK
+note over emailjob #LightYellow
+On final exhaustion -> Hangfire DLQ filter
+inserts a row into the FailedEmails table.
+end note
+
+== Side effect 2 - real-time UI push ==
+consumer -> dispatcher: PushAsync("tenant:{tenantId}",\n"PaymentConfirmed", { paymentId, confirmedAt })
+dispatcher -> hub: Clients.Group("tenant:{id}").SendAsync(...)
+hub -> redis: PUBLISH (Redis pub/sub fanout across replicas)
+redis -> hub: broadcast to all backend instances
+hub -> browser: WebSocket frame: PaymentConfirmed
+browser -> tq: queryClient.invalidateQueries(['tenant','payments','current'])
+tq -> browser: refetch -> UI updates with authoritative state
+
+note over consumer, hub #LightGreen
+**Why two side effects:** at-least-once email via Hangfire DLQ
+gives durable delivery; SignalR push gives instant UX
+but is best-effort.
+end note
+
+@enduml
