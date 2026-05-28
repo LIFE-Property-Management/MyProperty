@@ -14,7 +14,7 @@ export function useLandlordProperties(page: number, pageSize: number) {
     queryKey: queryKeys.landlord.property.list(page, pageSize),
     queryFn: () =>
       apiClient
-        .get(ENDPOINTS.landlordProperties, { params: { page, pageSize } })
+        .get(ENDPOINTS.properties, { params: { page, pageSize } })
         .then((r) => propertiesResponseSchema.parse(r.data)),
     placeholderData: (prev) => prev,
   });
