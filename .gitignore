@@ -255,3 +255,13 @@ frontend/test-results/
 #  CLAUDE CODE — per-developer local settings
 # ───────────────────────────────────────────────────────────
 **/.claude/settings.local.json
+
+
+# ───────────────────────────────────────────────────────────
+#  ARCHITECTURE DIAGRAMS — tooling (PlantUML)
+# ───────────────────────────────────────────────────────────
+# plantuml.jar is ~28 MB and is downloaded on demand by
+# scripts/render-architecture-diagrams.ps1. The rendered .svg
+# outputs IN docs/architecture/diagrams/ ARE committed.
+tools/plantuml.jar
+tools/*.jar
