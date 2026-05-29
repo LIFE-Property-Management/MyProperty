@@ -44,7 +44,7 @@ internal sealed class KeycloakAdminTokenCache(
     private async Task<(string token, DateTime expiresAt)> FetchTokenAsync(CancellationToken ct)
     {
         using var http = httpClientFactory.CreateClient();
-        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["grant_type"] = "client_credentials",
             ["client_id"] = _opts.ClientId,
