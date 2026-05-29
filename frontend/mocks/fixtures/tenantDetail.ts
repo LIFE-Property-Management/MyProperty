@@ -23,14 +23,14 @@ const makeDetail = (
     leaseEndDate: leaseStatus === "Active" ? "2026-12-31" : "2025-12-31",
     monthlyRent,
     currency: "EUR",
-    leaseStatus,
-    paymentHistory: [
-      { id: P("01"), amount: monthlyRent, currency: "EUR", dueDate: "2026-04-01", status: "Confirmed",   submittedAt: "2026-04-02T10:00:00Z", confirmedAt: "2026-04-03T09:00:00Z", rejectedAt: null },
-      { id: P("02"), amount: monthlyRent, currency: "EUR", dueDate: "2026-03-01", status: "Confirmed",   submittedAt: "2026-03-02T11:00:00Z", confirmedAt: "2026-03-03T08:00:00Z", rejectedAt: null },
-      { id: P("03"), amount: monthlyRent, currency: "EUR", dueDate: "2026-05-01", status: "Pending",     submittedAt: "2026-05-02T14:00:00Z", confirmedAt: null,                   rejectedAt: null },
-      { id: P("04"), amount: monthlyRent, currency: "EUR", dueDate: "2026-02-01", status: "Rejected",    submittedAt: "2026-02-03T09:00:00Z", confirmedAt: null,                   rejectedAt: "2026-02-04T10:00:00Z" },
-      { id: P("05"), amount: monthlyRent, currency: "EUR", dueDate: "2026-06-01", status: "Outstanding", submittedAt: null,                   confirmedAt: null,                   rejectedAt: null },
-    ],
+    leaseStatus, 
+      paymentHistory: [
+          { id: P("01"), amount: monthlyRent, currency: "EUR", dueDate: "2026-06-01", status: "Outstanding", submittedAt: null,                   confirmedAt: null,                   rejectedAt: null },
+          { id: P("02"), amount: monthlyRent, currency: "EUR", dueDate: "2026-05-01", status: "Pending",     submittedAt: "2026-05-02T14:00:00Z", confirmedAt: null,                   rejectedAt: null },
+          { id: P("03"), amount: monthlyRent, currency: "EUR", dueDate: "2026-04-01", status: "Confirmed",   submittedAt: "2026-04-02T10:00:00Z", confirmedAt: "2026-04-03T09:00:00Z", rejectedAt: null },
+          { id: P("04"), amount: monthlyRent, currency: "EUR", dueDate: "2026-03-01", status: "Confirmed",   submittedAt: "2026-03-02T11:00:00Z", confirmedAt: "2026-03-03T08:00:00Z", rejectedAt: null },
+          { id: P("05"), amount: monthlyRent, currency: "EUR", dueDate: "2026-02-01", status: "Rejected",    submittedAt: "2026-02-03T09:00:00Z", confirmedAt: null,                   rejectedAt: "2026-02-04T10:00:00Z" },
+      ],
   });
 
 export const tenantDetailFixtures: Record<string, TenantDetail> = {
@@ -39,4 +39,14 @@ export const tenantDetailFixtures: Record<string, TenantDetail> = {
   [T("03")]: makeDetail(T("03"), "mike.ross@example.com",   "Mike Ross",   "Pine Road 34",        L("03"), "Expired",    800),
   [T("04")]: makeDetail(T("04"), "anna.belle@example.com",  "Anna Belle",  "Birch House",         L("04"), "Active",     1500),
   [T("05")]: makeDetail(T("05"), "chris.ward@example.com",  "Chris Ward",  "Cedar Blvd Studio",   L("05"), "Terminated", 700),
+    [T("06")]: makeDetail(T("06"), "emma.stone@example.com",  "Emma Stone",  "Elm Court 3A",      L("06"), "Active",     1100),
+    [T("07")]: makeDetail(T("07"), "liam.gray@example.com",   "Liam Gray",   "Willow Lane 9",     L("07"), "Active",     1250),
+    [T("08")]: makeDetail(T("08"), "noah.king@example.com",   "Noah King",   "Aspen Heights 14",  L("08"), "Expired",    900),
+    [T("09")]: makeDetail(T("09"), "olivia.fox@example.com",  "Olivia Fox",  "Spruce Court 2",    L("09"), "Active",     1050),
+    [T("10")]: makeDetail(T("10"), "ava.reed@example.com",    "Ava Reed",    "Magnolia Flats 5",  L("10"), "Terminated", 750),
+    [T("11")]: makeDetail(T("11"), "ethan.hall@example.com",  "Ethan Hall",  "Juniper Place 8",   L("11"), "Active",     1300),
+    [T("12")]: makeDetail(T("12"), "mia.young@example.com",   "Mia Young",   "Hawthorn Row 1",    L("12"), "Active",     1150),
+    [T("13")]: makeDetail(T("13"), "lucas.bell@example.com",  "Lucas Bell",  "Sycamore Tower 21", L("13"), "Expired",    980),
+    [T("14")]: makeDetail(T("14"), "amelia.ray@example.com",  "Amelia Ray",  "Poplar Mews 6",     L("14"), "Active",     1400),
+    [T("15")]: makeDetail(T("15"), "james.cole@example.com",  "James Cole",  "Linden Gardens 4",  L("15"), "Active",     1200),
 };
