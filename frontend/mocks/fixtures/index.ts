@@ -8,3 +8,5 @@ export {
   buildUpcomingPaymentsResponse,
 } from "./landlordDashboard";
 export { propertiesFixture, buildPropertiesResponse } from "./properties";
+export { tenantsFixture, buildTenantsResponse } from "./tenants";
+export { tenantDetailFixtures } from "./tenantDetail";
