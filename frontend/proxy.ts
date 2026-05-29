@@ -10,7 +10,7 @@ const IS_DEV = process.env.NODE_ENV === "development";
 // can run end-to-end without a real Keycloak. Must never be "true" in CI or deployed envs.
 const IS_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
 
-const PUBLIC_PATHS = new Set<string>(["/"]);
+const PUBLIC_PATHS = new Set<string>(["/", "/login", "/signup", "/logout"]);
 const PUBLIC_PREFIXES = ["/invite/"];
 
 export default function middleware(req: NextRequest) {
@@ -32,7 +32,7 @@ export default function middleware(req: NextRequest) {
   }
 
   const url = req.nextUrl.clone();
-  url.pathname = "/";
+  url.pathname = "/login";
   url.searchParams.set("redirectTo", pathname);
   return NextResponse.redirect(url);
 }

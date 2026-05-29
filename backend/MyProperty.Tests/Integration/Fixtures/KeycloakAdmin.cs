@@ -98,6 +98,83 @@ internal sealed class KeycloakAdmin(string baseAddress, string adminUser, string
         EnsureSuccess(create, $"create client '{clientId}'");
     }
 
+    /// <summary>
+    /// Creates (or ensures the existence of) a confidential client with service
+    /// accounts enabled, then assigns the three realm-management roles required
+    /// for user provisioning to its service account. Used by the integration-test
+    /// fixture to mirror the myproperty-api service account on the test realm.
+    /// </summary>
+    public async Task EnsureServiceAccountClientAsync(
+        string realm, string clientId, string clientSecret)
+    {
+        await EnsureAdminTokenAsync();
+
+        // Resolve or create the confidential client.
+        var probe = await _http.GetAsync($"admin/realms/{realm}/clients?clientId={clientId}");
+        EnsureSuccess(probe, $"list clients for '{clientId}'");
+        var existingClients = await probe.Content.ReadFromJsonAsync<JsonElement>();
+
+        string clientUuid;
+        if (existingClients.GetArrayLength() > 0)
+        {
+            clientUuid = existingClients[0].GetProperty("id").GetString()!;
+        }
+        else
+        {
+            var create = await _http.PostAsJsonAsync($"admin/realms/{realm}/clients", new
+            {
+                clientId,
+                enabled = true,
+                publicClient = false,
+                secret = clientSecret,
+                directAccessGrantsEnabled = false,
+                standardFlowEnabled = false,
+                serviceAccountsEnabled = true,
+                bearerOnly = false,
+            });
+            EnsureSuccess(create, $"create confidential client '{clientId}'");
+
+            var lookup = await _http.GetAsync($"admin/realms/{realm}/clients?clientId={clientId}");
+            EnsureSuccess(lookup, $"lookup created client '{clientId}'");
+            var clients = await lookup.Content.ReadFromJsonAsync<JsonElement>();
+            clientUuid = clients[0].GetProperty("id").GetString()!;
+        }
+
+        // Locate the realm-management client's internal UUID.
+        var rmLookup = await _http.GetAsync($"admin/realms/{realm}/clients?clientId=realm-management");
+        EnsureSuccess(rmLookup, "lookup realm-management client");
+        var rmClients = await rmLookup.Content.ReadFromJsonAsync<JsonElement>();
+        var realmMgmtUuid = rmClients[0].GetProperty("id").GetString()!;
+
+        // Find the service account user for our confidential client.
+        var saResp = await _http.GetAsync($"admin/realms/{realm}/clients/{clientUuid}/service-account-user");
+        EnsureSuccess(saResp, $"get service-account user for '{clientId}'");
+        var saUser = await saResp.Content.ReadFromJsonAsync<JsonElement>();
+        var saUserId = saUser.GetProperty("id").GetString()!;
+
+        // Build role representation payloads for the three required roles.
+        var requiredRoles = new[] { "manage-users", "view-users", "view-realm" };
+        var rolePayload = new List<object>();
+        foreach (var roleName in requiredRoles)
+        {
+            var roleResp = await _http.GetAsync(
+                $"admin/realms/{realm}/clients/{realmMgmtUuid}/roles/{roleName}");
+            EnsureSuccess(roleResp, $"lookup role '{roleName}' on realm-management");
+            var roleJson = await roleResp.Content.ReadFromJsonAsync<JsonElement>();
+            rolePayload.Add(new
+            {
+                id = roleJson.GetProperty("id").GetString(),
+                name = roleJson.GetProperty("name").GetString(),
+            });
+        }
+
+        // Assign the client roles to the service account user.
+        var assignResp = await _http.PostAsJsonAsync(
+            $"admin/realms/{realm}/users/{saUserId}/role-mappings/clients/{realmMgmtUuid}",
+            rolePayload);
+        EnsureSuccess(assignResp, $"assign realm-management roles to service account '{clientId}'");
+    }
+
     public async Task<string> CreateUserAsync(
         string realm, string email, string password, params string[] roles)
     {

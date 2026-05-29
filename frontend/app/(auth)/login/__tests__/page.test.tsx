@@ -1,88 +1,45 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
-const mockMutate = jest.fn();
-let mockIsPending = false;
-let mockIsError = false;
-let mockError: Error | null = null;
+jest.mock("@/lib/auth/keycloak", () => ({
+    login: jest.fn(),
+}));
 
-jest.mock("@/lib/hooks/auth/useLoginMutation", () => ({
-    useLoginMutation: () => ({
-        mutate: mockMutate,
-        isPending: mockIsPending,
-        isError: mockIsError,
-        error: mockError,
-    }),
+jest.mock("next/navigation", () => ({
+    useSearchParams: () => new URLSearchParams(),
+    useRouter: () => ({ push: jest.fn() }),
 }));
 
 import LoginPage from "../page";
+import { login as mockLoginFn } from "@/lib/auth/keycloak";
+
+const mockLogin = mockLoginFn as jest.Mock;
 
 beforeEach(() => {
-    mockMutate.mockReset();
-    mockIsPending = false;
-    mockIsError = false;
-    mockError = null;
+    mockLogin.mockReset();
 });
 
 describe("<LoginPage />", () => {
-    it("renders email and password fields and the submit button", () => {
+    it("renders the continue-to-sign-in button", () => {
         render(<LoginPage />);
-        expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /log in/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /continue to sign-in/i }),
+        ).toBeInTheDocument();
     });
 
-    it("shows required-field errors when submitted empty", async () => {
+    it("clicking the button calls login()", () => {
         render(<LoginPage />);
-        fireEvent.click(screen.getByRole("button", { name: /log in/i }));
-        await screen.findByText("Email is required");
-        expect(screen.getByText("Password is required")).toBeInTheDocument();
-        expect(mockMutate).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole("button", { name: /continue to sign-in/i }));
+        expect(mockLogin).toHaveBeenCalledTimes(1);
     });
 
-    it("shows email format error for an invalid email", async () => {
+    it("the 'Create a landlord account' link points to /signup", () => {
         render(<LoginPage />);
-        fireEvent.change(screen.getByLabelText(/email address/i), {
-            target: { value: "not-an-email" },
-        });
-        fireEvent.click(screen.getByRole("button", { name: /log in/i }));
-        await screen.findByText("Enter a valid email");
-        expect(mockMutate).not.toHaveBeenCalled();
-    });
-
-    it("calls mutate with form values on valid submission", async () => {
-        render(<LoginPage />);
-        fireEvent.change(screen.getByLabelText(/email address/i), {
-            target: { value: "landlord@example.com" },
-        });
-        fireEvent.change(screen.getByLabelText(/password/i), {
-            target: { value: "secret123" },
-        });
-        fireEvent.click(screen.getByRole("button", { name: /log in/i }));
-        await waitFor(() =>
-            expect(mockMutate).toHaveBeenCalledWith(
-                { email: "landlord@example.com", password: "secret123" },
-            ),
-        );
-    });
-
-    it("renders the mutation error message when isError is true", () => {
-        mockIsError = true;
-        mockError = new Error("Authentication is not yet implemented.");
-        render(<LoginPage />);
-        expect(screen.getByRole("alert")).toHaveTextContent(
-            "Authentication is not yet implemented.",
-        );
-    });
-
-    it("the 'Sign up' link points to /signup", () => {
-        render(<LoginPage />);
-        const link = screen.getByRole("link", { name: /sign up/i });
+        const link = screen.getByRole("link", { name: /create a landlord account/i });
         expect(link).toHaveAttribute("href", "/signup");
     });
 
-    it("the 'Forgot password?' link points to /forgot-password", () => {
+    it("does NOT show the registration banner when query param is absent", () => {
         render(<LoginPage />);
-        const link = screen.getByRole("link", { name: /forgot password/i });
-        expect(link).toHaveAttribute("href", "/forgot-password");
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 });

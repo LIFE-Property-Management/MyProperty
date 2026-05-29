@@ -25,10 +25,16 @@ export const wizardSchema = z
         (f) => (ID_MIME as readonly string[]).includes(f.type),
         "File must be JPEG, PNG, or PDF",
       ),
-    fullName: z
+    firstName: z
       .string()
-      .min(2, "Full name must be at least 2 characters")
-      .max(120, "Full name must be 120 characters or fewer"),
+      .trim()
+      .min(1, "First name is required")
+      .max(100, "First name must be 100 characters or fewer"),
+    lastName: z
+      .string()
+      .trim()
+      .min(1, "Last name is required")
+      .max(100, "Last name must be 100 characters or fewer"),
     password: passwordField,
     confirmPassword: z.string(),
   })
@@ -42,7 +48,7 @@ export type WizardValues = z.infer<typeof wizardSchema>;
 export const STEP_FIELDS = [
   ["acknowledgedLease"],
   ["signatureName", "idDocument"],
-  ["fullName", "password", "confirmPassword"],
+  ["firstName", "lastName", "password", "confirmPassword"],
 ] as const satisfies ReadonlyArray<ReadonlyArray<keyof WizardValues>>;
 
 export type StepIndex = 0 | 1 | 2;

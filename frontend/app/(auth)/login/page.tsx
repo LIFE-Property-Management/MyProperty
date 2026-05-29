@@ -1,26 +1,14 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { loginSchema, type LoginFormValues } from "@/lib/schemas/auth/login";
-import { useLoginMutation } from "@/lib/hooks/auth/useLoginMutation";
+import { login } from "@/lib/auth/keycloak";
 
 export default function LoginPage() {
-    const mutation = useLoginMutation();
-
-    const {
-        register,
-        handleSubmit,
-        formState: { errors },
-    } = useForm<LoginFormValues>({
-        resolver: zodResolver(loginSchema),
-    });
-
-    const onSubmit = handleSubmit((data) => mutation.mutate(data));
+    const params = useSearchParams();
+    const registered = params.get("registered") === "1";
 
     return (
         <Card padding="lg" className="w-full max-w-md">
@@ -28,53 +16,23 @@ export default function LoginPage() {
                 Welcome back
             </h2>
             <p className="text-sm text-muted-text mb-7">
-                Log in to your landlord account
+                Log in to your MyProperty account
             </p>
 
-            <form onSubmit={onSubmit} noValidate className="space-y-4">
-                <Input
-                    label="Email address"
-                    type="email"
-                    placeholder="you@example.com"
-                    autoComplete="email"
-                    {...register("email")}
-                    error={errors.email?.message}
-                />
+            {registered && (
+                <p className="text-sm text-primary bg-primary-light rounded-md px-4 py-3 mb-5" role="status">
+                    Account created — please log in to continue.
+                </p>
+            )}
 
-                <div className="space-y-1">
-                    <Input
-                        label="Password"
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="current-password"
-                        {...register("password")}
-                        error={errors.password?.message}
-                    />
-                    <div className="flex justify-end">
-                        <Link
-                            href="/forgot-password"
-                            className="text-sm text-primary font-medium hover:underline"
-                        >
-                            Forgot password?
-                        </Link>
-                    </div>
-                </div>
-
-                {mutation.isError && (
-                    <p className="text-danger text-sm" role="alert">
-                        {mutation.error.message}
-                    </p>
-                )}
-
-                <Button type="submit" fullWidth isLoading={mutation.isPending}>
-                    Log in
-                </Button>
-            </form>
+            <Button fullWidth onClick={() => login()}>
+                Continue to sign-in
+            </Button>
 
             <p className="text-center text-sm text-muted-text mt-5">
-                Don&apos;t have an account?{" "}
+                New here?{" "}
                 <Link href="/signup" className="text-primary font-medium hover:underline">
-                    Sign up
+                    Create a landlord account
                 </Link>
             </p>
         </Card>

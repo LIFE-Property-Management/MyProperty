@@ -18,6 +18,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.6.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
@@ -41,6 +42,10 @@
          directly (it builds a slim DI graph without going through AddInfrastructure
          to avoid pulling Hangfire / Smtp config into a measurement tool). -->
     <InternalsVisibleTo Include="MyProperty.Bench.Cache" />
+    <InternalsVisibleTo Include="MyProperty.Tests" />
+    <!-- Lets Moq's Castle DynamicProxy create proxies for internal interfaces
+         (e.g. IKeycloakAdminTokenCache) when mocked from MyProperty.Tests. -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 
 </Project>
