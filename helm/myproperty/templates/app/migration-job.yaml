@@ -1,3 +1,4 @@
+{{- if .Values.backend.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -75,3 +76,4 @@ spec:
             # to stdout/stderr). readOnlyRootFilesystem closes the
             # final M4.8 hardening box for this workload.
             readOnlyRootFilesystem: true
+{{- end }}

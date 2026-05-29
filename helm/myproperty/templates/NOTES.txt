@@ -1,9 +1,12 @@
 MyProperty has been deployed to namespace {{ .Release.Namespace }}.
 
 Endpoints (once DNS + ingress are configured):
-  Frontend:  https://app.myproperty.works
-  API:       https://api.myproperty.works
-  Auth:      https://auth.myproperty.works
+  Frontend:  https://{{ .Values.hosts.app }}
+  API:       https://{{ .Values.hosts.api }}
+  Auth:      https://{{ .Values.hosts.auth }}
+{{- if .Values.uptimeKuma.enabled }}
+  Status:    https://{{ .Values.hosts.status }}
+{{- end }}
 
 Check rollout status:
   kubectl rollout status deployment/{{ .Release.Name }}-backend -n {{ .Release.Namespace }}

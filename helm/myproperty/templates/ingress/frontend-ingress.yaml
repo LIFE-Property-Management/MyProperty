@@ -1,3 +1,4 @@
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,19 +8,16 @@ metadata:
     {{- include "myproperty.labels" . | nindent 4 }}
     app.kubernetes.io/component: frontend
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    {{ include "myproperty.certIssuerAnnotation" . }}
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - app.myproperty.works
-        - api.myproperty.works
-        - auth.myproperty.works
-        - {{ .Values.uptimeKuma.publicHost }}
-      secretName: myproperty-tls
+{{- include "myproperty.tlsHosts" . | nindent 8 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
   rules:
-    - host: app.myproperty.works
+    - host: {{ .Values.hosts.app }}
       http:
         paths:
           - path: /
@@ -29,3 +27,4 @@ spec:
                 name: frontend
                 port:
                   name: http
+{{- end }}

@@ -1,3 +1,4 @@
+{{- if .Values.keycloak.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -45,7 +46,7 @@ spec:
             - apk add --no-cache gettext > /dev/null && envsubst < /template/realm-export.template.json > /import/realm-export.json
           env:
             - name: MYPROPERTY_FRONTEND_BASE_URL
-              value: "https://app.myproperty.works"
+              value: "https://{{ .Values.hosts.app }}"
             - name: GOOGLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -80,7 +81,7 @@ spec:
               protocol: TCP
           env:
             - name: KC_HOSTNAME
-              value: "https://auth.myproperty.works"
+              value: "https://{{ .Values.hosts.auth }}"
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
             - name: KC_HTTP_ENABLED
@@ -170,3 +171,4 @@ spec:
             name: {{ .Release.Name }}-keycloak-realm
         - name: realm-import
           emptyDir: {}
+{{- end }}

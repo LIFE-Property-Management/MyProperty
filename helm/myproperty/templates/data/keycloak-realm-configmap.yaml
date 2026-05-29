@@ -1,3 +1,4 @@
+{{- if .Values.keycloak.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,3 +10,4 @@ metadata:
 data:
   realm-export.template.json: |
 {{ .Files.Get "files/realm-export.template.json" | indent 4 }}
+{{- end }}

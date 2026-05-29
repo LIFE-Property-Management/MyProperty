@@ -1,3 +1,4 @@
+{{- if .Values.backend.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -102,7 +103,7 @@ spec:
             - name: LokiUrl
               value: "http://loki:3100"
             - name: Keycloak__Authority
-              value: "https://auth.myproperty.works/realms/MyProperty"
+              value: "https://{{ .Values.hosts.auth }}/realms/MyProperty"
             - name: Keycloak__MetadataAddress
               value: "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration"
             - name: Cache__RedisConnection
@@ -112,7 +113,7 @@ spec:
             - name: SignalR__UseRedisBackplane
               value: "true"
             - name: Cors__AllowedOrigins__0
-              value: "https://app.myproperty.works"
+              value: "https://{{ .Values.hosts.app }}"
             # MailHog not deployed in M4.4 — invite email flow degrades gracefully.
             # Tracked as post-M4 follow-up (real SMTP or hosted MailDev).
             - name: Smtp__Host
@@ -126,7 +127,7 @@ spec:
             - name: Smtp__FromName
               value: "MyProperty"
             - name: Invites__PortalBaseUrl
-              value: "https://app.myproperty.works"
+              value: "https://{{ .Values.hosts.app }}"
             - name: Invites__ExpiryDays
               value: "7"
             - name: RabbitMq__Enabled
@@ -196,3 +197,4 @@ spec:
         - name: backend-storage
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-backend-storage
+{{- end }}
