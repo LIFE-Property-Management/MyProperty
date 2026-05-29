@@ -8,6 +8,6 @@ metadata:
     {{- include "myproperty.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgres
 data:
-  init.sql: |
-{{ .Files.Get "files/postgres-init.sql" | indent 4 }}
+  init.sh: |
+{{ .Files.Get "files/postgres-init.sh" | indent 4 }}
 {{- end }}

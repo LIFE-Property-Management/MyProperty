@@ -105,15 +105,12 @@ spec:
             - name: KC_DB_URL
               value: "jdbc:postgresql://$(KC_DB_HOST):$(KC_DB_PORT)/keycloak"
             - name: KC_DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: myproperty-postgres
-                  key: postgres-user
+              value: "keycloak"
             - name: KC_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: myproperty-postgres
-                  key: postgres-password
+                  key: keycloak-db-password
             - name: KEYCLOAK_ADMIN
               valueFrom:
                 secretKeyRef:

@@ -32,6 +32,7 @@ persist() { grep -q "^$1=" "$ENV_FILE" || printf '%s="%s"\n' "$1" "$2" >> "$ENV_
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-$(gen)}";        persist POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
 RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(gen)}";        persist RABBITMQ_PASSWORD "$RABBITMQ_PASSWORD"
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-$(gen)}"; persist KEYCLOAK_ADMIN_PASSWORD "$KEYCLOAK_ADMIN_PASSWORD"
+KEYCLOAK_DB_PASSWORD="${KEYCLOAK_DB_PASSWORD:-$(gen)}";  persist KEYCLOAK_DB_PASSWORD "$KEYCLOAK_DB_PASSWORD"
 
 # 4. Refuse to run with unreplaced placeholders.
 for v in GHCR_USERNAME GHCR_PAT GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ANTHROPIC_API_KEY; do
@@ -55,7 +56,8 @@ apply secret generic myproperty-postgres \
   --from-literal=postgres-password="$POSTGRES_PASSWORD" \
   --from-literal=postgres-db="$POSTGRES_DB" \
   --from-literal=postgres-host=postgres \
-  --from-literal=postgres-port=5432
+  --from-literal=postgres-port=5432 \
+  --from-literal=keycloak-db-password="$KEYCLOAK_DB_PASSWORD"
 
 apply secret generic myproperty-rabbitmq \
   --from-literal=rabbitmq-user="$RABBITMQ_USER" \
