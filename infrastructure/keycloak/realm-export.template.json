@@ -499,6 +499,16 @@
           "view-groups"
         ]
       }
+    ],
+    "realm-management": [
+      {
+        "client": "myproperty-api",
+        "roles": [
+          "manage-users",
+          "view-users",
+          "view-realm"
+        ]
+      }
     ]
   },
   "clients": [
@@ -696,25 +706,27 @@
       "id": "38f498e0-49a4-49a1-929b-ad158c14fcac",
       "clientId": "myproperty-api",
       "name": "MyProperty API",
-      "description": "Bearer-only client representing the .NET API. Used as an audience target so tokens issued to other clients (currently myproperty-frontend) carry aud='myproperty-api'. No login flows are enabled here.",
+      "description": "Confidential client for the .NET API. Dual purpose: (1) audience target — tokens for myproperty-frontend carry aud='myproperty-api'; (2) service account — backend uses client_credentials to call the Keycloak Admin REST API.",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
       "clientAuthenticatorType": "client-secret",
+      "secret": "${MYPROPERTY_API_CLIENT_SECRET}",
       "redirectUris": [],
       "webOrigins": [],
       "notBefore": 0,
-      "bearerOnly": true,
+      "bearerOnly": false,
       "consentRequired": false,
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
+      "serviceAccountsEnabled": true,
       "publicClient": false,
       "frontchannelLogout": false,
       "protocol": "openid-connect",
       "attributes": {
-        "realm_client": "false"
+        "realm_client": "false",
+        "use.refresh.tokens": "false"
       },
       "authenticationFlowBindingOverrides": {},
       "fullScopeAllowed": false,
@@ -753,7 +765,7 @@
       "consentRequired": false,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": true,
+      "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "publicClient": true,
       "frontchannelLogout": false,
@@ -946,6 +958,19 @@
       "realmRoles": [
         "Tenant"
       ]
+    },
+    {
+      "username": "service-account-myproperty-api",
+      "serviceAccountClientId": "myproperty-api",
+      "enabled": true,
+      "emailVerified": false,
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "view-users",
+          "view-realm"
+        ]
+      }
     }
   ],
   "clientScopes": [

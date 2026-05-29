@@ -31,7 +31,8 @@ export function InviteWizard({ invite }: InviteWizardProps) {
     resolver: zodResolver(wizardSchema),
     defaultValues: {
       signatureName: "",
-      fullName: "",
+      firstName: "",
+      lastName: "",
       password: "",
       confirmPassword: "",
     },
@@ -53,13 +54,13 @@ export function InviteWizard({ invite }: InviteWizardProps) {
 
   const onValid = handleSubmit(async (values) => {
     setSubmitError(null);
-    const formData = new FormData();
-    formData.append("signatureName", values.signatureName);
-    formData.append("fullName", values.fullName);
-    formData.append("password", values.password);
-    formData.append("idDocument", values.idDocument);
     try {
-      await mutateAsync({ token: invite.token, formData });
+      await mutateAsync({
+        token: invite.token,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        password: values.password,
+      });
       setDone(true);
     } catch {
       setSubmitError("We couldn't submit your acceptance. Please try again.");

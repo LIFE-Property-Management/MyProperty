@@ -67,13 +67,23 @@ export function clearCachedToken(): void {
   initPromise = null;
 }
 
+export async function login(redirectUri?: string): Promise<void> {
+  // keycloak-js sets up its internal adapter during init(); calling login()
+  // before init() throws "this[#adapter] is undefined". The /login and landing
+  // routes are not under a portal layout that calls initKeycloak, so ensure
+  // initialization here (initKeycloak is idempotent) before redirecting.
+  await initKeycloak();
+  getInstance().login({ redirectUri: redirectUri ?? window.location.origin });
+}
+
 export function initKeycloak(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     const kc = getInstance();
     const authenticated = await kc.init({
-      onLoad: "login-required",
+      onLoad: "check-sso",
       checkLoginIframe: false,
+      silentCheckSsoRedirectUri: window.location.origin + "/silent-check-sso.html",
     });
     if (authenticated && kc.token) {
       const payload = decodePayload(kc.token);

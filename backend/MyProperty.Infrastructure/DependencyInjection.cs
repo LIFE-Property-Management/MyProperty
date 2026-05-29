@@ -12,6 +12,7 @@ using MyProperty.Application.Common.Options;
 using MyProperty.Infrastructure.Ai;
 using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Email;
+using MyProperty.Infrastructure.Keycloak;
 using MyProperty.Infrastructure.Storage;
 using MyProperty.Infrastructure.Jobs;
 using MyProperty.Infrastructure.Messaging;
@@ -53,6 +54,7 @@ public static class DependencyInjection
         services.AddMessaging(configuration);
         services.AddStorage(configuration);
         services.AddAiServices(configuration);
+        services.AddKeycloakAdmin(configuration);
 
         return services;
     }
@@ -144,6 +146,22 @@ public static class DependencyInjection
         {
             client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
         });
+
+        return services;
+    }
+
+    private static IServiceCollection AddKeycloakAdmin(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<KeycloakAdminOptions>()
+            .Bind(configuration.GetSection(KeycloakAdminOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddSingleton<IKeycloakAdminTokenCache, KeycloakAdminTokenCache>();
+
+        services.AddHttpClient<IUserAccountProvisioner, KeycloakAdminClient>()
+            .AddStandardResilienceHandler();
 
         return services;
     }

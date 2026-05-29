@@ -1,15 +1,14 @@
 using FluentValidation;
 
-namespace MyProperty.Application.Invites.Commands.AcceptInvite;
+namespace MyProperty.Application.Auth.Commands.RegisterLandlord;
 
-public sealed class AcceptInviteValidator : AbstractValidator<AcceptInviteCommand>
+public sealed class RegisterLandlordValidator : AbstractValidator<RegisterLandlordCommand>
 {
-    public AcceptInviteValidator()
+    public RegisterLandlordValidator()
     {
-        RuleFor(x => x.Token)
-            .NotEmpty().WithMessage("Token is required.")
-            .Length(20, 100).WithMessage("Token length is invalid.")
-            .Matches("^[A-Za-z0-9_-]+$").WithMessage("Token must be URL-safe base64.");
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.");
 
         RuleFor(x => x.FirstName)
             .NotEmpty().WithMessage("First name is required.")
