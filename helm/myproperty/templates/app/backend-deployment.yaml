@@ -106,8 +106,13 @@ spec:
               value: "https://{{ .Values.hosts.auth }}/realms/MyProperty"
             - name: Keycloak__MetadataAddress
               value: "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-redis
+                  key: redis-password
             - name: Cache__RedisConnection
-              value: "redis:6379"
+              value: "redis:6379,password=$(REDIS_PASSWORD)"
             - name: Cache__InstancePrefix
               value: "myproperty:prod:"
             - name: SignalR__UseRedisBackplane

@@ -20,9 +20,9 @@ postgres:
   storage:
     storageClassName: longhorn
 redis:
-  enabled: false
+  enabled: true
 rabbitmq:
-  enabled: false
+  enabled: true
   storage:
     storageClassName: longhorn
 keycloak:
