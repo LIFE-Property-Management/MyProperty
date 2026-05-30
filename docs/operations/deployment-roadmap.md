@@ -92,9 +92,11 @@ running workloads.
   Decision #7).
 
 ### Security housekeeping
-- **Revoke the unused DigitalOcean API token + Spaces keys.** They only exist in the local
-  gitignored `infrastructure/terraform/**/terraform.tfvars` (never committed — history
-  confirmed clean), but the DO account/token is dead weight; revoke it.
+- ✅ **DONE (2026-05-31):** the DigitalOcean account was deleted, revoking the API token +
+  Spaces key (which only existed in the local gitignored
+  `infrastructure/terraform/**/terraform.tfvars`, never committed). Those local files have
+  been scrubbed to `REVOKED` placeholders. The dead `infrastructure/terraform/` tree is
+  removed as part of this batch's cleanup.
 
 ### Provider durability
 - Ask Gjirafa whether the ingress entrypoint is a **stable** contractual address (floating
