@@ -31,17 +31,19 @@ keycloak:
 backend:
   enabled: true
   image:
-    tag: "6cd4267"
+    tag: "1232e70"
   storage:
     storageClassName: longhorn
 migration:
   image:
-    tag: "6cd4267"
+    tag: "1232e70"
 frontend:
-  enabled: false
+  enabled: true
+  image:
+    tag: ""           # set to SHA6 after docker build + push
 
 ingress:
-  enabled: false
+  enabled: true
   tls:
     secretName: myproperty-tls
     issuerKind: Issuer
