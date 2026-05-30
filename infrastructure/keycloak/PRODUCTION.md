@@ -1,5 +1,14 @@
 # Keycloak — production deployment notes
 
+> ⚠️ **SUPERSEDED (DOKS-era bootstrap).** Keycloak now runs in-cluster via the Helm chart on
+> Hetzner (namespace `project-02`); the realm config details here may still be useful but the
+> deployment/bootstrap steps are obsolete. Current deploy:
+> [../../docs/operations/k8s-deployment.md](../../docs/operations/k8s-deployment.md); current
+> auth flow: [../../docs/operations/auth-flow.md](../../docs/operations/auth-flow.md).
+> Note `infrastructure/keycloak/realm-export.template.json` is a **duplicate** of the Helm
+> copy (`helm/myproperty/files/`) — dedup tracked in
+> [../../docs/operations/deployment-roadmap.md](../../docs/operations/deployment-roadmap.md).
+
 This document describes how the MyProperty Keycloak realm runs in
 production-grade environments (staging, production). It complements
 `docker-compose.yml`, which uses `start-dev` mode and is **dev-only**.

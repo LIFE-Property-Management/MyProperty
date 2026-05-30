@@ -1,5 +1,11 @@
 # Nginx + Let's Encrypt — production deployment notes
 
+> ⚠️ **SUPERSEDED.** This standalone nginx + Let's Encrypt layer is **not used** on the
+> current cluster — ingress-nginx + cert-manager replace it. See
+> [../../docs/operations/k8s-deployment.md](../../docs/operations/k8s-deployment.md).
+> Deleting `infrastructure/nginx/` is tracked in
+> [../../docs/operations/deployment-roadmap.md](../../docs/operations/deployment-roadmap.md).
+
 This document describes how the MyProperty reverse-proxy + TLS layer
 runs in production-grade Kubernetes. It complements
 `docker-compose.yml`, which spins up nginx + certbot via the `proxy`

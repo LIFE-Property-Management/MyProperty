@@ -1,5 +1,9 @@
 # Milestone 5 — End-to-end Authentication & Authorization
 
+> **Current/production auth flow:** see [../operations/auth-flow.md](../operations/auth-flow.md).
+> This milestone doc is the historical local bring-up record (2026-05-29); the production
+> routing / cookie gate / end-session logout were finished later in the Hetzner deploy.
+
 **Status:** 🟡 In progress — local auth complete & verified; cluster deployment deferred
 **Branch:** `feature/authorization-end-to-end`
 **Aligns with:** Section 2 — Auth & Accounts
