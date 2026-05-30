@@ -34,6 +34,7 @@ RABBITMQ_PASSWORD="${RABBITMQ_PASSWORD:-$(gen)}";        persist RABBITMQ_PASSWO
 KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-$(gen)}"; persist KEYCLOAK_ADMIN_PASSWORD "$KEYCLOAK_ADMIN_PASSWORD"
 KEYCLOAK_DB_PASSWORD="${KEYCLOAK_DB_PASSWORD:-$(gen)}";  persist KEYCLOAK_DB_PASSWORD "$KEYCLOAK_DB_PASSWORD"
 REDIS_PASSWORD="${REDIS_PASSWORD:-$(gen)}";              persist REDIS_PASSWORD "$REDIS_PASSWORD"
+MYPROPERTY_API_CLIENT_SECRET="${MYPROPERTY_API_CLIENT_SECRET:-$(gen)}"; persist MYPROPERTY_API_CLIENT_SECRET "$MYPROPERTY_API_CLIENT_SECRET"
 
 # 4. Refuse to run with unreplaced placeholders.
 for v in GHCR_USERNAME GHCR_PAT GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ANTHROPIC_API_KEY; do
@@ -77,6 +78,9 @@ apply secret generic myproperty-anthropic \
 
 apply secret generic myproperty-redis \
   --from-literal=redis-password="$REDIS_PASSWORD"
+
+apply secret generic myproperty-api-client \
+  --from-literal=client-secret="$MYPROPERTY_API_CLIENT_SECRET"
 
 echo "✓ Secrets applied in namespace $NS:"
 kc get secrets

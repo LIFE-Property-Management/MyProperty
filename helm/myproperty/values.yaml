@@ -35,6 +35,9 @@ postgres:
   # backend's connection string template is unchanged; only the Secret content
   # differs between modes.
   enabled: true
+  # SSL mode for the Npgsql connection string. "Require" for managed Postgres
+  # (DO managed PG requires TLS); "Disable" for in-cluster Postgres (no TLS).
+  sslMode: Disable
   image:
     repository: postgres
     tag: 16-alpine

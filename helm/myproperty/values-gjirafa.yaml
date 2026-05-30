@@ -19,6 +19,7 @@ postgres:
   enabled: true
   storage:
     storageClassName: longhorn
+  sslMode: Disable
 redis:
   enabled: true
 rabbitmq:
@@ -28,9 +29,14 @@ rabbitmq:
 keycloak:
   enabled: true
 backend:
-  enabled: false
+  enabled: true
+  image:
+    tag: "6cd4267"
   storage:
     storageClassName: longhorn
+migration:
+  image:
+    tag: "6cd4267"
 frontend:
   enabled: false
 
