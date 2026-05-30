@@ -47,7 +47,7 @@ ingress:
   tls:
     secretName: myproperty-tls
     issuerKind: Issuer
-    issuerName: letsencrypt-staging        # flip to letsencrypt-prod once staging validates
+    issuerName: letsencrypt-prod           # flipped from staging after staging validated (Batch 6)
     createIssuers: true
     acmeEmail: erdi.syla@gjirafa.com
     issuers:

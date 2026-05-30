@@ -38,5 +38,7 @@ export default function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/public).*)"],
+  // silent-check-sso.html must be served as-is for the keycloak-js check-sso iframe;
+  // without this exclusion the middleware redirects it to /login, breaking init() and login().
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/public|silent-check-sso.html).*)"],
 };
