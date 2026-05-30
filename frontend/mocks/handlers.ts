@@ -10,6 +10,8 @@ import {
     landlordDashboardFixture,
     buildUpcomingPaymentsResponse,
     buildPropertiesResponse,
+    buildTenantsResponse,
+    tenantDetailFixtures,
 } from "./fixtures";
 
 // In-memory "current payment" state — lets the dashboard show the post-submit
@@ -71,6 +73,21 @@ export const handlers = [
     http.get("/landlord/dashboard", async () => {
         await delay(300);
         return HttpResponse.json(landlordDashboardFixture);
+    }),
+
+    http.get("/landlord/tenants", async ({ request }) => {
+        await delay(300);
+        const url = new URL(request.url);
+        const page = parsePositiveInt(url.searchParams.get("page"), 1);
+        const pageSize = parsePositiveInt(url.searchParams.get("pageSize"), 10);
+        return HttpResponse.json(buildTenantsResponse(page, pageSize));
+    }),
+
+    http.get("/landlord/tenants/:id", async ({ params }) => {
+        await delay(300);
+        const detail = tenantDetailFixtures[params.id as string];
+        if (!detail) return new HttpResponse(null, { status: 404 });
+        return HttpResponse.json(detail);
     }),
 
     http.get("/properties", async ({ request }) => {
