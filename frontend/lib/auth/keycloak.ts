@@ -135,11 +135,14 @@ export function initKeycloak(): Promise<void> {
   return initPromise;
 }
 
-export async function logout(): Promise<void> {
+export async function logout(redirectUri?: string): Promise<void> {
   const kc = _keycloak;
   _keycloak = null;
   initPromise = null;
   useAuthStore.getState().clearAuth();
   clearAuthCookie();
-  await kc?.logout({ redirectUri: window.location.origin });
+  // kc.logout() redirects the browser to Keycloak's end-session endpoint, which
+  // terminates the SSO session server-side (clearing KEYCLOAK_IDENTITY) before
+  // returning to redirectUri. Without this a later check-sso silently re-auths.
+  await kc?.logout({ redirectUri: redirectUri ?? window.location.origin });
 }
