@@ -78,14 +78,15 @@ Idempotent. Copy the template and fill in operator-supplied values, then run:
 
 ```bash
 cp infrastructure/gjirafa/secrets.env.example infrastructure/gjirafa/.secrets.env
-# edit .secrets.env: GHCR_USERNAME, GHCR_PAT, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ANTHROPIC_API_KEY
+# edit .secrets.env: GHCR_USERNAME, GHCR_PAT, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+#   ANTHROPIC_API_KEY, DISCORD_WEBHOOK_URL, DISCORD_UPTIME_WEBHOOK_URL (optional)
 infrastructure/gjirafa/secrets.sh
 ```
 
 `.secrets.env` is gitignored. The script **generates and persists** the random passwords
-(Postgres, RabbitMQ, Keycloak admin, Keycloak DB, Redis, `myproperty-api` client secret)
-on first run and reuses them on re-runs — never regenerate them by hand. It then applies
-these Secrets in `project-02`:
+(Postgres, RabbitMQ, Keycloak admin, Keycloak DB, Redis, Grafana admin, Uptime-Kuma admin,
+`myproperty-api` client secret) on first run and reuses them on re-runs — never regenerate
+them by hand. It then applies these Secrets in `project-02`:
 
 | Secret | Holds |
 |---|---|
@@ -97,6 +98,19 @@ these Secrets in `project-02`:
 | `myproperty-anthropic` | Anthropic API key (backend OCR + aiops-webhook) |
 | `myproperty-redis` | redis password |
 | `myproperty-api-client` | `myproperty-api` Keycloak client secret (service account) |
+| `myproperty-grafana` | Grafana admin user/password |
+| `myproperty-uptime-kuma` | Uptime-Kuma admin user/password |
+| `myproperty-discord` | `webhook-url` (aiops #alerts) + `uptime-webhook-url` (Kuma #uptime) |
+
+#### Rotating a data-store password
+
+Postgres & RabbitMQ bake their password into the data volume on **first init only** —
+changing the Secret on an existing volume does nothing to the live password. To rotate
+by wiping (acceptable when the data is disposable): delete the password lines from
+`.secrets.env`, re-run `secrets.sh`, delete the StatefulSets + their PVCs, then run
+`deploy.sh --no-hooks` to recreate the stores fresh **before** a normal `deploy.sh` (the
+migration runs as a pre-upgrade hook and needs Postgres already up). Redis is stateless —
+just `rollout restart`, then `rollout restart` the backend + keycloak so they reconnect.
 
 ---
 
@@ -118,8 +132,8 @@ Then prints `kubectl -n project-02 get pods,pvc`.
   Verify with `kubectl` afterwards (don't trust "helm succeeded" alone).
 - **`values-gjirafa.yaml`** is the overlay that makes the chart fit this cluster:
   `storageClassName: longhorn` everywhere, namespaced cert-manager `Issuer`s
-  (`createIssuers: true`, staging + prod), `monitoring.enabled: false`,
-  `uptimeKuma.enabled: false`, and the **pinned image tags**.
+  (`createIssuers: true`, staging + prod), `monitoring.enabled: true`,
+  `uptimeKuma.enabled: true`, and the **pinned image tags**.
 
 ### Image tags
 
@@ -203,19 +217,22 @@ For a code rollback, re-pin the previous image tag in `values-gjirafa.yaml` and 
 
 | Kind | Notes |
 |---|---|
-| Deployment | backend, frontend, keycloak, aiops-webhook (aiops/monitoring off in this overlay) |
-| StatefulSet | postgres, rabbitmq (+ loki when monitoring on) |
-| Job | EF Core migration bundle (pre-install/pre-upgrade hook) |
-| Service | postgres, redis, rabbitmq, keycloak, backend, frontend |
-| Ingress | frontend (`app`), api (WebSocket timeouts), keycloak (`auth`, proxy buffers) |
+| Deployment | backend, frontend, keycloak, redis, aiops-webhook, grafana |
+| StatefulSet | postgres, rabbitmq, prometheus, alertmanager, loki, uptime-kuma |
+| DaemonSet | promtail (namespaced log tailing) |
+| Job | EF Core migration bundle (pre-upgrade hook); uptime-kuma seed (post-upgrade hook) |
+| Service | postgres, redis, rabbitmq, keycloak, backend, frontend, prometheus, alertmanager, grafana, loki, aiops-webhook, uptime-kuma |
+| Ingress | frontend (`app`), api (WebSocket timeouts), keycloak (`auth`), grafana (`grafana`), uptime-kuma (`status`) |
 | Issuer | `letsencrypt-staging`, `letsencrypt-prod` (namespaced) |
-| ConfigMap | postgres-init, keycloak-realm, (+ monitoring configs when on) |
-| PersistentVolumeClaim | backend file storage (5Gi RWO, `longhorn`); StatefulSet PVCs for postgres (10Gi) + rabbitmq (5Gi) |
+| ConfigMap | postgres-init, keycloak-realm, prometheus/alertmanager/loki/promtail/grafana configs |
+| PersistentVolumeClaim | backend storage (5Gi); StatefulSet PVCs: postgres (10Gi), rabbitmq (5Gi), prometheus (20Gi), alertmanager (1Gi), loki (10Gi), uptime-kuma (2Gi), grafana (2Gi) — all RWO `longhorn` |
 | Secret | created out-of-band by `secrets.sh` (see above) |
 
-Monitoring resources (Loki, Promtail, kube-prometheus-stack, ServiceMonitor,
-PrometheusRule) and Uptime-Kuma exist in the chart but are **disabled** in the `project-02`
-overlay; enabling them is the monitoring batch in the roadmap.
+The monitoring stack is **self-contained**: in-namespace Prometheus, Alertmanager, Grafana,
+Loki, Promtail, Uptime-Kuma, and the AIOps webhook — all rendered by this chart. There is
+**no Prometheus operator and no CRDs** (`ServiceMonitor`/`PrometheusRule`); Prometheus
+scrapes via static config and loads alert rules from a ConfigMap. Gated by
+`monitoring.enabled` + `uptimeKuma.enabled` (both **on** in the `project-02` overlay).
 
 ---
 
@@ -241,9 +258,11 @@ support ship in the chart's `security/` templates.
   the cluster — invite emails don't send (the rest of the app is unaffected). Fix is a
   mailer batch (Mailpit / transactional relay) in the roadmap.
 - **Backend capped at 1 replica** by the RWO `longhorn` PVC; horizontal scaling needs
-  object storage (roadmap).
-- **kube-prometheus-stack CRDs are cluster-scoped** — relevant only when monitoring is
-  enabled; don't `helm uninstall` carelessly on a shared cluster.
+  object storage (roadmap). Same RWO constraint is why backend + Grafana use
+  `strategy: Recreate` (a rolling update would deadlock on the single-attach volume).
+- **Monitoring is fully namespace-scoped** — no cluster-scoped CRDs or operator, so it's
+  safe on the shared cluster. Alerting flows Alertmanager → aiops-webhook → Claude →
+  Discord (`#alerts`); Uptime-Kuma posts to a separate Discord channel (`#uptime`).
 
 ---
 

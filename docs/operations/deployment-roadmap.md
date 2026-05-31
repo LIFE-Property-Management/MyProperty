@@ -11,18 +11,21 @@ batches below clean that up and extend the platform.
 
 ---
 
-## Batch 7 — Monitoring
+## Batch 7 — Monitoring — ✅ DONE (2026-05-31)
 
-Currently `monitoring.enabled: false` and `uptimeKuma.enabled: false` in
-`values-gjirafa.yaml`. Bring observability up **namespace-scoped** (the SA has no
-cluster-scoped permissions):
+Observability is live and namespace-scoped. See [k8s-deployment.md](./k8s-deployment.md)
+for the operational detail. What shipped (no Prometheus operator / CRDs — the
+kube-prometheus-stack dependency was replaced with self-contained manifests, since
+the SA has no cluster-scoped permissions):
 
-- Namespaced `ServiceMonitor` + `PrometheusRule` (confirm the shared cluster's Prometheus
-  operator will scrape our namespace).
-- In-cluster Loki for logs.
-- Promtail reworked to a **namespaced `Role`** (it can only tail our namespace's pods —
-  acceptable) rather than the chart's default cluster-scoped Pod discovery.
-- Uptime-Kuma needs a 4th subdomain + ingress if enabled.
+- In-namespace **Prometheus + Alertmanager + Grafana**, scraping the backend's metrics
+  and loading alert rules directly (no `ServiceMonitor`/`PrometheusRule` CRDs).
+- In-cluster **Loki** for logs; **Promtail** as a namespaced `Role` tailing only
+  `project-02` pods.
+- **Uptime-Kuma** on `status.myproperty.works` (4th subdomain + ingress), seeded with 13
+  monitors + a public status page; data-store monitors inject real creds from Secrets.
+- **AIOps webhook**: Alertmanager → Claude triage → **Discord** (`#alerts`), firing +
+  resolved. Uptime-Kuma posts to a **separate** Discord channel (`#uptime`).
 
 ---
 
@@ -81,10 +84,12 @@ running workloads.
   `helm/myproperty/files/realm-export.template.json` (the Helm copy is the one actually
   used). Keep one source of truth.
 
-### Fix vestigial Helm defaults
-- `helm/myproperty/values.yaml` still defaults `storageClassName: do-block-storage` (×8)
-  and `issuerKind: ClusterIssuer`. These are overridden by `values-gjirafa.yaml` but are
-  broken/dangerous for any un-overlaid deploy. Make them Hetzner-correct / parameter-driven.
+### Fix vestigial Helm defaults — ✅ DONE (2026-05-31)
+- `helm/myproperty/values.yaml` base defaults are now Hetzner-correct: `storageClassName:
+  longhorn` (×8, was `do-block-storage`) and `issuerKind: Issuer` (namespaced, was
+  `ClusterIssuer`). An un-overlaid deploy no longer references DO storage or a
+  cluster-scoped Issuer the SA can't use. Stale `kube-prometheus-stack`/`ServiceMonitor`/
+  `PrometheusRule` comments removed too.
 
 ### Frontend multi-environment build args
 - `NEXT_PUBLIC_*` are baked at build time and hardcoded to prod in `frontend-ci.yml`.

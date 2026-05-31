@@ -10,21 +10,23 @@ hosts:
   status: status.myproperty.works   # only emitted when uptimeKuma.enabled
   grafana: grafana.myproperty.works  # only emitted when monitoring.enabled
 
-# Ingress + TLS. Defaults reproduce the original DOKS behavior:
-# annotation `cert-manager.io/cluster-issuer: letsencrypt-prod`, no Issuer created.
+# Ingress + TLS. Defaults are namespace-scoped (Hetzner project-02 reality):
+# a namespaced Issuer, since the SA has no cluster-scoped permissions and
+# cannot reference a ClusterIssuer. The overlay sets createIssuers + acmeEmail.
 ingress:
   enabled: true
   tls:
     secretName: myproperty-tls
-    issuerKind: ClusterIssuer        # "Issuer" (namespaced) | "ClusterIssuer"
+    issuerKind: Issuer               # "Issuer" (namespaced) | "ClusterIssuer"
     issuerName: letsencrypt-prod     # annotation value the ingresses reference
     createIssuers: false             # when true, render the Issuers listed below
     acmeEmail: ""                    # required when createIssuers=true
     issuers: []                      # list of {name, server}; see overlay
 
-# Master switch for the monitoring sub-stack (loki, promtail, ServiceMonitor,
-# PrometheusRule, grafana dashboards/datasource, aiops-webhook) AND the
-# kube-prometheus-stack dependency (gated via Chart.yaml `condition`).
+# Master switch for the self-contained monitoring sub-stack: Prometheus,
+# Alertmanager, Grafana (dashboards/datasource), Loki, Promtail, and the
+# aiops-webhook. All namespace-scoped manifests rendered by this chart — no
+# operator / CRDs (replaced the kube-prometheus-stack dependency).
 monitoring:
   enabled: true
 
@@ -44,7 +46,7 @@ postgres:
     tag: 16-alpine
   storage:
     size: 10Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -82,7 +84,7 @@ rabbitmq:
     tag: 3-management
   storage:
     size: 5Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -117,7 +119,7 @@ backend:
   replicas: 1
   storage:
     size: 5Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 200m
@@ -179,7 +181,7 @@ uptimeKuma:
   publicUrl: https://status.myproperty.works
   storage:
     size: 2Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -201,7 +203,7 @@ loki:
     tag: "3.2.0"
   storage:
     size: 10Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -227,7 +229,7 @@ prometheus:
   retention: 15d
   storage:
     size: 20Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 200m
@@ -242,7 +244,7 @@ alertmanager:
   webhookUrl: http://aiops-webhook:5001/alerts
   storage:
     size: 1Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 50m
@@ -257,7 +259,7 @@ grafana:
   ingressAllowlist: ""
   storage:
     size: 2Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -349,7 +351,7 @@ networkPolicies:
   # permitted to reach the public-facing workloads (frontend, backend,
   # keycloak). Override if running a different controller / namespace.
   ingressNamespace: ingress-nginx
-  # kube-prometheus-stack lives in the same release namespace by default
-  # because it ships as a chart dependency. If the chart is split out,
-  # override with the controller's namespace.
+  # The monitoring stack (Prometheus/Alertmanager) runs in this release's own
+  # namespace — it's rendered by this chart, not a separate operator install.
+  # Override only if monitoring is ever split into a different namespace.
   monitoringNamespace: project-02

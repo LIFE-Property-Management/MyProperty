@@ -366,8 +366,8 @@ spec:
         - protocol: TCP
           port: 6443
 ---
-# AIOps webhook: ingress from kube-prometheus-stack's Alertmanager pods.
-# Egress to external HTTPS only (Anthropic, Slack/Discord webhooks).
+# AIOps webhook: ingress from the in-namespace Alertmanager pods.
+# Egress to external HTTPS only (Anthropic API, Discord webhooks).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
