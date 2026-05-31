@@ -2,8 +2,8 @@
 
 Inline fixtures, no file I/O. Tests boundary contracts:
   - Alertmanager payload parsing (Pydantic happy path + extra-field tolerance)
-  - Block Kit rendering for firing alerts
-  - Block Kit rendering for resolved alerts (no triage section)
+  - Discord embed rendering for firing alerts (includes triage)
+  - Discord embed rendering for resolved alerts (no triage, RESOLVED title)
   - LLM-disabled path returns None from triage_alert (clean fallback)
   - /alerts endpoint returns 202 even when no LLM key is configured
 """
@@ -47,34 +47,27 @@ def test_alertmanager_payload_parses_with_extra_fields():
     assert parsed.alerts[0].labels["alertname"] == "MyPropertyApiDown"
 
 
-def test_build_slack_blocks_firing_includes_triage_section():
-    """Firing alert with triage text renders a Triage section block."""
+def test_build_discord_payload_firing_includes_triage():
+    """Firing alert with triage text renders the Triage section in the embed."""
     alert = main.Alert(**FIRING_PAYLOAD["alerts"][0])
-    blocks = main.build_slack_blocks(alert, "firing", "Triage text here.")
-    triage_blocks = [
-        b
-        for b in blocks
-        if b.get("type") == "section"
-        and isinstance(b.get("text"), dict)
-        and "Triage" in b["text"].get("text", "")
-    ]
-    assert len(triage_blocks) == 1
+    payload = main.build_discord_payload(alert, "firing", "Triage text here.")
+    embed = payload["embeds"][0]
+    assert "Triage" in embed["description"]
+    assert "Triage text here." in embed["description"]
+    assert "[CRITICAL]" in embed["title"]
+    # content one-liner is the mobile-push fallback.
+    assert payload["content"].startswith("[FIRING]")
 
 
-def test_build_slack_blocks_resolved_omits_triage_section():
-    """Resolved alerts skip the triage section even if triage_text is provided."""
+def test_build_discord_payload_resolved_omits_triage():
+    """Resolved alerts skip triage (even if provided) and use the RESOLVED title."""
     alert = main.Alert(**FIRING_PAYLOAD["alerts"][0])
-    blocks = main.build_slack_blocks(alert, "resolved", "Should be ignored.")
-    triage_blocks = [
-        b
-        for b in blocks
-        if b.get("type") == "section"
-        and isinstance(b.get("text"), dict)
-        and "Triage" in b["text"].get("text", "")
-    ]
-    assert triage_blocks == []
-    header = next(b for b in blocks if b.get("type") == "header")
-    assert "RESOLVED" in header["text"]["text"]
+    payload = main.build_discord_payload(alert, "resolved", "Should be ignored.")
+    embed = payload["embeds"][0]
+    assert "Should be ignored." not in embed.get("description", "")
+    assert "Triage" not in embed.get("description", "")
+    assert "RESOLVED" in embed["title"]
+    assert embed["color"] == main.RESOLVED_COLOR
 
 
 def test_triage_alert_returns_none_when_llm_disabled():
@@ -89,7 +82,7 @@ def test_alerts_endpoint_returns_202_with_no_api_key():
     """The webhook accepts payloads and queues background work even when triage is disabled."""
     with (
         patch.object(main, "claude_client", None),
-        patch.object(main, "SLACK_WEBHOOK_URL", ""),
+        patch.object(main, "DISCORD_WEBHOOK_URL", ""),
     ):
         client = TestClient(main.app)
         response = client.post("/alerts", json=FIRING_PAYLOAD)

@@ -2,7 +2,7 @@
 #  infrastructure/aiops-webhook/Dockerfile
 #
 #  AIOps webhook receiver — M4.11. Receives Alertmanager webhook
-#  POSTs, calls Anthropic Claude for triage, posts to Slack.
+#  POSTs, calls Anthropic Claude for triage, posts to Discord.
 #
 #  Multi-stage build:
 #    Stage 1 (deps)    — installs pinned wheels into a venv.
