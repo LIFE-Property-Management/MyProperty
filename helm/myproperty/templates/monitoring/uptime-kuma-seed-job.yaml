@@ -71,6 +71,45 @@ spec:
               value: {{ .Values.uptimeKuma.smtp.to | quote }}
             - name: KUMA_LOG_LEVEL
               value: "INFO"
+            # Real data-store credentials for the Postgres/Redis/RabbitMQ
+            # monitors. monitors.json references these via ${VAR} placeholders
+            # (seed.py expands them); the same Secrets the backend consumes.
+            {{- if .Values.postgres.enabled }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-db
+            {{- end }}
+            {{- if .Values.redis.enabled }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-redis
+                  key: redis-password
+            {{- end }}
+            {{- if .Values.rabbitmq.enabled }}
+            - name: RABBITMQ_USER
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-rabbitmq
+                  key: rabbitmq-user
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-rabbitmq
+                  key: rabbitmq-password
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

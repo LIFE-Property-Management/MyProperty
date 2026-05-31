@@ -89,9 +89,9 @@
       "interval": 60,
       "maxretries": 2,
       "retryInterval": 30,
-      "databaseConnectionString": "postgres://postgres:postgres@postgres:5432/myproperty",
+      "databaseConnectionString": "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-myproperty}",
       "databaseQuery": "SELECT 1",
-      "comment": "Connects via the same connection string the backend uses; runs SELECT 1 every minute. Kuma will reuse the connection across probes."
+      "comment": "Connects via the same connection string the backend uses; runs SELECT 1 every minute. Credentials come from env (${POSTGRES_*}, injected from the myproperty-postgres Secret in K8s); falls back to the compose dev defaults when unset."
     },
     {
       "name": "Redis",
@@ -99,8 +99,8 @@
       "interval": 60,
       "maxretries": 2,
       "retryInterval": 30,
-      "databaseConnectionString": "redis://redis:6379",
-      "comment": "Redis PING probe. The API tolerates brief Redis outages by design (cache + SignalR backplane fall back gracefully) — this monitor exists for visibility, not for paging."
+      "databaseConnectionString": "redis://:${REDIS_PASSWORD:-}@redis:6379",
+      "comment": "Redis PING probe. Password comes from ${REDIS_PASSWORD} (myproperty-redis Secret in K8s); empty in compose dev, where Redis runs auth-less and the empty userinfo sends no AUTH. The API tolerates brief Redis outages by design (cache + SignalR backplane fall back gracefully) — this monitor exists for visibility, not for paging."
     },
     {
       "name": "RabbitMQ — management",
@@ -112,9 +112,9 @@
       "retryInterval": 30,
       "accepted_statuscodes": ["200-299"],
       "authMethod": "basic",
-      "basic_auth_user": "guest",
-      "basic_auth_pass": "guest",
-      "comment": "Rabbit's built-in health/checks/alarms endpoint — green when there are no memory or disk alarms firing on any node. Basic auth uses the default guest creds (only reachable from inside the docker network)."
+      "basic_auth_user": "${RABBITMQ_USER:-guest}",
+      "basic_auth_pass": "${RABBITMQ_PASSWORD:-guest}",
+      "comment": "Rabbit's built-in health/checks/alarms endpoint — green when there are no memory or disk alarms firing on any node. Basic auth creds come from env (${RABBITMQ_USER}/${RABBITMQ_PASSWORD}, injected from the myproperty-rabbitmq Secret in K8s); falls back to the compose dev guest/guest when unset."
     },
     {
       "name": "Loki",
