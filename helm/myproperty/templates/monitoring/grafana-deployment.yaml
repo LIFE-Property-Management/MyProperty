@@ -34,6 +34,12 @@ metadata:
     app.kubernetes.io/component: grafana
 spec:
   replicas: 1
+  # Recreate, not RollingUpdate: Grafana mounts a single RWO longhorn PVC
+  # (grafana-data). A rolling update would start the new pod before the old
+  # one releases the volume → Multi-Attach error and a stuck rollout. Same
+  # reasoning as the backend Deployment.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "myproperty.selectorLabels" . | nindent 6 }}
