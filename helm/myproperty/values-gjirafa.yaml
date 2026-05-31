@@ -56,14 +56,12 @@ uptimeKuma:
   enabled: true
   storage:
     storageClassName: longhorn
-  # Set to real GHCR SHA once image is built+pushed (Batch 2 step 2.4)
   seedImage:
-    tag: latest
+    tag: "e4be20d"
 
 aiopsWebhook:
-  # Set to real GHCR SHA from GHCR (Batch 2 step 2.5)
   image:
-    tag: latest
+    tag: "cf3f118"
 
 prometheus:
   storage:

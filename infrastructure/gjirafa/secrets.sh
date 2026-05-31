@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Batch 1 — create the six application Secrets in namespace project-02.
+# Create all application Secrets in namespace project-02.
 # Idempotent. Run after copying secrets.env.example -> .secrets.env and filling it in.
 set -euo pipefail
 
@@ -24,6 +24,8 @@ POSTGRES_USER="${POSTGRES_USER:-myproperty}"
 POSTGRES_DB="${POSTGRES_DB:-myproperty}"
 RABBITMQ_USER="${RABBITMQ_USER:-myproperty}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
+GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER:-admin}"
+KUMA_ADMIN_USERNAME="${KUMA_ADMIN_USERNAME:-admin}"
 
 # 3. Generate passwords once; persist for stable re-runs. Hex = no special chars,
 #    safe inside the ADO.NET connection string the backend/migration build.
@@ -35,9 +37,11 @@ KEYCLOAK_ADMIN_PASSWORD="${KEYCLOAK_ADMIN_PASSWORD:-$(gen)}"; persist KEYCLOAK_A
 KEYCLOAK_DB_PASSWORD="${KEYCLOAK_DB_PASSWORD:-$(gen)}";  persist KEYCLOAK_DB_PASSWORD "$KEYCLOAK_DB_PASSWORD"
 REDIS_PASSWORD="${REDIS_PASSWORD:-$(gen)}";              persist REDIS_PASSWORD "$REDIS_PASSWORD"
 MYPROPERTY_API_CLIENT_SECRET="${MYPROPERTY_API_CLIENT_SECRET:-$(gen)}"; persist MYPROPERTY_API_CLIENT_SECRET "$MYPROPERTY_API_CLIENT_SECRET"
+GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-$(gen)}";              persist GRAFANA_ADMIN_PASSWORD "$GRAFANA_ADMIN_PASSWORD"
+KUMA_ADMIN_PASSWORD="${KUMA_ADMIN_PASSWORD:-$(gen)}";                    persist KUMA_ADMIN_PASSWORD "$KUMA_ADMIN_PASSWORD"
 
 # 4. Refuse to run with unreplaced placeholders.
-for v in GHCR_USERNAME GHCR_PAT GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ANTHROPIC_API_KEY; do
+for v in GHCR_USERNAME GHCR_PAT GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ANTHROPIC_API_KEY DISCORD_WEBHOOK_URL; do
   val="${!v:-}"
   if [[ -z "$val" || "$val" == *replace* || "$val" == your-* ]]; then
     echo "ERROR: $v is unset or still a placeholder in .secrets.env." >&2
@@ -81,6 +85,17 @@ apply secret generic myproperty-redis \
 
 apply secret generic myproperty-api-client \
   --from-literal=client-secret="$MYPROPERTY_API_CLIENT_SECRET"
+
+apply secret generic myproperty-grafana \
+  --from-literal=admin-user="$GRAFANA_ADMIN_USER" \
+  --from-literal=admin-password="$GRAFANA_ADMIN_PASSWORD"
+
+apply secret generic myproperty-discord \
+  --from-literal=webhook-url="$DISCORD_WEBHOOK_URL"
+
+apply secret generic myproperty-uptime-kuma \
+  --from-literal=admin-username="$KUMA_ADMIN_USERNAME" \
+  --from-literal=admin-password="$KUMA_ADMIN_PASSWORD"
 
 echo "✓ Secrets applied in namespace $NS:"
 kc get secrets
