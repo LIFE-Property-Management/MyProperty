@@ -1,5 +1,11 @@
 # Terraform — MyProperty infrastructure (M4.7)
 
+> ⚠️ **SUPERSEDED (DOKS-era).** MyProperty now deploys to a shared **Hetzner** cluster
+> (namespace `project-02`) via Helm — there is **no Terraform** in the current path. See
+> [k8s-deployment.md](./k8s-deployment.md). This document describes the abandoned
+> DigitalOcean DOKS provisioning and is kept for history only. Retiring it (and deleting
+> `infrastructure/terraform/`) is tracked in [deployment-roadmap.md](./deployment-roadmap.md).
+
 Provisions DigitalOcean resources for the MyProperty production-shaped deployment.
 The Terraform modules live in `infrastructure/terraform/`.
 

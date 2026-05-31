@@ -1,6 +1,32 @@
 # Default values for the myproperty Helm chart.
 # Single environment — no value layering. Override at deploy time with --set or --values.
 
+# Public hostnames. Defaults match the original hardcoded values, so a plain
+# `helm install` is unchanged. Override per environment (e.g. values-gjirafa.yaml).
+hosts:
+  app: app.myproperty.works
+  api: api.myproperty.works
+  auth: auth.myproperty.works
+  status: status.myproperty.works   # only emitted when uptimeKuma.enabled
+
+# Ingress + TLS. Defaults reproduce the original DOKS behavior:
+# annotation `cert-manager.io/cluster-issuer: letsencrypt-prod`, no Issuer created.
+ingress:
+  enabled: true
+  tls:
+    secretName: myproperty-tls
+    issuerKind: ClusterIssuer        # "Issuer" (namespaced) | "ClusterIssuer"
+    issuerName: letsencrypt-prod     # annotation value the ingresses reference
+    createIssuers: false             # when true, render the Issuers listed below
+    acmeEmail: ""                    # required when createIssuers=true
+    issuers: []                      # list of {name, server}; see overlay
+
+# Master switch for the monitoring sub-stack (loki, promtail, ServiceMonitor,
+# PrometheusRule, grafana dashboards/datasource, aiops-webhook) AND the
+# kube-prometheus-stack dependency (gated via Chart.yaml `condition`).
+monitoring:
+  enabled: true
+
 postgres:
   # When true (default), the chart renders an in-cluster Postgres StatefulSet,
   # Service, and init-configmap. When false, those templates are skipped and
@@ -9,6 +35,9 @@ postgres:
   # backend's connection string template is unchanged; only the Secret content
   # differs between modes.
   enabled: true
+  # SSL mode for the Npgsql connection string. "Require" for managed Postgres
+  # (DO managed PG requires TLS); "Disable" for in-cluster Postgres (no TLS).
+  sslMode: Disable
   image:
     repository: postgres
     tag: 16-alpine
@@ -34,6 +63,7 @@ externalPostgres:
   enabled: false
 
 redis:
+  enabled: true
   image:
     repository: redis
     tag: 7-alpine
@@ -45,6 +75,7 @@ redis:
       memory: 128Mi
 
 rabbitmq:
+  enabled: true
   image:
     repository: rabbitmq
     tag: 3-management
@@ -59,6 +90,7 @@ rabbitmq:
       memory: 512Mi
 
 keycloak:
+  enabled: true
   image:
     repository: quay.io/keycloak/keycloak
     tag: "26.2"
@@ -74,6 +106,7 @@ keycloak:
       memory: 1Gi
 
 backend:
+  enabled: true
   image:
     repository: ghcr.io/life-property-management/myproperty-api
     # Set at deploy time via --set backend.image.tag=<SHA>
@@ -99,6 +132,7 @@ migration:
     tag: latest
 
 frontend:
+  enabled: true
   image:
     repository: ghcr.io/life-property-management/myproperty-frontend
     # Set at deploy time via --set frontend.image.tag=<SHA>
@@ -127,6 +161,7 @@ aiopsWebhook:
       memory: 256Mi
 
 uptimeKuma:
+  enabled: true
   image:
     repository: louislam/uptime-kuma
     tag: 1.23.16-alpine

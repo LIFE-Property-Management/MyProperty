@@ -47,6 +47,32 @@ export function decodePayload(token: string): DecodedPayload {
 let _keycloak: Keycloak | null = null;
 let initPromise: Promise<void> | null = null;
 
+// Edge-gate marker cookie. The middleware (proxy.ts) only checks this cookie's
+// PRESENCE to let protected routes through — it never reads the value (the dev
+// bypass path sets a fake "mock.dev.token"). So the real-auth path sets a
+// non-sensitive sentinel, never the JWT: the actual token stays in keycloak-js
+// memory and is sent to the API as a Bearer header. Max-Age is tied to the
+// session so the gate self-closes near real expiry instead of lingering.
+const AUTH_COOKIE = "kc_token";
+const AUTH_COOKIE_VALUE = "kc.authenticated";
+
+function setAuthCookie(): void {
+  const kc = _keycloak;
+  if (!kc) return;
+  const expSec = kc.refreshTokenParsed?.exp ?? kc.tokenParsed?.exp;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  const maxAge =
+    expSec !== undefined
+      ? `; Max-Age=${Math.max(0, Math.floor(expSec - Date.now() / 1000))}`
+      : "";
+  document.cookie = `${AUTH_COOKIE}=${AUTH_COOKIE_VALUE}; Path=/; SameSite=Lax${secure}${maxAge}`;
+}
+
+function clearAuthCookie(): void {
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${AUTH_COOKIE}=; Path=/; SameSite=Lax${secure}; Max-Age=0`;
+}
+
 function getInstance(): Keycloak {
   if (!_keycloak) {
     _keycloak = new Keycloak({
@@ -73,7 +99,9 @@ export async function login(redirectUri?: string): Promise<void> {
   // routes are not under a portal layout that calls initKeycloak, so ensure
   // initialization here (initKeycloak is idempotent) before redirecting.
   await initKeycloak();
-  getInstance().login({ redirectUri: redirectUri ?? window.location.origin });
+  getInstance().login({
+    redirectUri: redirectUri ?? `${window.location.origin}/login`,
+  });
 }
 
 export function initKeycloak(): Promise<void> {
@@ -88,20 +116,33 @@ export function initKeycloak(): Promise<void> {
     if (authenticated && kc.token) {
       const payload = decodePayload(kc.token);
       useAuthStore.getState().setAuth(payload);
+      setAuthCookie();
       kc.onTokenExpired = () => {
-        kc.updateToken(60).catch(() => {
-          useAuthStore.getState().clearAuth();
-        });
+        kc.updateToken(60)
+          .then(() => setAuthCookie())
+          .catch(() => {
+            useAuthStore.getState().clearAuth();
+            clearAuthCookie();
+          });
       };
+    } else {
+      // No active session — clear any stale gate cookie so the middleware
+      // stops waving the user through to protected routes.
+      useAuthStore.getState().clearAuth();
+      clearAuthCookie();
     }
   })();
   return initPromise;
 }
 
-export async function logout(): Promise<void> {
+export async function logout(redirectUri?: string): Promise<void> {
   const kc = _keycloak;
   _keycloak = null;
   initPromise = null;
   useAuthStore.getState().clearAuth();
-  await kc?.logout({ redirectUri: window.location.origin });
+  clearAuthCookie();
+  // kc.logout() redirects the browser to Keycloak's end-session endpoint, which
+  // terminates the SSO session server-side (clearing KEYCLOAK_IDENTITY) before
+  // returning to redirectUri. Without this a later check-sso silently re-auths.
+  await kc?.logout({ redirectUri: redirectUri ?? window.location.origin });
 }

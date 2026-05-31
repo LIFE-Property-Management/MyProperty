@@ -1,5 +1,9 @@
 # Milestone 4 — Deployment & Operations
 
+> **Note (post-M5):** M4 targeted DigitalOcean DOKS. The project later pivoted to a shared
+> **Hetzner** cluster (namespace `project-02`); the deliverables below are historical.
+> Current deployment: [../operations/k8s-deployment.md](../operations/k8s-deployment.md).
+
 **Status:** ✅ Complete
 **Window:** May 13 – May 25, 2026
 **Aligns with:** Section 3 — Deployment & DevOps

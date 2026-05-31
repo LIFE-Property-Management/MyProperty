@@ -1,3 +1,4 @@
+{{- if and .Values.ingress.enabled .Values.uptimeKuma.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,7 +8,7 @@ metadata:
     {{- include "myproperty.labels" . | nindent 4 }}
     app.kubernetes.io/component: uptime-kuma
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    {{ include "myproperty.certIssuerAnnotation" . }}
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # Kuma's UI is socket.io-based — same long-lived WebSocket story as the
     # SignalR backend ingress. Without these timeouts the dashboard reconnects
@@ -18,13 +19,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - app.myproperty.works
-        - api.myproperty.works
-        - auth.myproperty.works
-        - {{ .Values.uptimeKuma.publicHost }}
-      secretName: myproperty-tls
+{{- include "myproperty.tlsHosts" . | nindent 8 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
   rules:
-    - host: {{ .Values.uptimeKuma.publicHost }}
+    - host: {{ .Values.hosts.status }}
       http:
         paths:
           - path: /
@@ -34,3 +32,4 @@ spec:
                 name: uptime-kuma
                 port:
                   name: http
+{{- end }}

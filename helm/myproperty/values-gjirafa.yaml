@@ -1,0 +1,64 @@
+# values-gjirafa.yaml — overlay for namespace project-02 on the shared Hetzner
+# cluster. Deploy with:
+#   helm upgrade --install myproperty ./helm/myproperty \
+#     --kubeconfig project-02.kubeconfig -n project-02 -f helm/myproperty/values-gjirafa.yaml
+#
+# Staged rollout — flip the enabled flags per batch (see deploy-plan.md):
+#   Batch 2: postgres only            <-- current state of this file
+#   Batch 3: + redis + rabbitmq
+#   Batch 4: + keycloak
+#   Batch 5: + backend
+#   Batch 6: + frontend + ingress (issuerName starts at staging, then prod)
+
+hosts:
+  app: app.myproperty.works
+  api: api.myproperty.works
+  auth: auth.myproperty.works
+
+postgres:
+  enabled: true
+  storage:
+    storageClassName: longhorn
+  sslMode: Disable
+redis:
+  enabled: true
+rabbitmq:
+  enabled: true
+  storage:
+    storageClassName: longhorn
+keycloak:
+  enabled: true
+backend:
+  enabled: true
+  image:
+    tag: "1232e70"
+  storage:
+    storageClassName: longhorn
+migration:
+  image:
+    tag: "1232e70"
+frontend:
+  enabled: true
+  image:
+    tag: "8c93b63"
+
+ingress:
+  enabled: true
+  tls:
+    secretName: myproperty-tls
+    issuerKind: Issuer
+    issuerName: letsencrypt-prod           # flipped from staging after staging validated (Batch 6)
+    createIssuers: true
+    acmeEmail: erdi.syla@gjirafa.com
+    issuers:
+      - name: letsencrypt-staging
+        server: https://acme-staging-v02.api.letsencrypt.org/directory
+      - name: letsencrypt-prod
+        server: https://acme-v02.api.letsencrypt.org/directory
+
+# Deferred — cluster-scoped (kube-prometheus-stack, promtail ClusterRole) or
+# needs a 4th subdomain (uptime-kuma). Brought up later, separately.
+monitoring:
+  enabled: false
+uptimeKuma:
+  enabled: false

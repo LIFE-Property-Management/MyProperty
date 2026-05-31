@@ -120,7 +120,8 @@ try
             {
                 options.MetadataAddress = keycloakMetadataAddress;
             }
-            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+            options.RequireHttpsMetadata = builder.Configuration.GetValue(
+                "Keycloak:RequireHttpsMetadata", !builder.Environment.IsDevelopment());
             options.TokenValidationParameters = new()
             {
                 // Issuer validation: tokens are minted against the browser-facing

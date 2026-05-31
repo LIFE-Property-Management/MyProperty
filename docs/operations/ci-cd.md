@@ -1,21 +1,27 @@
-# CI/CD Pipeline (M4.3)
+# CI/CD Pipeline
 
-This document describes MyProperty's continuous integration pipeline as of M4.3
-(2026-05-20). Continuous deployment is **out of scope** for M4.3 — the
-deliverable is "lint → test → build → push." Deployment runs via manual
-`helm upgrade` against the demo cluster, owned by the DevOps teammate.
+This document describes MyProperty's continuous **integration** pipeline. There is
+currently **no automated continuous deployment**: the build/test/push workflows publish
+images to GHCR, and **deployment is manual** via `infrastructure/gjirafa/deploy.sh` against
+the Hetzner `project-02` namespace (see [k8s-deployment.md](./k8s-deployment.md)).
+
+> The old DOKS deploy workflow (`.github/workflows/cd.yml`) was **removed** — it targeted
+> the abandoned DigitalOcean cluster and failed on every push. Building a real Hetzner CD
+> workflow (GHCR images → `helm upgrade` against `project-02`) is tracked in
+> [deployment-roadmap.md](./deployment-roadmap.md).
 
 ## Overview
 
-Three workflows cover the three services in the repo:
+Four CI workflows cover the services + Keycloak in the repo:
 
 | Workflow | Covers | Triggers |
 |---|---|---|
 | `.github/workflows/backend-ci.yml` | `.NET 10` API + EF migration bundle | `backend/**`, `MyProperty.sln` |
 | `.github/workflows/frontend-ci.yml` | `Next.js 16` frontend | `frontend/**` |
-| `.github/workflows/aiops-webhook-ci.yml` | `Python 3.12` FastAPI service | `infrastructure/aiops-webhook/**` |
+| `.github/workflows/aiops-webhook-ci.yml` | `Python` FastAPI service | `infrastructure/aiops-webhook/**` |
+| `.github/workflows/realm-import-ci.yml` | Keycloak realm export smoke test (boots Keycloak on Postgres, verifies the service account) | `infrastructure/keycloak/**`, `docker-compose.yml` |
 
-All three follow the same pattern:
+The three image workflows follow the same pattern:
 
 1. **Lint** — format/style gate fails fast.
 2. **Test** — unit suite runs against the source tree.
@@ -131,12 +137,13 @@ Post-M4 follow-up: once frontend↔backend auth is wired, add a final
 compose-up + curl-loop job that exercises the OIDC redirect dance and an
 authenticated API call against the just-built images.
 
-### CD (deploy step)
+### CD (deploy step) — currently manual
 
-Out of scope per the M4 unblock sprint decision log: "lint → test → build →
-push. Deploy via pipeline is out of scope; manual `helm upgrade` for the
-demo is acceptable." The DevOps teammate owns the Helm chart + deploy
-procedure under M4.4.
+There is no automated deploy. Images built here are deployed by hand: pin the short-SHA
+tag in `helm/myproperty/values-gjirafa.yaml` and run `infrastructure/gjirafa/deploy.sh`
+(see [k8s-deployment.md](./k8s-deployment.md)). The DOKS `cd.yml` that previously ran on
+push was removed. A namespace-scoped Hetzner CD workflow (deploy to `project-02` via a
+kubeconfig secret) is planned — see [deployment-roadmap.md](./deployment-roadmap.md).
 
 ### Node.js 24 migration
 
@@ -156,16 +163,19 @@ action-version bumps and base image bumps automatically; the `actions/setup-node
 `node-version` bump and the bundled M4.2 verification re-run require manual
 coordination as a batched change.
 
-### Frontend `NEXT_PUBLIC_*` baked in CI image
+### Frontend `NEXT_PUBLIC_*` baked at build time — single environment
 
-The frontend CI build passes placeholder URLs as `NEXT_PUBLIC_*` build args
-(see `frontend-ci.yml` and `frontend/lib/utils/env.ts`). The resulting image
-is suitable for traceability and Trivy scanning, **but is not
-environment-ready** — any real deployment (staging, demo cluster, prod) must
-rebuild with environment-specific URLs.
+`NEXT_PUBLIC_*` values are inlined into the Next.js bundle at build time, so they are
+fixed per image. `frontend-ci.yml` hardcodes the **production** URLs
+(`https://api.myproperty.works`, `https://auth.myproperty.works`, realm `MyProperty`,
+client `myproperty-frontend`, `DEV_AUTH_BYPASS=false`). There is **one environment**, so
+the CI image is deployable as-is.
 
-M4.4's Helm chart will own the per-environment rebuild step. The CI image
-proves the build chain works and gives a frozen point-in-time scan target.
+Multi-environment support (parameterising these via `workflow_dispatch` inputs so the same
+pipeline can target staging/prod) is deferred — tracked in
+[deployment-roadmap.md](./deployment-roadmap.md). When deploying a specific commit
+manually, build the image with these same args (see the frontend build step in
+[k8s-deployment.md](./k8s-deployment.md)).
 
 ### `frontend-image` job does not depend on `e2e-tests`
 
@@ -193,7 +203,6 @@ npm ci
 npm run lint
 npm run typecheck
 npm test -- --ci
-# CI/CD Pipeline (M4.3)
 # First time only — installs the browser binaries Playwright needs
 npx playwright install --with-deps chromium
 npx playwright test

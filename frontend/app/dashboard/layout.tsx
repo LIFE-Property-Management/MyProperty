@@ -6,8 +6,9 @@ import { MockProvider } from "@/mocks/MockProvider";
 export default function DashboardSegmentLayout({ children }: { children: ReactNode }) {
     return (
         <MockProvider>
-            <KeycloakInit />
-            <DashboardShell>{children}</DashboardShell>
+            <KeycloakInit>
+                <DashboardShell>{children}</DashboardShell>
+            </KeycloakInit>
         </MockProvider>
     );
 }

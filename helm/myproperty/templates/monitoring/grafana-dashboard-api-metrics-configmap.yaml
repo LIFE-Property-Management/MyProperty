@@ -1,3 +1,4 @@
+{{- if .Values.monitoring.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,3 +11,4 @@ metadata:
 data:
   myproperty-api-metrics.json: |
 {{ .Files.Get "files/dashboard-api-metrics.json" | indent 4 }}
+{{- end }}

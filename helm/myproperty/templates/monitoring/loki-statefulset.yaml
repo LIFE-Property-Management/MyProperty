@@ -1,3 +1,4 @@
+{{- if .Values.monitoring.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -90,3 +91,4 @@ spec:
         resources:
           requests:
             storage: {{ .Values.loki.storage.size }}
+{{- end }}

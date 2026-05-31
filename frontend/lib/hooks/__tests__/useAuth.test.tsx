@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import useAuthStore from "@/lib/store/auth/useAuthStore";
 import { resetAuthStore } from "@/test-utils/resetAuthStore";
 import apiClient from "@/lib/api/client";
+import { logout as keycloakLogout } from "@/lib/auth/keycloak";
 import { useAuth } from "../useAuth";
 
 const mockPush = jest.fn();
@@ -23,6 +24,7 @@ jest.mock("@/lib/auth/keycloak", () => ({
 }));
 
 const mockedGet = apiClient.get as jest.MockedFunction<typeof apiClient.get>;
+const mockKeycloakLogout = keycloakLogout as jest.Mock;
 
 function makeWrapper() {
   const client = new QueryClient({
@@ -39,6 +41,8 @@ beforeEach(() => {
   resetAuthStore();
   mockedGet.mockReset();
   mockPush.mockReset();
+  mockKeycloakLogout.mockClear();
+  delete process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS;
   // jsdom doesn't ship fetch; stub it so signOut doesn't throw.
   global.fetch = jest.fn().mockResolvedValue({ ok: true });
 });
@@ -80,17 +84,23 @@ describe("useAuth", () => {
     expect(result.current.isReadOnly).toBe(true);
   });
 
-  it("signOut clears the auth store", async () => {
+  it("signOut delegates to Keycloak end-session logout, returning to /logout", async () => {
+    useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
+    const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
+    await act(() => result.current.signOut());
+    expect(mockKeycloakLogout).toHaveBeenCalledWith(expect.stringMatching(/\/logout$/));
+    // It must NOT do a local-only client redirect, which would leave the
+    // Keycloak SSO session alive and let check-sso silently re-auth.
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("signOut in dev-bypass clears the store locally and shows the /logout page", async () => {
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS = "true";
     useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
     const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
     await act(() => result.current.signOut());
     expect(useAuthStore.getState().user).toBeNull();
-  });
-
-  it("signOut calls router.push('/logout')", async () => {
-    useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
-    const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
-    await act(() => result.current.signOut());
     expect(mockPush).toHaveBeenCalledWith("/logout");
+    expect(mockKeycloakLogout).not.toHaveBeenCalled();
   });
 });

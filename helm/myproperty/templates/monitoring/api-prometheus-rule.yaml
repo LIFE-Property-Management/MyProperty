@@ -1,3 +1,4 @@
+{{- if .Values.monitoring.enabled }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -73,3 +74,4 @@ spec:
           annotations:
             summary: "Scrape target down"
             description: "Target {{ "{{" }} $labels.instance {{ "}}" }} has been unreachable for 5 minutes."
+{{- end }}
