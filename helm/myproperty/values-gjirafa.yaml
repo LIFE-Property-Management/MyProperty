@@ -57,7 +57,7 @@ uptimeKuma:
   storage:
     storageClassName: longhorn
   seedImage:
-    tag: "e4be20d"
+    tag: "a05902c"
 
 aiopsWebhook:
   image:
