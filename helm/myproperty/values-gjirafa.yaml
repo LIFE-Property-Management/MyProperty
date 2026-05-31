@@ -61,7 +61,7 @@ uptimeKuma:
 
 aiopsWebhook:
   image:
-    tag: "cf3f118"
+    tag: "8f4a2f3"
 
 prometheus:
   storage:
