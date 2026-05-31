@@ -8,6 +8,7 @@ hosts:
   api: api.myproperty.works
   auth: auth.myproperty.works
   status: status.myproperty.works   # only emitted when uptimeKuma.enabled
+  grafana: grafana.myproperty.works  # only emitted when monitoring.enabled
 
 # Ingress + TLS. Defaults reproduce the original DOKS behavior:
 # annotation `cert-manager.io/cluster-issuer: letsencrypt-prod`, no Issuer created.
@@ -219,81 +220,50 @@ promtail:
     limits:
       memory: 128Mi
 
-kube-prometheus-stack:
-  prometheus:
-    prometheusSpec:
-      retention: 15d
-      storageSpec:
-        volumeClaimTemplate:
-          spec:
-            storageClassName: do-block-storage
-            accessModes: [ReadWriteOnce]
-            resources:
-              requests:
-                storage: 20Gi
-      serviceMonitorSelectorNilUsesHelmValues: false
-      ruleSelectorNilUsesHelmValues: false
-      resources:
-        requests:
-          cpu: 200m
-          memory: 512Mi
-        limits:
-          memory: 1Gi
+prometheus:
+  image:
+    repository: prom/prometheus
+    tag: v2.54.1
+  retention: 15d
+  storage:
+    size: 20Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
 
-  alertmanager:
-    config:
-      route:
-        receiver: 'aiops-webhook'
-        group_by: ['alertname', 'severity']
-        group_wait: 30s
-        group_interval: 5m
-        repeat_interval: 12h
-        routes:
-          - matchers:
-              - severity = critical
-            receiver: 'aiops-webhook'
-      receivers:
-        - name: 'aiops-webhook'
-          webhook_configs:
-            - url: 'http://aiops-webhook.myproperty.svc.cluster.local:5001/alerts'
-              send_resolved: true
-      inhibit_rules:
-        - source_matchers:
-            - severity = critical
-          target_matchers:
-            - severity = warning
-          equal: ['alertname', 'service']
-    alertmanagerSpec:
-      storage:
-        volumeClaimTemplate:
-          spec:
-            storageClassName: do-block-storage
-            accessModes: [ReadWriteOnce]
-            resources:
-              requests:
-                storage: 1Gi
+alertmanager:
+  image:
+    repository: prom/alertmanager
+    tag: v0.27.0
+  webhookUrl: http://aiops-webhook:5001/alerts
+  storage:
+    size: 1Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
 
-  grafana:
-    admin:
-      existingSecret: myproperty-grafana
-      userKey: admin-user
-      passwordKey: admin-password
-    persistence:
-      enabled: true
-      storageClassName: do-block-storage
-      size: 2Gi
-    sidecar:
-      datasources:
-        enabled: true
-        label: grafana_datasource
-      dashboards:
-        enabled: true
-        label: grafana_dashboard
-
-  defaultRules:
-    create: true
-    rules:
-      node: false
+grafana:
+  image:
+    repository: grafana/grafana
+    tag: "11.2.0"
+  ingressAllowlist: ""
+  storage:
+    size: 2Gi
+    storageClassName: do-block-storage
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
 
 # ─────────────────────────────────────────────────────────────────────────
 # External Secrets Operator (M4.8 — Key Vault / Secret Manager).
@@ -381,4 +351,4 @@ networkPolicies:
   # kube-prometheus-stack lives in the same release namespace by default
   # because it ships as a chart dependency. If the chart is split out,
   # override with the controller's namespace.
-  monitoringNamespace: myproperty
+  monitoringNamespace: project-02

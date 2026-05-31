@@ -7,7 +7,6 @@ metadata:
   labels:
     {{- include "myproperty.labels" . | nindent 4 }}
     app.kubernetes.io/component: grafana
-    grafana_dashboard: "1"
 data:
   myproperty-api-metrics.json: |
 {{ .Files.Get "files/dashboard-api-metrics.json" | indent 4 }}

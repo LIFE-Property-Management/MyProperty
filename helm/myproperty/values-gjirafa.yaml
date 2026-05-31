@@ -2,18 +2,12 @@
 # cluster. Deploy with:
 #   helm upgrade --install myproperty ./helm/myproperty \
 #     --kubeconfig project-02.kubeconfig -n project-02 -f helm/myproperty/values-gjirafa.yaml
-#
-# Staged rollout — flip the enabled flags per batch (see deploy-plan.md):
-#   Batch 2: postgres only            <-- current state of this file
-#   Batch 3: + redis + rabbitmq
-#   Batch 4: + keycloak
-#   Batch 5: + backend
-#   Batch 6: + frontend + ingress (issuerName starts at staging, then prod)
 
 hosts:
   app: app.myproperty.works
   api: api.myproperty.works
   auth: auth.myproperty.works
+  grafana: grafana.myproperty.works
 
 postgres:
   enabled: true
@@ -47,7 +41,7 @@ ingress:
   tls:
     secretName: myproperty-tls
     issuerKind: Issuer
-    issuerName: letsencrypt-prod           # flipped from staging after staging validated (Batch 6)
+    issuerName: letsencrypt-prod
     createIssuers: true
     acmeEmail: erdi.syla@gjirafa.com
     issuers:
@@ -56,9 +50,34 @@ ingress:
       - name: letsencrypt-prod
         server: https://acme-v02.api.letsencrypt.org/directory
 
-# Deferred — cluster-scoped (kube-prometheus-stack, promtail ClusterRole) or
-# needs a 4th subdomain (uptime-kuma). Brought up later, separately.
 monitoring:
-  enabled: false
+  enabled: true
 uptimeKuma:
-  enabled: false
+  enabled: true
+  storage:
+    storageClassName: longhorn
+  # Set to real GHCR SHA once image is built+pushed (Batch 2 step 2.4)
+  seedImage:
+    tag: latest
+
+aiopsWebhook:
+  # Set to real GHCR SHA from GHCR (Batch 2 step 2.5)
+  image:
+    tag: latest
+
+prometheus:
+  storage:
+    storageClassName: longhorn
+
+alertmanager:
+  storage:
+    storageClassName: longhorn
+
+grafana:
+  storage:
+    storageClassName: longhorn
+  ingressAllowlist: ""
+
+loki:
+  storage:
+    storageClassName: longhorn
