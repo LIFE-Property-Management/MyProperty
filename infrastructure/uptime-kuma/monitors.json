@@ -3,15 +3,13 @@
 
   "notifications": [
     {
-      "name": "Slack (#alerts)",
-      "type": "slack",
+      "name": "Discord (#uptime)",
+      "type": "discord",
       "isDefault": true,
       "applyExisting": true,
-      "comment": "Reuses SLACK_WEBHOOK_URL — same incoming webhook the M4.11 aiops-webhook posts to. When the env var is empty, seed.py skips creation entirely (the demo still works without a Slack workspace).",
+      "comment": "Native Discord webhook (Kuma renders Discord-native embeds — posting Slack format to a Discord URL fails as an empty message). Uses its own DISCORD_WEBHOOK_URL, separate from the aiops-webhook's #alerts channel. When the env var is empty, seed.py skips creation entirely (the demo still works without a Discord server).",
       "config": {
-        "slackchannelnotify": false,
-        "slackusername": "Uptime Kuma",
-        "slackiconemo": ":robot_face:"
+        "discordUsername": "Uptime Kuma"
       }
     },
     {
@@ -155,7 +153,7 @@
       "maxretries": 2,
       "retryInterval": 30,
       "accepted_statuscodes": ["200-299"],
-      "comment": "Closes the loop: if the AIOps triage service goes dark, this monitor alerts via Slack/email even though the AIOps webhook itself can't."
+      "comment": "Closes the loop: if the AIOps triage service goes dark, this monitor alerts via Discord/email even though the AIOps webhook itself can't."
     },
     {
       "name": "Grafana",

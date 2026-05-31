@@ -53,14 +53,16 @@ spec:
                 secretKeyRef:
                   name: myproperty-uptime-kuma
                   key: admin-password
-            # Slack channel reuses the same secret as the M4.11 aiops-webhook.
-            # Empty value short-circuits the channel inside seed.py — no Job
-            # failure, just no Slack notifications until the secret is set.
-            - name: SLACK_WEBHOOK_URL
+            # Discord channel for uptime alerts — a SEPARATE webhook from the
+            # aiops-webhook's #alerts channel (myproperty-discord/webhook-url),
+            # so black-box uptime checks and Prometheus/AIOps triage land in
+            # different channels. Empty value short-circuits the channel inside
+            # seed.py — no Job failure, just no Discord notifications until set.
+            - name: DISCORD_WEBHOOK_URL
               valueFrom:
                 secretKeyRef:
                   name: myproperty-discord
-                  key: webhook-url
+                  key: uptime-webhook-url
             - name: KUMA_SMTP_HOST
               value: {{ .Values.uptimeKuma.smtp.host | quote }}
             - name: KUMA_SMTP_PORT

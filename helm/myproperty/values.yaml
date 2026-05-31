@@ -330,6 +330,7 @@ externalSecrets:
     googleOauthClientSecret: myproperty-google-oauth-client-secret
     anthropicApiKey: myproperty-anthropic-api-key
     discordWebhookUrl: myproperty-discord-webhook-url
+    discordUptimeWebhookUrl: myproperty-discord-uptime-webhook-url
     grafanaAdminUser: myproperty-grafana-admin-user
     grafanaAdminPassword: myproperty-grafana-admin-password
 

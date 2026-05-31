@@ -475,8 +475,9 @@ services:
   # account already configured and exit no-op.
   #
   # Notifications:
-  #   - Slack: only created if SLACK_WEBHOOK_URL is set (same env var the
-  #     M4.11 aiops-webhook consumes; falls back to stdout-via-Loki there).
+  #   - Discord: only created if DISCORD_WEBHOOK_URL is set (Kuma renders
+  #     Discord-native embeds). In K8s this is a separate channel from the
+  #     aiops-webhook's #alerts; locally it's whatever you point it at.
   #   - Email: posts to the MailHog SMTP catcher already in this stack —
   #     visible at http://localhost:8025. Demo-friendly without an external
   #     SMTP account.
@@ -524,7 +525,7 @@ services:
       KUMA_PUBLIC_URL: "${KUMA_PUBLIC_URL:-http://localhost:3002}"
       # Notification channels — both optional. Empty values short-circuit
       # the corresponding channel; the demo runs without external accounts.
-      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_UPTIME_WEBHOOK_URL:-}"
       # MailHog runs in this stack on port 1025 — the email notification
       # lands in the MailHog Web UI at http://localhost:8025, demoable
       # without configuring an external SMTP provider.

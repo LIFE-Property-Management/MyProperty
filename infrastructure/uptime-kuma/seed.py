@@ -30,7 +30,7 @@ KUMA_ADMIN_PASSWORD; defaults documented in docker-compose.yml):
                              setup validation.
     KUMA_PUBLIC_URL        — URL the status page advertises in its
                              "Powered by" link.
-    SLACK_WEBHOOK_URL      — empty value skips the Slack channel.
+    DISCORD_WEBHOOK_URL    — empty value skips the Discord channel.
     KUMA_SMTP_HOST / *_PORT / *_FROM / *_TO — empty *_HOST skips the
                              email channel entirely.
     KUMA_LOG_LEVEL         — INFO (default) | DEBUG | WARNING.
@@ -81,7 +81,7 @@ KUMA_ADMIN_USERNAME = os.environ.get("KUMA_ADMIN_USERNAME", "admin")
 KUMA_ADMIN_PASSWORD = os.environ.get("KUMA_ADMIN_PASSWORD", "")
 KUMA_PUBLIC_URL = os.environ.get("KUMA_PUBLIC_URL", "http://localhost:3002")
 
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
 KUMA_SMTP_HOST = os.environ.get("KUMA_SMTP_HOST", "").strip()
 KUMA_SMTP_PORT = int(os.environ.get("KUMA_SMTP_PORT", "1025"))
 KUMA_SMTP_FROM = os.environ.get("KUMA_SMTP_FROM", "uptime@myproperty.local")
@@ -192,17 +192,17 @@ def upsert_notifications(api: UptimeKumaApi,
         apply_existing = bool(spec.get("applyExisting", False))
         cfg = spec.get("config", {})
 
-        if type_key == "slack":
-            if not SLACK_WEBHOOK_URL:
-                log.info("Skipping Slack notification '%s' — SLACK_WEBHOOK_URL is empty",
+        if type_key == "discord":
+            if not DISCORD_WEBHOOK_URL:
+                log.info("Skipping Discord notification '%s' — DISCORD_WEBHOOK_URL is empty",
                          name)
                 continue
             kwargs: dict[str, Any] = {
                 "name": name,
-                "type": NotificationType.SLACK,
+                "type": NotificationType.DISCORD,
                 "isDefault": is_default,
                 "applyExisting": apply_existing,
-                "slackwebhookURL": SLACK_WEBHOOK_URL,
+                "discordWebhookUrl": DISCORD_WEBHOOK_URL,
                 **cfg,
             }
 

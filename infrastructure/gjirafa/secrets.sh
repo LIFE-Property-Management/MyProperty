@@ -91,7 +91,8 @@ apply secret generic myproperty-grafana \
   --from-literal=admin-password="$GRAFANA_ADMIN_PASSWORD"
 
 apply secret generic myproperty-discord \
-  --from-literal=webhook-url="$DISCORD_WEBHOOK_URL"
+  --from-literal=webhook-url="$DISCORD_WEBHOOK_URL" \
+  --from-literal=uptime-webhook-url="${DISCORD_UPTIME_WEBHOOK_URL:-}"
 
 apply secret generic myproperty-uptime-kuma \
   --from-literal=admin-username="$KUMA_ADMIN_USERNAME" \
