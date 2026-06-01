@@ -1,5 +1,6 @@
 {{- if .Values.networkPolicies.enabled }}
   {{- $ingressNS := .Values.networkPolicies.ingressNamespace }}
+  {{- $nodeCIDRs := .Values.networkPolicies.nodeCIDRs }}
   # ─────────────────────────────────────────────────────────────────────────
   # NetworkPolicies (M4.8).
   #
@@ -100,6 +101,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 3000
@@ -127,6 +132,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 8080
@@ -274,6 +283,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: backend
@@ -468,6 +481,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 3000
@@ -604,6 +621,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: uptime-kuma-seed

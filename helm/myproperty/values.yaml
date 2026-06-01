@@ -351,3 +351,19 @@ networkPolicies:
   # permitted to reach the public-facing workloads (frontend, backend,
   # keycloak). Override if running a different controller / namespace.
   ingressNamespace: ingress-nginx
+  # Node IPs (as CIDRs, e.g. "10.0.0.5/32") to allow as an ingress *source* on
+  # the public-facing workloads (frontend, backend, keycloak, grafana,
+  # uptime-kuma), IN ADDITION to ingressNamespace.
+  #
+  # Needed when the ingress controller runs with hostNetwork (common on
+  # bare-metal / no cloud LB): it then proxies to pods from the *node's* IP, and
+  # a namespaceSelector/podSelector can never match a host-sourced packet. On a
+  # multi-node cluster a request can land on any node, so list every node that
+  # runs the controller (and, to be safe, all nodes). Calico already failsafes
+  # *local* host→pod traffic (kubelet probes), so this only covers the
+  # cross-node controller hops.
+  #
+  # Leave empty on clusters where the controller runs as a normal pod (a cloud
+  # LoadBalancer Service preserves the pod source) — the namespaceSelector
+  # alone is correct there.
+  nodeCIDRs: []

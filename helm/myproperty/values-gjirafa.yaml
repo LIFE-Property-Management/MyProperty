@@ -79,3 +79,23 @@ grafana:
 loki:
   storage:
     storageClassName: longhorn
+
+# NetworkPolicies stay OFF here — enable deliberately via
+#   ./infrastructure/gjirafa/deploy.sh --set networkPolicies.enabled=true
+# in a watched window (rollback: kubectl -n project-02 delete networkpolicy --all).
+#
+# This cluster's ingress-nginx is a hostNetwork DaemonSet (the Ingress status
+# publishes node IPs; pods are on the 192.168.0.0/16 Calico pool), so it proxies
+# to pods from the *node* IP — nodeCIDRs below is what actually admits public
+# inbound. CNI is Calico, which enforces policy. The IPs are the 4 worker node
+# IPs (from the Ingress loadBalancer status) + the control-plane (API server).
+# CONFIRM with the canary: if inbound still drops, the host-source IP is a
+# private/tunnel address and these need adjusting.
+networkPolicies:
+  enabled: false
+  nodeCIDRs:
+    - 159.69.16.208/32   # worker
+    - 159.69.2.83/32     # worker
+    - 159.69.5.128/32    # worker
+    - 159.69.8.132/32    # worker
+    - 159.69.213.73/32   # control-plane / API server
