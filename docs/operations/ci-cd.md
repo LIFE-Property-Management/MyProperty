@@ -1,33 +1,41 @@
 # CI/CD Pipeline
 
-This document describes MyProperty's continuous **integration** pipeline. There is
-currently **no automated continuous deployment**: the build/test/push workflows publish
-images to GHCR, and **deployment is manual** via `infrastructure/gjirafa/deploy.sh` against
-the Hetzner `project-02` namespace (see [k8s-deployment.md](./k8s-deployment.md)).
+This document describes MyProperty's continuous **integration** and **deployment** pipelines.
+The build/test/push CI workflows publish images to GHCR; **CD is automated** via
+`.github/workflows/cd.yml`, which deploys to the Hetzner `project-02` namespace behind a
+manual approval gate (see [§ Continuous deployment](#continuous-deployment-cdyml) and
+[k8s-deployment.md](./k8s-deployment.md)).
 
-> The old DOKS deploy workflow (`.github/workflows/cd.yml`) was **removed** — it targeted
-> the abandoned DigitalOcean cluster and failed on every push. Building a real Hetzner CD
-> workflow (GHCR images → `helm upgrade` against `project-02`) is tracked in
-> [deployment-roadmap.md](./deployment-roadmap.md).
+> The old DOKS deploy workflow was removed (it targeted the abandoned DigitalOcean cluster
+> and passed one 40-char `github.sha` as every component's tag, while CI tags 7-char
+> per-component SHAs). The current `cd.yml` is the namespace-scoped Hetzner replacement —
+> push-based (no ArgoCD/Flux: the SA is namespace-admin only), per-component tag resolution,
+> `helm upgrade --atomic`. Design notes: [§ Continuous deployment](#continuous-deployment-cdyml) below.
 
 ## Overview
 
-Four CI workflows cover the services + Keycloak in the repo:
+Five CI workflows cover the services + Keycloak in the repo, plus one CD workflow:
 
 | Workflow | Covers | Triggers |
 |---|---|---|
 | `.github/workflows/backend-ci.yml` | `.NET 10` API + EF migration bundle | `backend/**`, `MyProperty.sln` |
 | `.github/workflows/frontend-ci.yml` | `Next.js 16` frontend | `frontend/**` |
 | `.github/workflows/aiops-webhook-ci.yml` | `Python` FastAPI service | `infrastructure/aiops-webhook/**` |
+| `.github/workflows/uptime-kuma-init-ci.yml` | `Python` Uptime-Kuma seed sidecar image | `infrastructure/uptime-kuma/**` |
 | `.github/workflows/realm-import-ci.yml` | Keycloak realm export smoke test (boots Keycloak on Postgres, verifies the service account) | `infrastructure/keycloak/**`, `docker-compose.yml` |
+| `.github/workflows/cd.yml` | **Deploy** to `project-02` (Hetzner) | `workflow_run` of the four image-CI workflows on `develop`/`main`, + `workflow_dispatch` |
 
-The three image workflows follow the same pattern:
+The three application workflows (backend, frontend, aiops-webhook) follow the same pattern:
 
 1. **Lint** — format/style gate fails fast.
 2. **Test** — unit suite runs against the source tree.
 3. **Build** — Docker image built (and pushed to GHCR on `push` events).
 4. **Scan** — Trivy CVE scan against the built image; SARIF uploaded to the
    GitHub Security tab.
+
+`uptime-kuma-init-ci.yml` runs **build + scan only** (steps 3–4): the seed sidecar is a
+single `seed.py` + `monitors.json` with no lint/test scaffolding, so it mirrors the image
+half of the aiops pipeline (same Buildx/GHCR/Trivy/SBOM pins) without lint/test jobs.
 
 ## Registry & tag scheme
 
@@ -37,6 +45,8 @@ All images push to `ghcr.io/life-property-management/`:
 - `myproperty-migrations` — EF Core migration bundle (from M4 unblock sprint, Plan 5 (D2)).
 - `myproperty-frontend` — Next.js frontend.
 - `myproperty-aiops-webhook` — FastAPI alert triage service.
+- `myproperty-uptime-kuma-init` — Uptime-Kuma seed sidecar (one-shot bootstrap of the
+  status page + monitors; consumed by the chart's post-upgrade hook).
 
 Each image is dual-tagged on push:
 
@@ -44,6 +54,72 @@ Each image is dual-tagged on push:
 - `<branch>` (mutable) — convenience tag for human inspection.
 
 The migration bundle uses the same scheme via `backend/scripts/build-migration-bundle.sh`.
+
+## Continuous deployment (`cd.yml`)
+
+> ⚠️ **Status: wired + statically validated, pending first verified live run.** The workflow,
+> the ruamel tag-bumper, and the chart all pass their static checks (actionlint+shellcheck,
+> byte-perfect bump test, `helm 3.20.0 lint`/`template`), but a live `CI → approval → bump →
+> deploy → rollback` cycle has **not** run yet — it can only fire once `cd.yml` is on the
+> default branch `develop`. This note is removed once that first live run is verified.
+
+Push-based deploy to the shared Hetzner cluster (namespace `project-02`). Pull-based GitOps
+(ArgoCD/Flux) is impossible here — it needs cluster-scoped CRDs + controllers, and our SA is
+**namespace-admin only**. So CD is a GitHub Actions job authenticating with the kubeconfig as
+a GitHub **Environment secret**.
+
+**Trigger & gating.** `cd.yml` runs on `workflow_run` after any of the four image-CI workflows
+(`Backend CI`, `Frontend CI`, `AIOps Webhook CI`, `Uptime Kuma Init CI`) completes, plus manual
+`workflow_dispatch`. `Realm Import Smoke` is deliberately excluded — it builds no deployable
+image. The job deploys only on a **successful, push-triggered** run on `develop`/`main` (PR-
+triggered CI can't deploy a PR branch), runs behind the **`project-02` Environment** (manual
+approval by a required reviewer), and is **serialized** (`concurrency: deploy-project-02`,
+never cancelled) so the one namespace sees one deploy at a time. Both `develop` and `main`
+deploy to the same namespace → **last-deploy-wins** (expected).
+
+**Per-component tag resolution.** CI tags each image `<short-sha>` per component, and the
+three non-backend images move independently — so the deploy resolves tags **per component**,
+not with one global SHA (the bug that killed the old DOKS `cd.yml`). For each repo it checks
+whether `ghcr.io/life-property-management/<repo>:<short-sha>` exists (`docker buildx imagetools
+inspect`) and bumps the matching `values-gjirafa.yaml` key for those present:
+
+| Image present at SHA | Key(s) bumped |
+|---|---|
+| `myproperty-api` | `backend.image.tag` **and** `migration.image.tag` (built together at one SHA) |
+| `myproperty-frontend` | `frontend.image.tag` |
+| `myproperty-aiops-webhook` | `aiopsWebhook.image.tag` |
+| `myproperty-uptime-kuma-init` | `uptimeKuma.seedImage.tag` |
+
+Components with no image at that SHA keep their pinned tag. The bump uses
+`infrastructure/gjirafa/bump_image_tags.py` (ruamel.yaml) rather than `yq` so the edit is a
+**byte-perfect one-line diff** (mikefarah `yq -i` re-serialises the whole file). The changed
+`values-gjirafa.yaml` is auto-committed back to the deploy branch by `github-actions[bot]`
+using `GITHUB_TOKEN` — loop-safe (token pushes don't retrigger workflows; the file matches no
+CI path filter), so no `[skip ci]` needed.
+
+**Deploy & health gate.** The kubeconfig secret is written to a temp file, `KUBECONFIG` is
+exported, and the deploy runs `infrastructure/gjirafa/deploy.sh --atomic --cleanup-on-fail
+--timeout 10m` (the same script as manual deploys; `--atomic` adds `--wait` → readiness gating
++ auto-rollback, without changing the script's manual default). Helm is pinned to **3.20.0**
+(setup-helm@v5 defaults to Helm 4, which changes `--atomic`/`--wait` semantics); kubectl to
+**1.31.x** (cluster is v1.31). After deploy it gates on `kubectl rollout status` for the
+backend + frontend deployments, `curl` of `https://api.myproperty.works/api/v1/health/ready`
+(expects 200), and an HTTP `<400` check on `app./auth./grafana./status.myproperty.works`.
+
+**Failure path & rollback.** On any failure the job posts to the `DISCORD_DEPLOY_WEBHOOK_URL`
+Environment secret (a dedicated **#deployments** channel, separate from the in-cluster
+`#alerts`/`#uptime` webhooks) and `--atomic` has already rolled the **workloads** back to the
+prior revision. ⚠️ **EF schema migrations are forward-only** — `--atomic` does **not** un-apply
+them, so a failed deploy may leave the DB partly migrated; verify manually. To roll back a
+*successful* deploy, `git revert` the bump commit (CD redeploys the prior image) or
+`helm rollback myproperty <REV>` as a break-glass.
+
+**Guardrails.** CD is **deploy-only** — it never wipes or auto-provisions data stores. The
+pre-upgrade EF migration hook aborts against a fresh store, so the two-phase wipe
+(`deploy.sh --no-hooks` → normal) stays **manual** (see [k8s-deployment.md](./k8s-deployment.md)).
+Secrets remain manual K8s Secrets (`secrets.sh`); no ESO (cluster-scoped). Realm-only changes
+(`helm/myproperty/files/realm-export.template.json`) build no image, so they don't trigger CD
+— they ride a component deploy or a manual run.
 
 ## Trivy scanning
 
@@ -137,13 +213,12 @@ Post-M4 follow-up: once frontend↔backend auth is wired, add a final
 compose-up + curl-loop job that exercises the OIDC redirect dance and an
 authenticated API call against the just-built images.
 
-### CD (deploy step) — currently manual
+### ~~CD (deploy step) — currently manual~~ — CLOSED (automated)
 
-There is no automated deploy. Images built here are deployed by hand: pin the short-SHA
-tag in `helm/myproperty/values-gjirafa.yaml` and run `infrastructure/gjirafa/deploy.sh`
-(see [k8s-deployment.md](./k8s-deployment.md)). The DOKS `cd.yml` that previously ran on
-push was removed. A namespace-scoped Hetzner CD workflow (deploy to `project-02` via a
-kubeconfig secret) is planned — see [deployment-roadmap.md](./deployment-roadmap.md).
+CD is now automated; see [§ Continuous deployment](#continuous-deployment-cdyml) below
+(⚠️ wired + statically validated, **pending its first verified live run**). The manual path
+(`deploy.sh` after hand-editing `values-gjirafa.yaml`) still works and is the documented
+break-glass / two-phase-wipe procedure ([k8s-deployment.md](./k8s-deployment.md)).
 
 ### Node.js 24 migration
 

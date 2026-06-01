@@ -1,0 +1,112 @@
+name: Uptime Kuma Init CI
+
+# Closes the seed-image CI gap (CD plan, Batch 1). Builds + publishes the
+# Uptime Kuma seed sidecar so its tag resolves to an existing image on every
+# deploy (the post-upgrade hook ImagePullBackOffs otherwise). Mirrors the
+# image-build pipeline of aiops-webhook-ci.yml (same action versions/pins,
+# Trivy two-pass + SBOM). There is no lint/unit-test job here because the
+# seed dir is a single seed.py + monitors.json with no test/lint scaffolding.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - "infrastructure/uptime-kuma/**"
+      - ".github/workflows/uptime-kuma-init-ci.yml"
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "infrastructure/uptime-kuma/**"
+      - ".github/workflows/uptime-kuma-init-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: uptime-kuma-init-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kuma-init-image:
+    name: Build and publish Uptime Kuma seed image
+    # Build on push (and manual dispatch) only — PRs validate the path filter
+    # but must not publish images, exactly like the aiops sibling.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Build and push seed image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./infrastructure/uptime-kuma
+          file: ./infrastructure/uptime-kuma/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/life-property-management/myproperty-uptime-kuma-init:${{ env.SHORT_SHA }}
+            ghcr.io/life-property-management/myproperty-uptime-kuma-init:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Trivy CI quality gate — same two-pass shape as aiops-webhook-ci.yml.
+      - name: Trivy SARIF report (non-blocking, CRITICAL+HIGH)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-uptime-kuma-init:${{ env.SHORT_SHA }}
+          format: sarif
+          output: trivy-kuma.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+          ignore-unfixed: true
+
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-kuma.sarif
+          category: trivy-kuma
+
+      - name: Trivy quality gate (blocking, CRITICAL only)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-uptime-kuma-init:${{ env.SHORT_SHA }}
+          format: table
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Generate SBOM (CycloneDX)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/life-property-management/myproperty-uptime-kuma-init:${{ env.SHORT_SHA }}
+          format: cyclonedx
+          output: sbom-kuma.cdx.json
+          exit-code: '0'
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-kuma-${{ env.SHORT_SHA }}
+          path: sbom-kuma.cdx.json
+          retention-days: 90
