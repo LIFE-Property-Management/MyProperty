@@ -12,7 +12,7 @@ automountServiceAccountToken: false
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: grafana-data
+  name: {{ .Release.Name }}-grafana-data
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "myproperty.labels" . | nindent 4 }}
@@ -35,7 +35,7 @@ metadata:
 spec:
   replicas: 1
   # Recreate, not RollingUpdate: Grafana mounts a single RWO longhorn PVC
-  # (grafana-data). A rolling update would start the new pod before the old
+  # ({{ .Release.Name }}-grafana-data). A rolling update would start the new pod before the old
   # one releases the volume → Multi-Attach error and a stuck rollout. Same
   # reasoning as the backend Deployment.
   strategy:
@@ -135,5 +135,5 @@ spec:
             name: {{ .Release.Name }}-grafana-dashboard-api-logs
         - name: grafana-data
           persistentVolumeClaim:
-            claimName: grafana-data
+            claimName: {{ .Release.Name }}-grafana-data
 {{- end }}

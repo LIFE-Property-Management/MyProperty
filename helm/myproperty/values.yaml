@@ -351,7 +351,3 @@ networkPolicies:
   # permitted to reach the public-facing workloads (frontend, backend,
   # keycloak). Override if running a different controller / namespace.
   ingressNamespace: ingress-nginx
-  # The monitoring stack (Prometheus/Alertmanager) runs in this release's own
-  # namespace — it's rendered by this chart, not a separate operator install.
-  # Override only if monitoring is ever split into a different namespace.
-  monitoringNamespace: project-02
