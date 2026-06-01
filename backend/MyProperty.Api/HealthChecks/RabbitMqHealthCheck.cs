@@ -41,6 +41,12 @@ internal sealed class RabbitMqHealthCheck(IServiceProvider services) : IHealthCh
                 ? HealthCheckResult.Healthy("RabbitMQ connection open")
                 : HealthCheckResult.Unhealthy("RabbitMQ connection is not open");
         }
+        // Broad catch is intentional: a health check must be total and never
+        // propagate. Narrowing to specific RabbitMQ exception types would let
+        // other connectivity failure modes (connect timeouts, channel-lifecycle
+        // errors, the new-connection refusal a broker raises under a resource
+        // alarm) escape as uncaught exceptions, losing this clean Unhealthy
+        // message. Mirrors KeycloakJwksHealthCheck in this folder.
         catch (Exception ex)
         {
             return HealthCheckResult.Unhealthy("RabbitMQ unreachable", ex);
