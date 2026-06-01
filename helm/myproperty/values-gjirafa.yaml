@@ -25,7 +25,7 @@ keycloak:
 backend:
   enabled: true
   image:
-    tag: "1232e70"
+    tag: "4286926"
   storage:
     storageClassName: longhorn
 migration:
