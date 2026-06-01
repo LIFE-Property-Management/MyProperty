@@ -396,14 +396,14 @@ services:
 
   # ── AIOps webhook (M4.11) ───────────────────────────────────────────────────
   # Receives Alertmanager webhook POSTs at /alerts, runs each firing alert
-  # through Anthropic Claude for triage, and posts the result to Slack as
-  # a Block Kit message. Resolved alerts skip the LLM (no triage needed) and
-  # post a short resolution.
+  # through Anthropic Claude for triage, and posts the result to Discord as
+  # a rich embed. Resolved alerts skip the LLM (no triage needed) and post a
+  # short resolution.
   #
   # Graceful degradation:
   #   - ANTHROPIC_API_KEY empty → triage disabled; raw labels/annotations
-  #     are posted to Slack with a "Triage disabled" header.
-  #   - SLACK_WEBHOOK_URL empty → message bodies are logged to stdout, which
+  #     are posted with a "Triage disabled" note.
+  #   - DISCORD_WEBHOOK_URL empty → message bodies are logged to stdout, which
   #     Promtail forwards to Loki (visible in Grafana → Explore → Loki).
   #
   # The real traffic path stays internal: alertmanager → aiops-webhook:5001
@@ -419,10 +419,10 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       # Haiku for triage (speed + cost); backend OCR uses Sonnet for vision.
       ANTHROPIC_MODEL: "${AIOPS_ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
-      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
       AIOPS_LOG_LEVEL: "${AIOPS_LOG_LEVEL:-INFO}"
       AIOPS_CLAUDE_TIMEOUT_SECONDS: "${AIOPS_CLAUDE_TIMEOUT_SECONDS:-15}"
-      AIOPS_SLACK_TIMEOUT_SECONDS: "${AIOPS_SLACK_TIMEOUT_SECONDS:-10}"
+      AIOPS_DISCORD_TIMEOUT_SECONDS: "${AIOPS_DISCORD_TIMEOUT_SECONDS:-10}"
     ports:
       - "5001:5001"
     networks:
@@ -475,8 +475,9 @@ services:
   # account already configured and exit no-op.
   #
   # Notifications:
-  #   - Slack: only created if SLACK_WEBHOOK_URL is set (same env var the
-  #     M4.11 aiops-webhook consumes; falls back to stdout-via-Loki there).
+  #   - Discord: only created if DISCORD_WEBHOOK_URL is set (Kuma renders
+  #     Discord-native embeds). In K8s this is a separate channel from the
+  #     aiops-webhook's #alerts; locally it's whatever you point it at.
   #   - Email: posts to the MailHog SMTP catcher already in this stack —
   #     visible at http://localhost:8025. Demo-friendly without an external
   #     SMTP account.
@@ -524,7 +525,7 @@ services:
       KUMA_PUBLIC_URL: "${KUMA_PUBLIC_URL:-http://localhost:3002}"
       # Notification channels — both optional. Empty values short-circuit
       # the corresponding channel; the demo runs without external accounts.
-      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_UPTIME_WEBHOOK_URL:-}"
       # MailHog runs in this stack on port 1025 — the email notification
       # lands in the MailHog Web UI at http://localhost:8025, demoable
       # without configuring an external SMTP provider.

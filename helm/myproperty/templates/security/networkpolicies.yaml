@@ -1,5 +1,6 @@
 {{- if .Values.networkPolicies.enabled }}
   {{- $ingressNS := .Values.networkPolicies.ingressNamespace }}
+  {{- $nodeCIDRs := .Values.networkPolicies.nodeCIDRs }}
   # ─────────────────────────────────────────────────────────────────────────
   # NetworkPolicies (M4.8).
   #
@@ -77,7 +78,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: prometheus
+              app.kubernetes.io/component: prometheus
 ---
 # Frontend: ingress from the ingress controller only. No internal egress
 # required — the Next.js bundle calls the API from the browser, not
@@ -100,6 +101,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 3000
@@ -127,6 +132,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 8080
@@ -274,6 +283,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: backend
@@ -329,7 +342,7 @@ spec:
               app.kubernetes.io/component: promtail
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: grafana
+              app.kubernetes.io/component: grafana
       ports:
         - protocol: TCP
           port: 3100
@@ -366,8 +379,8 @@ spec:
         - protocol: TCP
           port: 6443
 ---
-# AIOps webhook: ingress from kube-prometheus-stack's Alertmanager pods.
-# Egress to external HTTPS only (Anthropic, Slack/Discord webhooks).
+# AIOps webhook: ingress from the in-namespace Alertmanager pods.
+# Egress to external HTTPS only (Anthropic API, Discord webhooks).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -385,7 +398,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: alertmanager
+              app.kubernetes.io/component: alertmanager
       ports:
         - protocol: TCP
           port: 5001
@@ -423,4 +436,240 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+---
+# Allow Uptime-Kuma to black-box probe every workload in this namespace.
+# Same catch-all pattern as allow-prometheus-scrape: Kuma's job is to reach
+# every service's health endpoint (HTTP probes + native postgres/redis
+# checks), so rather than enumerate each target this grants ingress from the
+# Kuma pod to all pods. Egress from Kuma is handled by the uptime-kuma policy
+# below. New workloads become probeable without editing this rule.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-allow-uptime-kuma-probe
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: uptime-kuma
+---
+# Grafana: ingress from the ingress controller (browser UI). Egress to its
+# three datasources — Prometheus, Loki, Alertmanager. Prometheus-scrape and
+# Kuma-probe ingress are covered by the catch-all policies above.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: loki
+      ports:
+        - protocol: TCP
+          port: 3100
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: alertmanager
+      ports:
+        - protocol: TCP
+          port: 9093
+---
+# Prometheus: ingress from Grafana (datasource queries). Egress to its scrape
+# targets (backend /metrics, loki, alertmanager) and to Alertmanager for alert
+# delivery. Self-scrape is localhost (no policy needed). Kuma-probe ingress is
+# covered by the catch-all above.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-prometheus
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: prometheus
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: grafana
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: loki
+      ports:
+        - protocol: TCP
+          port: 3100
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: alertmanager
+      ports:
+        - protocol: TCP
+          port: 9093
+---
+# Alertmanager: ingress from Prometheus (alert delivery) and Grafana (the
+# Alertmanager datasource), both on 9093. Egress to the AIOps webhook, which
+# relays alerts to Claude triage → Discord. Kuma-probe ingress is covered by
+# the catch-all above.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-alertmanager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: alertmanager
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: prometheus
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: grafana
+      ports:
+        - protocol: TCP
+          port: 9093
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: aiops-webhook
+      ports:
+        - protocol: TCP
+          port: 5001
+---
+# Uptime-Kuma: ingress from the ingress controller (public status page) and
+# from the seed Job (loads the monitor set via Kuma's API on first install).
+# Egress is broad to any in-namespace pod — Kuma black-box probes nearly every
+# service on many ports, so an allow-list per target would be brittle and break
+# silently as monitors change. External egress is locked to HTTPS:443 only
+# (Discord notifications). A future in-cluster Mailpit is covered by the
+# in-namespace egress automatically.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-uptime-kuma
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: uptime-kuma
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ingressNS }}
+        {{- range $nodeCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: uptime-kuma-seed
+      ports:
+        - protocol: TCP
+          port: 3001
+  egress:
+    # Internal probes: any in-namespace pod, any port (HTTP health endpoints
+    # plus native postgres/redis checks across many ports).
+    - to:
+        - podSelector: {}
+    # External HTTPS — Discord webhook notifications only.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Uptime-Kuma seed Job: one-shot, POSTs the monitor set to Kuma's API on
+# install/upgrade. Egress to Kuma only (the uptime-kuma policy above grants the
+# matching ingress).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-uptime-kuma-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: uptime-kuma-seed
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: uptime-kuma
+      ports:
+        - protocol: TCP
+          port: 3001
 {{- end }}

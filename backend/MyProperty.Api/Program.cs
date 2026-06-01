@@ -1,7 +1,6 @@
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using MyProperty.Api.HealthChecks;
-using RabbitMQ.Client;
 using Asp.Versioning.ApiExplorer;
 using FluentValidation;
 using Hangfire;
@@ -295,20 +294,7 @@ try
             connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>()["Cache:RedisConnection"]!,
             name: "redis",
             tags: ["diagnostic"])
-        .AddRabbitMQ(
-            factory: sp =>
-            {
-                var cfg = sp.GetRequiredService<IConfiguration>();
-                return new ConnectionFactory
-                {
-                    HostName = cfg["RabbitMq:HostName"] ?? "localhost",
-                    Port = cfg.GetValue("RabbitMq:Port", 5672),
-                    UserName = cfg["RabbitMq:UserName"] ?? "guest",
-                    Password = cfg["RabbitMq:Password"] ?? "guest",
-                    VirtualHost = cfg["RabbitMq:VirtualHost"] ?? "/",
-                    AutomaticRecoveryEnabled = false,
-                }.CreateConnectionAsync(CancellationToken.None);
-            },
+        .AddCheck<RabbitMqHealthCheck>(
             name: "rabbitmq",
             tags: ["diagnostic"])
         .AddCheck<KeycloakJwksHealthCheck>(

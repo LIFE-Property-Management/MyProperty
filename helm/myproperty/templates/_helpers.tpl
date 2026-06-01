@@ -71,6 +71,7 @@ fail its HTTP-01 challenge and block issuance of the entire shared SAN cert.
 {{- if .Values.backend.enabled -}}{{- $hosts = append $hosts .Values.hosts.api -}}{{- end -}}
 {{- if .Values.keycloak.enabled -}}{{- $hosts = append $hosts .Values.hosts.auth -}}{{- end -}}
 {{- if .Values.uptimeKuma.enabled -}}{{- $hosts = append $hosts .Values.hosts.status -}}{{- end -}}
+{{- if .Values.monitoring.enabled -}}{{- $hosts = append $hosts .Values.hosts.grafana -}}{{- end -}}
 {{- toYaml $hosts -}}
 {{- end -}}
 

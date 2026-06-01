@@ -1,0 +1,33 @@
+{{- if and .Values.ingress.enabled .Values.monitoring.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+  annotations:
+    {{ include "myproperty.certIssuerAnnotation" . }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- with .Values.grafana.ingressAllowlist }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ . | quote }}
+    {{- end }}
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+{{- include "myproperty.tlsHosts" . | nindent 8 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  rules:
+    - host: {{ .Values.hosts.grafana }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  name: http
+{{- end }}

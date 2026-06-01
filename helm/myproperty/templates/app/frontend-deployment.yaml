@@ -41,8 +41,6 @@ spec:
           type: RuntimeDefault
       containers:
         - name: frontend
-          # Note: this image has placeholder URLs baked in until Phase 9
-          # updates frontend-ci.yml and a new image is built.
           image: {{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}
           ports:
             - name: http

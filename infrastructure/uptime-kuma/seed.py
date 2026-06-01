@@ -30,10 +30,18 @@ KUMA_ADMIN_PASSWORD; defaults documented in docker-compose.yml):
                              setup validation.
     KUMA_PUBLIC_URL        — URL the status page advertises in its
                              "Powered by" link.
-    SLACK_WEBHOOK_URL      — empty value skips the Slack channel.
+    DISCORD_WEBHOOK_URL    — empty value skips the Discord channel.
     KUMA_SMTP_HOST / *_PORT / *_FROM / *_TO — empty *_HOST skips the
                              email channel entirely.
     KUMA_LOG_LEVEL         — INFO (default) | DEBUG | WARNING.
+
+String values in monitors.json may reference environment variables with
+shell-style `${VAR}` / `${VAR:-default}` syntax (see expand_env). This is
+how the Postgres/Redis/RabbitMQ monitors pick up real credentials in K8s
+(injected from the myproperty-postgres/-redis/-rabbitmq Secrets) while
+still falling back to the docker-compose dev defaults when those vars are
+unset. Relevant vars: POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB,
+REDIS_PASSWORD, RABBITMQ_USER / RABBITMQ_PASSWORD.
 """
 
 from __future__ import annotations
@@ -41,6 +49,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -72,7 +81,7 @@ KUMA_ADMIN_USERNAME = os.environ.get("KUMA_ADMIN_USERNAME", "admin")
 KUMA_ADMIN_PASSWORD = os.environ.get("KUMA_ADMIN_PASSWORD", "")
 KUMA_PUBLIC_URL = os.environ.get("KUMA_PUBLIC_URL", "http://localhost:3002")
 
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
 KUMA_SMTP_HOST = os.environ.get("KUMA_SMTP_HOST", "").strip()
 KUMA_SMTP_PORT = int(os.environ.get("KUMA_SMTP_PORT", "1025"))
 KUMA_SMTP_FROM = os.environ.get("KUMA_SMTP_FROM", "uptime@myproperty.local")
@@ -91,12 +100,41 @@ CONNECT_BACKOFF_SECONDS = 2.0
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+# Shell-style `${VAR}` / `${VAR:-default}` references in seed-file string
+# values. Empty (not just unset) env vars fall through to the default, matching
+# POSIX `:-` — so an env var wired to an empty Secret key behaves like unset.
+_ENV_PLACEHOLDER = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+
+
+def expand_env(obj: Any) -> Any:
+    """Recursively expand `${VAR}` / `${VAR:-default}` in every string value.
+
+    Credentials never live in monitors.json: the file carries dev defaults,
+    and K8s injects the real values via env (from Secrets). Passwords are
+    hex (openssl rand -hex), so they're URL-safe inside connection strings
+    with no escaping needed.
+    """
+    if isinstance(obj, str):
+        def repl(m: re.Match[str]) -> str:
+            name, default = m.group(1), m.group(2)
+            val = os.environ.get(name)
+            if val:  # non-empty env wins; empty/unset → default (or "")
+                return val
+            return default if default is not None else ""
+        return _ENV_PLACEHOLDER.sub(repl, obj)
+    if isinstance(obj, list):
+        return [expand_env(v) for v in obj]
+    if isinstance(obj, dict):
+        return {k: expand_env(v) for k, v in obj.items()}
+    return obj
+
+
 def load_seed() -> dict[str, Any]:
     if not SEED_FILE.exists():
         log.error("Seed file missing at %s", SEED_FILE)
         sys.exit(2)
     with SEED_FILE.open(encoding="utf-8") as fp:
-        return json.load(fp)
+        return expand_env(json.load(fp))
 
 
 def connect_with_retry() -> UptimeKumaApi:
@@ -154,17 +192,17 @@ def upsert_notifications(api: UptimeKumaApi,
         apply_existing = bool(spec.get("applyExisting", False))
         cfg = spec.get("config", {})
 
-        if type_key == "slack":
-            if not SLACK_WEBHOOK_URL:
-                log.info("Skipping Slack notification '%s' — SLACK_WEBHOOK_URL is empty",
+        if type_key == "discord":
+            if not DISCORD_WEBHOOK_URL:
+                log.info("Skipping Discord notification '%s' — DISCORD_WEBHOOK_URL is empty",
                          name)
                 continue
             kwargs: dict[str, Any] = {
                 "name": name,
-                "type": NotificationType.SLACK,
+                "type": NotificationType.DISCORD,
                 "isDefault": is_default,
                 "applyExisting": apply_existing,
-                "slackwebhookURL": SLACK_WEBHOOK_URL,
+                "discordWebhookUrl": DISCORD_WEBHOOK_URL,
                 **cfg,
             }
 
