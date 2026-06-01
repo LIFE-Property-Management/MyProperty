@@ -1,0 +1,266 @@
+name: CD — Deploy to project-02
+
+# Push-based continuous deployment for the shared Hetzner cluster (namespace
+# project-02, namespace-admin only — no cluster-scoped controllers, so no
+# ArgoCD/Flux). Fires after the per-component image CI workflows finish on a
+# deploy branch, resolves which component images exist at the triggering SHA,
+# auto-commits a per-component tag bump to values-gjirafa.yaml, then deploys
+# with `deploy.sh --atomic` (readiness gating + auto-rollback on failure).
+#
+# Guardrails (see docs/operations/cd-pipeline-plan.md):
+#   * Behind the protected `project-02` Environment (manual approval gate).
+#   * Serialized — never two deploys on the one namespace.
+#   * `--atomic` rolls back WORKLOADS; EF schema migrations are FORWARD-ONLY,
+#     so a failed deploy may leave the DB partly migrated — verify manually.
+#   * CD is deploy-only. It NEVER wipes/auto-provisions data stores (the
+#     pre-upgrade migration hook aborts on a fresh store); the two-phase wipe
+#     (`deploy.sh --no-hooks` then normal) stays manual.
+
+on:
+  # Runs in the DEFAULT-branch (develop) context, but deploys head_branch.
+  # Realm Import Smoke is deliberately excluded — it builds no deployable image.
+  workflow_run:
+    workflows: ["Backend CI", "Frontend CI", "AIOps Webhook CI", "Uptime Kuma Init CI"]
+    types: [completed]
+  # Manual run (deploys the branch it is dispatched from; the project-02
+  # Environment branch policy still restricts this to develop/main).
+  workflow_dispatch:
+
+concurrency:
+  # Shared, never cancelled — queue deploys so the namespace sees one at a time.
+  # Redundant fires (one per CI workflow on a multi-component push) are safe:
+  # tag resolution is idempotent and converges.
+  group: deploy-project-02
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # auto-commit the tag bump back to the deploy branch
+  packages: read    # query GHCR for per-component image existence
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    name: Deploy to project-02
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Deploy ONLY on a manual dispatch, or a SUCCESSFUL, PUSH-triggered CI run on
+    # develop/main. The `event == 'push'` guard stops PR-triggered CI from
+    # deploying a PR branch; the head_branch guard double-locks to the two deploy
+    # branches (the Environment branch policy can't help here — workflow_run always
+    # executes in the default-branch context, so github.ref is always develop).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       (github.event.workflow_run.head_branch == 'develop' ||
+        github.event.workflow_run.head_branch == 'main'))
+    environment: project-02
+
+    steps:
+      - name: Resolve deploy branch
+        id: ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_BRANCH: ${{ github.ref_name }}
+          WR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            BRANCH="$DISPATCH_BRANCH"
+            SHA=""   # resolved from HEAD after checkout
+          else
+            BRANCH="$WR_BRANCH"
+            SHA="$WR_SHA"
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "preset_sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Deploy branch: $BRANCH (sha: ${SHA:-resolve-after-checkout})"
+
+      - name: Checkout deploy branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      - name: Resolve target SHA
+        id: sha
+        env:
+          PRESET_SHA: ${{ steps.ref.outputs.preset_sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "$PRESET_SHA" ]; then
+            FULL="$PRESET_SHA"
+          else
+            FULL="$(git rev-parse HEAD)"
+          fi
+          echo "full=$FULL" >> "$GITHUB_OUTPUT"
+          echo "short=${FULL:0:7}" >> "$GITHUB_OUTPUT"
+          echo "Target SHA: $FULL (short ${FULL:0:7})"
+
+      - name: Set up Helm 3.20.0
+        # Pinned: setup-helm@v5 defaults to `latest` = Helm 4, where --atomic was
+        # renamed and --wait fails fast. v3.20.0 is the locally-validated line.
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.20.0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up kubectl 1.31.x
+        # Match the cluster (v1.31.14) within the supported skew.
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.14
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR (read-only, for image existence checks)
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python (for the format-preserving tag bumper)
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install ruamel.yaml
+        # The bump uses ruamel (not yq): mikefarah yq -i re-serialises the whole
+        # document (strips blank lines, normalises comment spacing), which would
+        # put an unreviewed reformat into the bot's commit. ruamel round-trips
+        # values-gjirafa.yaml byte-for-byte, so a bump is a true one-line diff.
+        run: pip install 'ruamel.yaml>=0.18,<0.19'
+
+      - name: Resolve per-component image tags and bump values
+        id: bump
+        env:
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+        run: |
+          set -euo pipefail
+          VALUES="helm/myproperty/values-gjirafa.yaml"
+          REGISTRY="ghcr.io/life-property-management"
+
+          # True iff the image exists in GHCR at the triggering short SHA.
+          image_exists() { docker buildx imagetools inspect "$REGISTRY/$1:$SHORT_SHA" >/dev/null 2>&1; }
+
+          assigns=()
+          changed=()
+          # backend-ci builds myproperty-api AND myproperty-migrations at the SAME
+          # SHA — so a present API image bumps both keys.
+          if image_exists myproperty-api; then
+            assigns+=("backend.image.tag=$SHORT_SHA" "migration.image.tag=$SHORT_SHA")
+            changed+=("backend" "migration")
+          fi
+          if image_exists myproperty-frontend; then
+            assigns+=("frontend.image.tag=$SHORT_SHA"); changed+=("frontend")
+          fi
+          if image_exists myproperty-aiops-webhook; then
+            assigns+=("aiopsWebhook.image.tag=$SHORT_SHA"); changed+=("aiopsWebhook")
+          fi
+          if image_exists myproperty-uptime-kuma-init; then
+            assigns+=("uptimeKuma.seedImage.tag=$SHORT_SHA"); changed+=("uptimeKuma")
+          fi
+
+          if [ ${#assigns[@]} -eq 0 ]; then
+            echo "::warning::No component image found at $SHORT_SHA — redeploying current pinned tags (idempotent)."
+            echo "components=" >> "$GITHUB_OUTPUT"
+          else
+            python infrastructure/gjirafa/bump_image_tags.py "$VALUES" "${assigns[@]}"
+            echo "Components present at $SHORT_SHA: ${changed[*]}"
+            echo "components=${changed[*]}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push tag bump
+        env:
+          BRANCH: ${{ steps.ref.outputs.branch }}
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+          COMPONENTS: ${{ steps.bump.outputs.components }}
+        run: |
+          set -euo pipefail
+          VALUES="helm/myproperty/values-gjirafa.yaml"
+          if git diff --quiet -- "$VALUES"; then
+            echo "values-gjirafa.yaml already current — no bump commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$VALUES"
+          git commit -m "Deploy(cd): bump [${COMPONENTS}] image tag(s) to ${SHORT_SHA} on ${BRANCH}"
+          # GITHUB_TOKEN pushes do not retrigger workflows (loop-safe); the bumped
+          # file also matches no CI path filter. Rebase first in case a human pushed
+          # during the deploy/approval window.
+          git pull --rebase origin "$BRANCH"
+          git push origin "HEAD:refs/heads/$BRANCH"
+          echo "Pushed tag bump to $BRANCH."
+
+      - name: Write kubeconfig from secret
+        env:
+          KCFG: ${{ secrets.KUBECONFIG_PROJECT_02 }}
+        run: |
+          set -euo pipefail
+          f="$RUNNER_TEMP/project-02.kubeconfig"
+          printf '%s' "$KCFG" > "$f"
+          chmod 600 "$f"
+          echo "KUBECONFIG=$f" >> "$GITHUB_ENV"
+          echo "Wrote kubeconfig to $f"
+
+      - name: Deploy (helm upgrade --install --atomic)
+        # deploy.sh forwards "$@" to helm. --atomic implies --wait → readiness
+        # gating + auto-rollback of WORKLOADS on failure (schema is forward-only).
+        run: |
+          set -euo pipefail
+          bash infrastructure/gjirafa/deploy.sh --atomic --cleanup-on-fail --timeout 10m
+
+      - name: Health gate
+        run: |
+          set -euo pipefail
+          kubectl -n project-02 rollout status deploy/myproperty-backend  --timeout=5m
+          kubectl -n project-02 rollout status deploy/myproperty-frontend --timeout=5m
+
+          echo "Probing api readiness (/api/v1/health/ready, expect 200)…"
+          curl -fsS --max-time 20 https://api.myproperty.works/api/v1/health/ready >/dev/null
+          echo "  api ready OK"
+
+          # app. serves 200; auth./grafana./status. legitimately 302 to a login —
+          # treat anything < 400 as 'host is up and serving'.
+          for h in app auth grafana status; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$h.myproperty.works")"
+            if [ "$code" -ge 400 ]; then
+              echo "::error::https://$h.myproperty.works returned HTTP $code"
+              exit 1
+            fi
+            echo "  $h.myproperty.works -> $code OK"
+          done
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_DEPLOY_WEBHOOK_URL }}
+          BRANCH: ${{ steps.ref.outputs.branch }}
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK:-}" ]; then
+            echo "DISCORD_DEPLOY_WEBHOOK_URL not set — skipping notification."
+            exit 0
+          fi
+          # Backticks below are literal Markdown for Discord, not command subst.
+          # shellcheck disable=SC2016
+          MSG="$(printf '⚠️ **CD deploy to project-02 FAILED** — branch \`%s\` @ \`%s\`.\n`--atomic` rolled the workloads back to the prior revision.\n**Schema migrations are forward-only — the DB may be partly migrated; verify manually.**\nLogs: %s' \
+            "${BRANCH:-?}" "${SHORT_SHA:-?}" "$RUN_URL")"
+          curl -fsS -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg c "$MSG" '{content:$c}')" \
+            "$WEBHOOK" >/dev/null && echo "Discord failure notice sent." || echo "Discord notify failed (non-fatal)."
+
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f "${KUBECONFIG:-}" || true
