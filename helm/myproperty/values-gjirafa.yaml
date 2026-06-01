@@ -84,18 +84,18 @@ loki:
 #   ./infrastructure/gjirafa/deploy.sh --set networkPolicies.enabled=true
 # in a watched window (rollback: kubectl -n project-02 delete networkpolicy --all).
 #
-# This cluster's ingress-nginx is a hostNetwork DaemonSet (the Ingress status
-# publishes node IPs; pods are on the 192.168.0.0/16 Calico pool), so it proxies
-# to pods from the *node* IP — nodeCIDRs below is what actually admits public
-# inbound. CNI is Calico, which enforces policy. The IPs are the 4 worker node
-# IPs (from the Ingress loadBalancer status) + the control-plane (API server).
-# CONFIRM with the canary: if inbound still drops, the host-source IP is a
-# private/tunnel address and these need adjusting.
+# CNI is Calico (enforces policy) and ingress-nginx is a hostNetwork DaemonSet on
+# the workers. Canary (2026-06-01) showed: allowing the public node IPs only
+# admitted *same-node* requests (Calico failsafes local host→pod); cross-node
+# requests were dropped because Calico encapsulation rewrites the source to the
+# originating node's *tunnel* address, which lives in the pod CIDR — not the
+# public node IP. So nodeCIDRs is the Calico pod CIDR (192.168.0.0/16).
+#
+# Trade-off: this admits any in-cluster pod to the public-facing services' HTTP
+# ports (frontend/backend/keycloak/grafana/uptime-kuma) — acceptable, since those
+# are already internet-facing via ingress. The data tier (postgres/redis/rabbitmq)
+# stays locked to component selectors, which is the protection that matters.
 networkPolicies:
-  enabled: false
+  enabled: true   # validated on project-02 (Calico) 2026-06-01: all ingress + 13 Kuma monitors green
   nodeCIDRs:
-    - 159.69.16.208/32   # worker
-    - 159.69.2.83/32     # worker
-    - 159.69.5.128/32    # worker
-    - 159.69.8.132/32    # worker
-    - 159.69.213.73/32   # control-plane / API server
+    - 192.168.0.0/16   # Calico pod CIDR — covers node tunnel IPs (hostNetwork ingress)

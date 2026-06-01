@@ -363,6 +363,11 @@ networkPolicies:
   # *local* host→pod traffic (kubelet probes), so this only covers the
   # cross-node controller hops.
   #
+  # CAVEAT for encapsulated CNIs (Calico IPIP/VXLAN, etc.): cross-node host→pod
+  # traffic is sourced from the node's *tunnel* IP, which is in the pod CIDR, not
+  # the node's "real" IP. There, set this to the pod CIDR (e.g. 192.168.0.0/16) —
+  # see values-gjirafa.yaml.
+  #
   # Leave empty on clusters where the controller runs as a normal pod (a cloud
   # LoadBalancer Service preserves the pod source) — the namespaceSelector
   # alone is correct there.
