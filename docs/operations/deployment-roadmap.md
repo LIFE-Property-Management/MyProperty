@@ -64,25 +64,32 @@ for new users.
 
 ---
 
-## Batch 9 — CD rewrite + DOKS cleanup
+## Batch 9 — CD rewrite + DOKS cleanup — ✅ MOSTLY DONE (2026-06-01)
 
-The big de-DOKS pass. None of this is started; all of it is safe to do without touching the
-running workloads.
+The big de-DOKS pass. Shipped in the `feature/hetzner-cd` branch (PR #128); the CD pipeline is
+documented in [ci-cd.md](./ci-cd.md).
 
-### Build a real Hetzner CD workflow
-- New GitHub Actions workflow: on push (or tag), `helm upgrade --install` against
-  `project-02` using a **kubeconfig stored as a repo secret**, with short-SHA image tags.
-  Replace/wrap the manual `infrastructure/gjirafa/deploy.sh` loop. (The dead DOKS `cd.yml`
-  is already removed.)
+### Build a real Hetzner CD workflow — ✅ DONE (pending first live run)
+- `.github/workflows/cd.yml` ships: `workflow_run` (the four image-CI workflows) +
+  `workflow_dispatch` → per-component GHCR tag resolution → format-preserving auto-commit
+  bump → `deploy.sh --atomic --cleanup-on-fail` against `project-02` (kubeconfig as a
+  **`project-02` Environment secret**) → health gate → Discord failure notice. Behind a
+  manual approval Environment; serialized; `GITHUB_TOKEN` push. Also added
+  `uptime-kuma-init-ci.yml` to close the seed-image CI gap. See [ci-cd.md](./ci-cd.md).
+  ⚠️ Statically validated only — the first **live** `CI → approval → deploy → rollback` run
+  is still pending (needs `cd.yml` on `develop`).
 
-### Delete abandoned artifacts
-- `infrastructure/terraform/` — the entire DOKS stack (cluster, managed Postgres, Spaces,
-  bootstrap state). Never applied against the current cluster.
-- `infrastructure/nginx/` — standalone reverse-proxy/TLS scripts, replaced by the
-  cluster's ingress-nginx + cert-manager.
-- `infrastructure/keycloak/realm-export.template.json` — **duplicate** of
-  `helm/myproperty/files/realm-export.template.json` (the Helm copy is the one actually
-  used). Keep one source of truth.
+### Delete abandoned artifacts — ⚠️ SCOPE CORRECTED
+- ✅ `infrastructure/terraform/` — **DELETED** (entire DOKS stack; never applied; DO account
+  revoked; no tfstate/real tfvars tracked; no functional refs).
+- ❌ `infrastructure/nginx/` — **KEPT.** Not abandoned: it backs the docker-compose `proxy`
+  profile (`docker compose --profile proxy up` → host 80/443 + subdomain routing + certbot
+  TLS). "Replaced by ingress-nginx" holds only for **K8s**; deleting it breaks local HTTPS dev.
+- ❌ `infrastructure/keycloak/realm-export.template.json` — **KEPT.** Not a dead duplicate: it
+  is the source the compose **default-stack** `keycloak-realm-init` service renders (envsubst →
+  import volume). Byte-identical to the Helm copy today, but compose reads this path; deleting
+  it breaks `docker compose up`. (Future: a single source of truth would require pointing
+  compose at the Helm copy — deferred, not a deletion.)
 
 ### Fix vestigial Helm defaults — ✅ DONE (2026-05-31)
 - `helm/myproperty/values.yaml` base defaults are now Hetzner-correct: `storageClassName:
@@ -122,14 +129,17 @@ This PR refreshed only the **current-reality** docs (`k8s-deployment.md`, `ci-cd
 new `auth-flow.md`) and left **SUPERSEDED banners** on the DOKS-era docs. The eventual goal
 is to fully rewrite/retire the rest so the docs tree matches reality end to end:
 
-- `docs/operations/terraform.md` — retire (no Terraform in the current path) or replace
-  with a short "why we don't use Terraform" note.
-- `docs/operations/nginx-ssl.md` — retire (ingress-nginx + cert-manager replace it).
-- `docs/decisions/keycloak-prod-config.md` — reconcile with what M5 actually shipped.
-- `docs/milestones/m4-deployment-ops.md` — historical; annotate the DOKS-vs-Hetzner pivot.
-- `infrastructure/keycloak/PRODUCTION.md`, `infrastructure/nginx/PRODUCTION.md` — retire.
-- `README.md` — currently empty; populate with project structure + how to run/deploy.
+- ✅ `docs/operations/terraform.md` — **RETIRED** (replaced with a short tombstone; the
+  Terraform tree is deleted).
+- ❌ `docs/operations/nginx-ssl.md` — **KEPT** (documents the still-live docker-compose `proxy`
+  profile; not retired — see the scope correction in Batch 9 above).
+- `docs/decisions/keycloak-prod-config.md` — reconcile with what M5 actually shipped. *(open)*
+- `docs/milestones/m4-deployment-ops.md` — historical; annotate the DOKS-vs-Hetzner pivot. *(open)*
+- ❌ `infrastructure/keycloak/PRODUCTION.md`, `infrastructure/nginx/PRODUCTION.md` — **KEPT**
+  (both document features still in use locally; keycloak banner's stale "duplicate/dedup" line
+  corrected). Not retired.
+- `README.md` — currently empty; populate with project structure + how to run/deploy. *(open)*
 - `backend/CLAUDE.md` — the "Keycloak admin client deferred" note is now delivered (M5);
-  refresh it.
+  refresh it. *(open)*
 
-Pairs naturally with Batch 9 (delete the artifacts and retire their docs together).
+Most of Batch 9 landed with the CD work; remaining items above are the only open doc tasks.

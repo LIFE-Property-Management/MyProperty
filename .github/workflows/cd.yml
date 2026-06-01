@@ -7,7 +7,7 @@ name: CD — Deploy to project-02
 # auto-commits a per-component tag bump to values-gjirafa.yaml, then deploys
 # with `deploy.sh --atomic` (readiness gating + auto-rollback on failure).
 #
-# Guardrails (see docs/operations/cd-pipeline-plan.md):
+# Guardrails (see docs/operations/ci-cd.md § Continuous deployment):
 #   * Behind the protected `project-02` Environment (manual approval gate).
 #   * Serialized — never two deploys on the one namespace.
 #   * `--atomic` rolls back WORKLOADS; EF schema migrations are FORWARD-ONLY,

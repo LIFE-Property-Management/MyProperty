@@ -281,7 +281,7 @@ Each technology has a distinct role; do not blur them.
 
 ### Post-M3 follow-ups
 
-- Keycloak admin client for fresh-tenant role assignment. Currently only seeded users (with Tenant role pre-assigned in `realm-export.json`) can accept invites end-to-end. Self-registered users get a JWT without the Tenant role and can't reach tenant endpoints after accepting.
+- ~~Keycloak admin client for fresh-tenant role assignment.~~ **DELIVERED (M5).** `KeycloakAdminClient` (`Infrastructure/Keycloak/`, behind `IUserAccountProvisioner`) provisions Keycloak users and assigns realm roles via the Admin REST API using the `myproperty-api` client-credentials service account (token cached by `IKeycloakAdminTokenCache`; unit + integration tested). Email+password self-registration now assigns the role server-side. **Residual gap:** Google/IdP first-login provisioning (an OIDC-brokered user still lands without a portal role/entity) — tracked as Batch 8 in [deployment-roadmap.md](../docs/operations/deployment-roadmap.md).
 - Mapperly retrofit. Handlers currently construct DTOs by hand. Single retrofit batch post-M3.
 - Remove `ClaimsPrincipal? Principal` from `ICurrentUser`. Acknowledged abstraction leak — only exists because `IUserRepository.GetOrSyncFromClaimsAsync` takes a `ClaimsPrincipal`. Cleanup once role assignment moves server-side.
 - FluentValidation validators on commands (M3.12).
