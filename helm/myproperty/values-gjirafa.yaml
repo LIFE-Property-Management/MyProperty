@@ -25,12 +25,12 @@ keycloak:
 backend:
   enabled: true
   image:
-    tag: "4286926"
+    tag: "2ad7353"
   storage:
     storageClassName: longhorn
 migration:
   image:
-    tag: "1232e70"
+    tag: "2ad7353"
 frontend:
   enabled: true
   image:
@@ -57,7 +57,7 @@ uptimeKuma:
   storage:
     storageClassName: longhorn
   seedImage:
-    tag: "19c92bd"
+    tag: "2ad7353"
 
 aiopsWebhook:
   image:
