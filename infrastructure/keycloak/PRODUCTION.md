@@ -5,8 +5,10 @@
 > deployment/bootstrap steps are obsolete. Current deploy:
 > [../../docs/operations/k8s-deployment.md](../../docs/operations/k8s-deployment.md); current
 > auth flow: [../../docs/operations/auth-flow.md](../../docs/operations/auth-flow.md).
-> Note `infrastructure/keycloak/realm-export.template.json` is a **duplicate** of the Helm
-> copy (`helm/myproperty/files/`) — dedup tracked in
+> Note `infrastructure/keycloak/realm-export.template.json` is the source the **docker-compose**
+> `keycloak-realm-init` service renders (envsubst → import volume); `helm/myproperty/files/` holds
+> the K8s copy. They are byte-identical today but serve two different stacks, so the compose copy
+> is **kept** (deleting it breaks `docker compose up`). See
 > [../../docs/operations/deployment-roadmap.md](../../docs/operations/deployment-roadmap.md).
 
 This document describes how the MyProperty Keycloak realm runs in
