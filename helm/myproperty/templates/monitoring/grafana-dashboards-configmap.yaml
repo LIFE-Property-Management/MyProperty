@@ -1,0 +1,21 @@
+{{- if .Values.monitoring.enabled }}
+# Single ConfigMap holding every dashboard, keyed by filename. Mounted as a DIRECTORY
+# (not per-file subPath) into Grafana at /var/lib/grafana/dashboards, where the file
+# provisioner picks them up. Directory mounts — unlike subPath — propagate ConfigMap
+# updates into the running pod, so the provider's 30s rescan applies dashboard edits
+# with no pod restart. Add a new dashboard by dropping a files/dashboard-*.json file;
+# the glob below includes it automatically.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-grafana-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana
+data:
+{{- range $path, $bytes := .Files.Glob "files/dashboard-*.json" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- end }}
