@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MyProperty.Application.Common.Email;
+using MyProperty.Application.Common.FeatureFlags;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Ocr;
@@ -12,6 +13,7 @@ using MyProperty.Application.Common.Options;
 using MyProperty.Infrastructure.Ai;
 using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Email;
+using MyProperty.Infrastructure.FeatureFlags;
 using MyProperty.Infrastructure.Keycloak;
 using MyProperty.Infrastructure.Storage;
 using MyProperty.Infrastructure.Jobs;
@@ -20,6 +22,7 @@ using MyProperty.Infrastructure.Messaging.Consumers;
 using MyProperty.Infrastructure.Persistence;
 using MyProperty.Infrastructure.Persistence.Interceptors;
 using MyProperty.Infrastructure.Persistence.Repositories;
+using Unleash;
 
 namespace MyProperty.Infrastructure;
 
@@ -54,6 +57,7 @@ public static class DependencyInjection
         services.AddMessaging(configuration);
         services.AddStorage(configuration);
         services.AddAiServices(configuration);
+        services.AddFeatureFlags(configuration);
         services.AddKeycloakAdmin(configuration);
 
         return services;
@@ -147,6 +151,47 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
         });
 
+        return services;
+    }
+
+    private static IServiceCollection AddFeatureFlags(
+        this IServiceCollection services, IConfiguration configuration)
+    {
+        var options = configuration.GetSection(UnleashOptions.SectionName).Get<UnleashOptions>();
+
+        // No token configured → register the no-op provider (returns the caller
+        // default everywhere) and skip both the live SDK and options validation,
+        // which would otherwise spin up a background poller against an
+        // unconfigured server / reject the empty ApiUrl that a no-Unleash
+        // environment legitimately ships. Mirrors the NullEventPublisher path in
+        // AddMessaging, which likewise validates RabbitMqOptions only when enabled.
+        if (options is null || string.IsNullOrWhiteSpace(options.ApiToken))
+        {
+            services.AddSingleton<IFeatureFlags, NullFeatureFlags>();
+            return services;
+        }
+
+        // Token present → we intend to use Unleash, so now require a well-formed
+        // ApiUrl (etc.) and fail fast at startup if it's missing/malformed.
+        services.AddOptions<UnleashOptions>()
+            .Bind(configuration.GetSection(UnleashOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // Singleton IUnleash — owns a background fetch + metrics sender and is
+        // thread-safe. DI disposes it on shutdown (DefaultUnleash : IDisposable).
+        services.AddSingleton<IUnleash>(_ => new DefaultUnleash(new UnleashSettings
+        {
+            AppName = options.AppName,
+            UnleashApi = new Uri(options.ApiUrl),
+            FetchTogglesInterval = TimeSpan.FromSeconds(options.FetchTogglesIntervalSeconds),
+            CustomHttpHeaders = new Dictionary<string, string>
+            {
+                ["Authorization"] = options.ApiToken!,
+            },
+        }));
+
+        services.AddSingleton<IFeatureFlags, UnleashFeatureFlags>();
         return services;
     }
 

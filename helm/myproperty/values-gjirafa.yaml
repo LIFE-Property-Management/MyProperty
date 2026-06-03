@@ -16,6 +16,8 @@ postgres:
   sslMode: Disable
 redis:
   enabled: true
+unleash:
+  enabled: true
 rabbitmq:
   enabled: true
   storage:

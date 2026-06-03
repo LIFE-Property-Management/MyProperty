@@ -8,6 +8,10 @@
 **Branch:** `feature/authorization-end-to-end`
 **Aligns with:** Section 2 — Auth & Accounts
 
+> **M5.6 — Feature flags (Unleash):** a separate M5 deliverable, documented in
+> [../operations/feature-flags.md](../operations/feature-flags.md) (self-hosted
+> Unleash + a receipt-OCR kill-switch) — not part of the auth work recorded here.
+
 ## Goal
 
 Close the account-creation gap. Before this milestone nobody could sign up or

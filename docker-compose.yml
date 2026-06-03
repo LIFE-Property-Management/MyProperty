@@ -161,6 +161,67 @@ services:
       retries: 10
       start_period: 30s
 
+  # ── Unleash (feature flags, M5.6) ───────────────────────────────────────────
+  # Self-hosted Unleash OSS server. Reuses the shared Postgres (dedicated
+  # `unleash` database created by infrastructure/postgres/init.sql) and seeds a
+  # fixed client API token so the backend SDK connects reproducibly with no
+  # manual token creation. The unleash-flag-init sidecar below creates the
+  # payments.ocr-autoextract flag via the Admin API on first boot.
+  # First run seeds a default admin user (admin / unleash4all) for the UI.
+  unleash:
+    image: unleashorg/unleash-server:7.6.4
+    container_name: myproperty-unleash
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: unleash
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_SSL: "false"
+      # Seeded tokens for reproducible dev/CI only — NEVER use these in a
+      # deployed environment. Prod injects a real client token via a Helm
+      # Secret (see docs/operations/feature-flags.md).
+      INIT_CLIENT_API_TOKENS: "default:development.unleash-insecure-api-token"
+      INIT_ADMIN_API_TOKENS: "*:*.unleash-insecure-admin-token"
+      LOG_LEVEL: warn
+    ports:
+      - "4242:4242"   # Unleash UI + API →  http://localhost:4242
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+    healthcheck:
+      # The image is Node-based and ships no curl/wget guarantee; use node,
+      # which is always on PATH, to probe the built-in /health endpoint.
+      test: ["CMD", "node", "-e", "const http=require('http');http.get('http://localhost:4242/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  # ── Unleash flag seed (one-shot) ────────────────────────────────────────────
+  # Creates + enables the payments.ocr-autoextract flag via the Admin API once
+  # Unleash is healthy, then exits. Idempotent and failure-tolerant (see
+  # seed-flags.sh). Same one-shot pattern as keycloak-realm-init.
+  unleash-flag-init:
+    image: alpine:3.20
+    container_name: myproperty-unleash-flag-init
+    command: >
+      sh -c "apk add --no-cache curl > /dev/null &&
+      sh /seed/seed-flags.sh"
+    environment:
+      UNLEASH_BASE_URL: "http://unleash:4242"
+      UNLEASH_ADMIN_TOKEN: "*:*.unleash-insecure-admin-token"
+    volumes:
+      - ./infrastructure/unleash/seed-flags.sh:/seed/seed-flags.sh:ro
+    depends_on:
+      unleash:
+        condition: service_healthy
+    networks:
+      - myproperty-net
+    restart: "no"   # One-shot — exits 0 after seeding (or no-op on re-run).
+
   # ── MailHog (dev SMTP catcher) ──────────────────────────────────────────────
   mailhog:
     image: mailhog/mailhog:latest
@@ -229,6 +290,11 @@ services:
       Anthropic__Model: "claude-sonnet-4-5-20250929"
       Anthropic__TimeoutSeconds: "30"
       Anthropic__ApiKey: "${ANTHROPIC_API_KEY:-}"
+      # Feature flags (M5.6). In-container the API reaches Unleash by service DNS
+      # (the baked appsettings.Development.json default of localhost is for host
+      # `dotnet run`). Token matches the unleash service's INIT_CLIENT_API_TOKENS.
+      Unleash__ApiUrl: "http://unleash:4242/api/"
+      Unleash__ApiToken: "default:development.unleash-insecure-api-token"
     ports:
       - "5042:8080"   # Host port matches launchSettings.json + NEXT_PUBLIC_API_BASE_URL
     volumes:
@@ -244,6 +310,8 @@ services:
         condition: service_healthy
       backend-storage-init:
         condition: service_completed_successfully
+      unleash:
+        condition: service_healthy
     networks:
       - myproperty-net
     # Docker HEALTHCHECK omitted: chiseled runtime has no shell or curl
