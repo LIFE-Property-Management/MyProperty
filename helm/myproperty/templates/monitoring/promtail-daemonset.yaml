@@ -14,6 +14,11 @@ spec:
       app.kubernetes.io/component: promtail
   template:
     metadata:
+      annotations:
+        # Roll Promtail pods when the scrape/pipeline config changes so the new config
+        # takes effect deterministically (rather than relying on watchConfig + the lag
+        # of ConfigMap-to-file propagation).
+        checksum/config: {{ include (print $.Template.BasePath "/monitoring/promtail-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "myproperty.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: promtail
@@ -29,6 +34,16 @@ spec:
         - name: promtail
           image: {{ .Values.promtail.image.repository }}:{{ .Values.promtail.image.tag }}
           args: ["-config.file=/etc/promtail/config.yml"]
+          # The promtail-config relabel sets each target's __host__ to its pod's NODE name,
+          # and Promtail keeps a target only when __host__ equals its own hostname — which it
+          # reads from $HOSTNAME first, falling back to os.Hostname() (the POD name). Without
+          # this override, node-name != pod-name, so EVERY target is silently dropped and
+          # nothing is ingested. Setting HOSTNAME to spec.nodeName makes the two sides match.
+          env:
+            - name: HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           ports:
             - name: http
               containerPort: 9080

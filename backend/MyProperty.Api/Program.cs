@@ -44,7 +44,6 @@ using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
-using Serilog.Sinks.Grafana.Loki;
 
 // Bootstrap logger captures events during startup, before the full Serilog pipeline
 // is configured via UseSerilog below. CreateBootstrapLogger() ensures these early
@@ -65,10 +64,12 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // ── Serilog ───────────────────────────────────────────────────────────────────
-    // Config lives here in code only — no ReadFrom.Configuration() — so there is
-    // no Serilog section in appsettings.json. The Loki URL is the only value read
-    // from config (it's infrastructure plumbing, not logger behaviour).
-    builder.Host.UseSerilog((ctx, _, cfg) =>
+    // Config lives here in code only — no ReadFrom.Configuration() — so there is no
+    // Serilog section in appsettings.json. Logs are emitted as CLEF JSON on stdout;
+    // Promtail scrapes the container's stdout and ships it to Loki (see the monitoring
+    // Helm chart). The app deliberately does NOT push to Loki directly — one ingestion
+    // path, uniform across every service, and crash output is still captured.
+    builder.Host.UseSerilog((_, _, cfg) =>
     {
         cfg.MinimumLevel.Information()
            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -76,16 +77,6 @@ try
            .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
            .Enrich.FromLogContext()
            .WriteTo.Console(new CompactJsonFormatter());
-
-        var lokiUrl = ctx.Configuration["LokiUrl"];
-        if (!string.IsNullOrWhiteSpace(lokiUrl))
-        {
-            cfg.WriteTo.GrafanaLoki(
-                lokiUrl,
-                labels: [new LokiLabel { Key = "app", Value = "myproperty-api" }],
-                batchPostingLimit: builder.Environment.IsDevelopment() ? 1 : 100
-            );
-        }
     });
 
     // ── Keycloak options ──────────────────────────────────────────────────────────

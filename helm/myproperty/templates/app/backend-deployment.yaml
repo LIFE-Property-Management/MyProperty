@@ -103,8 +103,6 @@ spec:
               value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode={{ .Values.postgres.sslMode }};Trust Server Certificate=true"
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
-            - name: LokiUrl
-              value: "http://loki:3100"
             - name: Keycloak__Authority
               value: "https://{{ .Values.hosts.auth }}/realms/MyProperty"
             - name: Keycloak__MetadataAddress
