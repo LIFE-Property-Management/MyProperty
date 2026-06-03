@@ -62,7 +62,7 @@ public sealed class PropertiesController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdatePropertyRequest request, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         await updateProperty.Handle(
             new UpdatePropertyCommand(id, request.Name, request.Address, request.UnitNumber, request.PropertyType), ct);
         return NoContent();
@@ -75,7 +75,7 @@ public sealed class PropertiesController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         await deleteProperty.Handle(id, ct);
         return NoContent();
     }
