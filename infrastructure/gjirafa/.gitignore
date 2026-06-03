@@ -1,0 +1,2 @@
+# Never commit the filled-in secret values.
+.secrets.env

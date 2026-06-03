@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { initKeycloak } from "@/lib/auth/keycloak";
 import useAuthStore from "@/lib/store/auth/useAuthStore";
 
-// Landlord-portal KeycloakInit. Kept separate from the tenant version
+// Landlord-portal auth gate. Kept separate from the tenant version
 // (app/(tenant)/_components/KeycloakInit.tsx) so each portal can diverge
 // independently when real Keycloak roles are wired per Decision 5 (Batch K).
-export default function KeycloakInit() {
+//
+// Acts as a render gate: children (the portal shell) are not shown until
+// Keycloak init resolves. If there is no authenticated session, the user is
+// redirected to /login rather than being left on a dashboard that would only
+// produce 401s. This keeps the client authoritative; the middleware cookie is
+// just a coarse edge gate.
+export default function KeycloakInit({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
     // Dev-only auth bypass. When NEXT_PUBLIC_DEV_AUTH_BYPASS is "true",
     // KeycloakInit short-circuits Keycloak initialization and signs the user
@@ -22,17 +32,39 @@ export default function KeycloakInit() {
       );
     }
 
-    if (isDevAuthBypass) {
-      useAuthStore.getState().setAuth({
-        portal: "landlord",
-        sub: "dev-landlord",
-        email: "landlord@dev.local",
-      });
-      return;
-    }
+    let active = true;
+    const settled = isDevAuthBypass
+      ? Promise.resolve().then(() => {
+          useAuthStore.getState().setAuth({
+            portal: "landlord",
+            sub: "dev-landlord",
+            email: "landlord@dev.local",
+          });
+        })
+      : initKeycloak();
 
-    initKeycloak();
-  }, []);
+    settled.finally(() => {
+      if (!active) return;
+      if (!useAuthStore.getState().user) {
+        router.replace("/login");
+        return;
+      }
+      setReady(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
-  return null;
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-muted-text" role="status">
+          Loading…
+        </p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }

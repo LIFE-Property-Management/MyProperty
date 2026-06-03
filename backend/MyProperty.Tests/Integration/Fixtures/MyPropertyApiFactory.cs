@@ -17,7 +17,11 @@ namespace MyProperty.Tests.Integration.Fixtures;
 /// </summary>
 internal sealed class MyPropertyApiFactory(
     string postgresConnectionString,
-    string keycloakAuthority) : WebApplicationFactory<Program>
+    string keycloakAuthority,
+    string keycloakBaseUrl,
+    string keycloakAdminRealm,
+    string keycloakAdminClientId,
+    string keycloakAdminClientSecret) : WebApplicationFactory<Program>
 {
     public RecordingBackgroundJobQueue Queue { get; } = new();
     public RecordingEventPublisher Events { get; } = new();
@@ -31,6 +35,10 @@ internal sealed class MyPropertyApiFactory(
 
         builder.UseSetting("ConnectionStrings:Postgres", postgresConnectionString);
         builder.UseSetting("Keycloak:Authority", keycloakAuthority);
+        builder.UseSetting("KeycloakAdmin:BaseUrl", keycloakBaseUrl);
+        builder.UseSetting("KeycloakAdmin:Realm", keycloakAdminRealm);
+        builder.UseSetting("KeycloakAdmin:ClientId", keycloakAdminClientId);
+        builder.UseSetting("KeycloakAdmin:ClientSecret", keycloakAdminClientSecret);
 
         // Redis cache options must satisfy ValidateDataAnnotations() at startup,
         // but the connection itself is never opened — we substitute IDistributedCache

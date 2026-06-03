@@ -1,5 +1,11 @@
 # Nginx + Let's Encrypt SSL (M4.9)
 
+> ⚠️ **SUPERSEDED.** This describes a standalone nginx reverse-proxy + TLS layer that is
+> **not used** on the current cluster — the cluster-provided **ingress-nginx** controller
+> and **cert-manager** handle ingress and TLS (namespaced `Issuer`s). See
+> [k8s-deployment.md](./k8s-deployment.md). Retirement tracked in
+> [deployment-roadmap.md](./deployment-roadmap.md).
+
 This document describes MyProperty's reverse-proxy + TLS termination layer
 as of M4.9 (2026-05-21). The proxy is **opt-in** via a Docker Compose
 profile so the default `docker compose up` keeps the existing

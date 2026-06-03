@@ -1,3 +1,4 @@
+{{- if .Values.redis.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -39,21 +40,28 @@ spec:
       containers:
         - name: redis
           image: {{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}
-          args: ["redis-server", "--save", "", "--appendonly", "no"]
+          command: ["sh", "-c"]
+          args: ["exec redis-server --save '' --appendonly no --requirepass \"$REDIS_PASSWORD\""]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-redis
+                  key: redis-password
           ports:
             - name: redis
               containerPort: 6379
               protocol: TCP
           livenessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping"]
             initialDelaySeconds: 10
             periodSeconds: 15
             timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping"]
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
@@ -69,3 +77,4 @@ spec:
             capabilities:
               drop: [ALL]
             readOnlyRootFilesystem: true
+{{- end }}

@@ -1,0 +1,26 @@
+{{- if and .Values.ingress.enabled .Values.ingress.tls.createIssuers }}
+{{- range .Values.ingress.tls.issuers }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" $ | nindent 4 }}
+spec:
+  acme:
+    server: {{ .server }}
+    email: {{ $.Values.ingress.tls.acmeEmail }}
+    privateKeySecretRef:
+      name: {{ .name }}-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx
+            ingressTemplate:
+              metadata:
+                annotations:
+                  nginx.ingress.kubernetes.io/ssl-redirect: "false"
+{{- end }}
+{{- end }}

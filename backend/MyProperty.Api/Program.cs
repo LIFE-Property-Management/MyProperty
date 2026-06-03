@@ -1,7 +1,6 @@
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using MyProperty.Api.HealthChecks;
-using RabbitMQ.Client;
 using Asp.Versioning.ApiExplorer;
 using FluentValidation;
 using Hangfire;
@@ -18,6 +17,7 @@ using MyProperty.Api.Logging;
 using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
 using MyProperty.Api.Swagger;
+using MyProperty.Application.Auth.Commands.RegisterLandlord;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Notifications;
 using MyProperty.Application.Common.Options;
@@ -94,6 +94,13 @@ try
         .ValidateDataAnnotations()
         .ValidateOnStart();
 
+    // Application-layer view of public Keycloak settings (authority URL for
+    // building login URLs in response DTOs). Same section as KeycloakOptions.
+    builder.Services.AddOptions<KeycloakPublicOptions>()
+        .Bind(builder.Configuration.GetSection(KeycloakPublicOptions.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
     var keycloakAuthority = builder.Configuration[$"{KeycloakOptions.SectionName}:Authority"]
         ?? throw new InvalidOperationException("Keycloak:Authority is required.");
     var keycloakMetadataAddress = builder.Configuration[$"{KeycloakOptions.SectionName}:MetadataAddress"];
@@ -112,9 +119,17 @@ try
             {
                 options.MetadataAddress = keycloakMetadataAddress;
             }
-            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+            options.RequireHttpsMetadata = builder.Configuration.GetValue(
+                "Keycloak:RequireHttpsMetadata", !builder.Environment.IsDevelopment());
             options.TokenValidationParameters = new()
             {
+                // Issuer validation: tokens are minted against the browser-facing
+                // Authority (e.g. http://localhost:8080/realms/MyProperty), so the
+                // `iss` claim is that URL. Pin it explicitly — otherwise, because
+                // MetadataAddress points at the cluster-internal Keycloak, the
+                // handler would validate against the discovery doc's issuer
+                // (keycloak:8080) and reject every real browser token.
+                ValidIssuer = keycloakAuthority,
                 // Audience validation: tokens must carry "myproperty-api" in the
                 // `aud` claim. The mapper that writes this claim lives on the
                 // `myproperty-frontend` client in realm-export.json, and the
@@ -151,6 +166,9 @@ try
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
     builder.Services.AddInfrastructure(builder.Configuration);
+
+    // Auth handlers
+    builder.Services.AddScoped<RegisterLandlordHandler>();
 
     // Invite handlers
     builder.Services.AddScoped<CreateInviteHandler>();
@@ -276,20 +294,7 @@ try
             connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>()["Cache:RedisConnection"]!,
             name: "redis",
             tags: ["diagnostic"])
-        .AddRabbitMQ(
-            factory: sp =>
-            {
-                var cfg = sp.GetRequiredService<IConfiguration>();
-                return new ConnectionFactory
-                {
-                    HostName = cfg["RabbitMq:HostName"] ?? "localhost",
-                    Port = cfg.GetValue("RabbitMq:Port", 5672),
-                    UserName = cfg["RabbitMq:UserName"] ?? "guest",
-                    Password = cfg["RabbitMq:Password"] ?? "guest",
-                    VirtualHost = cfg["RabbitMq:VirtualHost"] ?? "/",
-                    AutomaticRecoveryEnabled = false,
-                }.CreateConnectionAsync(CancellationToken.None);
-            },
+        .AddCheck<RabbitMqHealthCheck>(
             name: "rabbitmq",
             tags: ["diagnostic"])
         .AddCheck<KeycloakJwksHealthCheck>(

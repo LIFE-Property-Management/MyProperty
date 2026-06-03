@@ -1,3 +1,4 @@
+{{- if .Values.uptimeKuma.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -55,15 +56,17 @@ spec:
               containerPort: 3001
               protocol: TCP
           livenessProbe:
-            exec:
-              command: ["extra/healthcheck"]
+            httpGet:
+              path: /
+              port: http
             initialDelaySeconds: 45
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command: ["extra/healthcheck"]
+            httpGet:
+              path: /
+              port: http
             initialDelaySeconds: 15
             periodSeconds: 10
             timeoutSeconds: 5
@@ -79,6 +82,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+              add: [SETUID, SETGID]
           volumeMounts:
             - name: uptime-kuma-data
               mountPath: /app/data
@@ -91,3 +95,4 @@ spec:
         resources:
           requests:
             storage: {{ .Values.uptimeKuma.storage.size }}
+{{- end }}

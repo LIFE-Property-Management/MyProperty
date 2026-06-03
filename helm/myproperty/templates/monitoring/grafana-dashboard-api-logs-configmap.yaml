@@ -1,3 +1,4 @@
+{{- if .Values.monitoring.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,7 +7,7 @@ metadata:
   labels:
     {{- include "myproperty.labels" . | nindent 4 }}
     app.kubernetes.io/component: grafana
-    grafana_dashboard: "1"
 data:
   myproperty-api-logs.json: |
-{{ .Files.Get "files/dashboard-api-logs.json" | indent 4 }}
+{{ .Files.Get "files/dashboard-api-logs.json" | replace "${DS_LOKI}" "loki" | indent 4 }}
+{{- end }}

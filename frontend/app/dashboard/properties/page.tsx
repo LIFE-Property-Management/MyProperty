@@ -8,7 +8,7 @@ import Pagination from "@/components/ui/Pagination";
 import Spinner from "@/components/ui/Spinner";
 import { useLandlordProperties } from "@/lib/hooks/useLandlordProperties";
 import { formatDate } from "@/lib/utils/formatDate";
-import type { PropertyRow } from "@/lib/types/landlord/property";
+import type { PropertyDto } from "@/lib/types/landlord/property";
 
 const PAGE_SIZE = 10;
 
@@ -16,7 +16,7 @@ const columns = [
     {
         key: "name",
         header: "Name",
-        accessor: (row: PropertyRow) => (
+        accessor: (row: PropertyDto) => (
             <Link
                 href={`/dashboard/properties/${row.id}`}
                 className="text-primary font-medium hover:underline focus-visible:underline focus-visible:outline-none transition-colors duration-150"
@@ -28,7 +28,7 @@ const columns = [
     {
         key: "address",
         header: "Address",
-        accessor: (row: PropertyRow) => (
+        accessor: (row: PropertyDto) => (
             <span className="text-muted-text">
                 {row.address}
                 {row.unitNumber ? `, Unit ${row.unitNumber}` : ""}
@@ -38,7 +38,7 @@ const columns = [
     {
         key: "createdAt",
         header: "Added",
-        accessor: (row: PropertyRow) => (
+        accessor: (row: PropertyDto) => (
             <span className="text-muted-text">{formatDate(row.createdAt)}</span>
         ),
     },
@@ -47,14 +47,6 @@ const columns = [
 export default function PropertiesPage() {
     const [page, setPage] = useState(1);
     const query = useLandlordProperties(page, PAGE_SIZE);
-
-    if (query.isLoading) {
-        return (
-            <div className="flex items-center justify-center py-20">
-                <Spinner size="lg" />
-            </div>
-        );
-    }
 
     if (query.isError) {
         return (
@@ -71,14 +63,17 @@ export default function PropertiesPage() {
         <div className="flex flex-col gap-6">
             <div>
                 <h1 className="text-xl font-semibold text-primary-text">Properties</h1>
-                {totalCount > 0 && (
-                    <p className="text-sm text-muted-text mt-1">
-                        {totalCount} propert{totalCount === 1 ? "y" : "ies"}
+                {!query.isLoading && totalCount > 0 && (
+                    <p className="text-sm text-muted-text mt-1 flex items-center gap-2">
+                        <span>
+                            {totalCount} propert{totalCount === 1 ? "y" : "ies"}
+                        </span>
+                        {query.isFetching && <Spinner size="sm" />}
                     </p>
                 )}
             </div>
 
-            <Card as="section" padding="none">
+            <Card as="section" padding="none" className={query.isFetching ? "opacity-60 transition-opacity duration-150" : "transition-opacity duration-150"}>
                 <DataTable
                     columns={columns}
                     data={query.data?.items ?? []}

@@ -7,7 +7,3 @@ version: 0.1.0
 # CD workflow sets all image tags via --set at deploy time.
 appVersion: "latest"
 
-dependencies:
-  - name: kube-prometheus-stack
-    version: "65.2.0"
-    repository: "https://prometheus-community.github.io/helm-charts"

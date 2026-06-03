@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Logging;
 using MyProperty.Api.Errors;
 using MyProperty.Application.Common.Exceptions;
+using MyProperty.Application.Common.Interfaces;
 using MyProperty.Domain.Exceptions;
 using AppValidationException = MyProperty.Application.Common.Exceptions.ValidationException;
 
@@ -25,6 +26,7 @@ internal sealed class GlobalExceptionHandler(
             NotFoundException n => BuildNotFound(n),
             ForbiddenException f => BuildForbidden(f),
             ConflictException c => BuildConflict(c),
+            UserAlreadyExistsException u => BuildUserAlreadyExists(u),
             LeaseAlreadyTerminatedException l => BuildLeaseAlreadyTerminated(l),
             _ => BuildInternal(exception, logger),
         };
@@ -87,6 +89,14 @@ internal sealed class GlobalExceptionHandler(
             Detail = "Please retry; if the problem persists, contact support.",
         };
     }
+
+    private static ProblemDetails BuildUserAlreadyExists(UserAlreadyExistsException ex) => new()
+    {
+        Title = "Account already exists.",
+        Status = StatusCodes.Status409Conflict,
+        Type = ProblemTypes.Conflict,
+        Detail = ex.Message,
+    };
 
     private static ProblemDetails BuildLeaseAlreadyTerminated(LeaseAlreadyTerminatedException ex) => new()
     {

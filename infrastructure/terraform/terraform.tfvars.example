@@ -1,9 +1,0 @@
-# Copy to terraform.tfvars and fill in real values.
-# terraform.tfvars is gitignored — never commit secrets.
-
-do_token          = "dop_v1_xxxxxxxxxxxxxxxx"
-spaces_access_id  = "DOxxxxxxxxxxxxxxxxxx"
-spaces_secret_key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-# All resources default to fra1. Override only if you know why.
-# region = "fra1"

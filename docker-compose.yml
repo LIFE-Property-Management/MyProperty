@@ -29,19 +29,36 @@ services:
 
   # ── Keycloak realm init (envsubst on the template) ──────────────────────────
   # Renders infrastructure/keycloak/realm-export.template.json into a named
-  # volume by substituting ${MYPROPERTY_FRONTEND_BASE_URL}. The keycloak
-  # service mounts the same volume at /opt/keycloak/data/import/ and picks
-  # up the rendered file on startup. This pattern maps 1:1 to a Kubernetes
-  # initContainer; see infrastructure/keycloak/PRODUCTION.md.
+  # volume by substituting our two deployment vars. The keycloak service mounts
+  # the same volume at /opt/keycloak/data/import/ and picks up the rendered file
+  # on startup. This pattern maps 1:1 to a Kubernetes initContainer; see
+  # infrastructure/keycloak/PRODUCTION.md.
+  #
+  # IMPORTANT — envsubst MUST be scoped to an allow-list, NOT bare `envsubst`.
+  # The realm template legitimately contains Keycloak's own ${...} literals
+  # (e.g. ${client_id} in the client-roles mapper's claim name, ${role_*},
+  # ${rolesScopeConsentText}). Bare envsubst would blank every one of them —
+  # clobbering ${client_id} silently breaks the resource_access.<client>.roles
+  # claim, so service-account/admin tokens come back with no roles and every
+  # Admin API call 403s. The quoted allow-list makes envsubst touch ONLY those
+  # two names and pass all other ${...} through verbatim.
+  #
+  # The `$$` is Compose escaping: Compose interpolates the command string at
+  # parse time, so a single `$` here would be expanded (to empty) by Compose
+  # before the container ever runs. `$$` → literal `$` reaches the container,
+  # where envsubst reads the real values from the `environment:` block below.
+  # (The K8s initContainer needs the same allow-list but WITHOUT the `$$` — it
+  # isn't under Compose interpolation.)
   keycloak-realm-init:
     image: alpine:3.20
     container_name: myproperty-keycloak-realm-init
     command: >
       sh -c "apk add --no-cache gettext > /dev/null &&
-      envsubst < /template/realm-export.template.json > /import/realm-export.json &&
+      envsubst '$${MYPROPERTY_FRONTEND_BASE_URL} $${MYPROPERTY_API_CLIENT_SECRET}' < /template/realm-export.template.json > /import/realm-export.json &&
       echo 'Rendered realm-export.json into /import/'"
     environment:
       MYPROPERTY_FRONTEND_BASE_URL: ${MYPROPERTY_FRONTEND_BASE_URL:-http://localhost:3000}
+      MYPROPERTY_API_CLIENT_SECRET: ${MYPROPERTY_API_CLIENT_SECRET:-dev-api-client-secret}
     volumes:
       - ./infrastructure/keycloak:/template:ro
       - keycloak_import:/import
@@ -181,6 +198,14 @@ services:
       LokiUrl: "http://loki:3100"
       Keycloak__Authority: "${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}/realms/MyProperty"
       Keycloak__MetadataAddress: "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration"
+      # Admin REST API for user provisioning. BaseUrl MUST be the in-cluster
+      # keycloak service, NOT localhost — appsettings.Development.json (baked
+      # into the image) defaults BaseUrl to localhost:8080, which in-container
+      # loops back to this API itself. Same Secret pattern as Phase 7 Helm.
+      KeycloakAdmin__BaseUrl: "http://keycloak:8080"
+      KeycloakAdmin__Realm: "MyProperty"
+      KeycloakAdmin__ClientId: "myproperty-api"
+      KeycloakAdmin__ClientSecret: "${MYPROPERTY_API_CLIENT_SECRET:-dev-api-client-secret}"
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=myproperty;Username=postgres;Password=postgres"
       Cache__RedisConnection: "redis:6379"
       Cache__InstancePrefix: "myproperty:dev:"
@@ -371,14 +396,14 @@ services:
 
   # ── AIOps webhook (M4.11) ───────────────────────────────────────────────────
   # Receives Alertmanager webhook POSTs at /alerts, runs each firing alert
-  # through Anthropic Claude for triage, and posts the result to Slack as
-  # a Block Kit message. Resolved alerts skip the LLM (no triage needed) and
-  # post a short resolution.
+  # through Anthropic Claude for triage, and posts the result to Discord as
+  # a rich embed. Resolved alerts skip the LLM (no triage needed) and post a
+  # short resolution.
   #
   # Graceful degradation:
   #   - ANTHROPIC_API_KEY empty → triage disabled; raw labels/annotations
-  #     are posted to Slack with a "Triage disabled" header.
-  #   - SLACK_WEBHOOK_URL empty → message bodies are logged to stdout, which
+  #     are posted with a "Triage disabled" note.
+  #   - DISCORD_WEBHOOK_URL empty → message bodies are logged to stdout, which
   #     Promtail forwards to Loki (visible in Grafana → Explore → Loki).
   #
   # The real traffic path stays internal: alertmanager → aiops-webhook:5001
@@ -394,10 +419,10 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       # Haiku for triage (speed + cost); backend OCR uses Sonnet for vision.
       ANTHROPIC_MODEL: "${AIOPS_ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}"
-      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
       AIOPS_LOG_LEVEL: "${AIOPS_LOG_LEVEL:-INFO}"
       AIOPS_CLAUDE_TIMEOUT_SECONDS: "${AIOPS_CLAUDE_TIMEOUT_SECONDS:-15}"
-      AIOPS_SLACK_TIMEOUT_SECONDS: "${AIOPS_SLACK_TIMEOUT_SECONDS:-10}"
+      AIOPS_DISCORD_TIMEOUT_SECONDS: "${AIOPS_DISCORD_TIMEOUT_SECONDS:-10}"
     ports:
       - "5001:5001"
     networks:
@@ -450,8 +475,9 @@ services:
   # account already configured and exit no-op.
   #
   # Notifications:
-  #   - Slack: only created if SLACK_WEBHOOK_URL is set (same env var the
-  #     M4.11 aiops-webhook consumes; falls back to stdout-via-Loki there).
+  #   - Discord: only created if DISCORD_WEBHOOK_URL is set (Kuma renders
+  #     Discord-native embeds). In K8s this is a separate channel from the
+  #     aiops-webhook's #alerts; locally it's whatever you point it at.
   #   - Email: posts to the MailHog SMTP catcher already in this stack —
   #     visible at http://localhost:8025. Demo-friendly without an external
   #     SMTP account.
@@ -499,7 +525,7 @@ services:
       KUMA_PUBLIC_URL: "${KUMA_PUBLIC_URL:-http://localhost:3002}"
       # Notification channels — both optional. Empty values short-circuit
       # the corresponding channel; the demo runs without external accounts.
-      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_UPTIME_WEBHOOK_URL:-}"
       # MailHog runs in this stack on port 1025 — the email notification
       # lands in the MailHog Web UI at http://localhost:8025, demoable
       # without configuring an external SMTP provider.

@@ -149,13 +149,14 @@ their own action reflected immediately:
 | Handler | Trigger | Status |
 |---|---|---|
 | `AcceptInviteHandler` | New lease created on accept | ✅ wired (May 5, 2026) |
-| `SubmitPaymentHandler` *(M3.8)* | Tenant submits a payment | ⏳ wire on creation |
-| `ConfirmPaymentHandler` *(M3.8)* | Landlord confirms a payment | ⏳ wire on creation |
-| `RejectPaymentHandler` *(M3.8)* | Landlord rejects a payment | ⏳ wire on creation |
+| `SubmitPaymentHandler` *(M3.8)* | Tenant submits a payment | ✅ wired |
+| `ConfirmPaymentHandler` *(M3.8)* | Landlord confirms a payment | ✅ wired |
+| `RejectPaymentHandler` *(M3.8)* | Landlord rejects a payment | ✅ wired |
 
 The interface (`ILandlordDashboardCache.InvalidateAsync(landlordId)`) is
-already in place; the future handlers just need to inject it and call
-once per write.
+in place and each handler above injects it and calls it once per write.
+Other write handlers outside this table also invalidate
+(`CreatePropertyHandler`, `CreatePaymentHandler`, `TerminateLeaseHandler`).
 
 ## Failure mode
 

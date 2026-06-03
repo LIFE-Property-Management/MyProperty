@@ -1,3 +1,4 @@
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -7,7 +8,7 @@ metadata:
     {{- include "myproperty.labels" . | nindent 4 }}
     app.kubernetes.io/component: keycloak
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    {{ include "myproperty.certIssuerAnnotation" . }}
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # Keycloak admin console asset bundle requires larger proxy buffers — match M4.9 nginx proxy_buffer_size
     nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
@@ -15,13 +16,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - app.myproperty.works
-        - api.myproperty.works
-        - auth.myproperty.works
-        - {{ .Values.uptimeKuma.publicHost }}
-      secretName: myproperty-tls
+{{- include "myproperty.tlsHosts" . | nindent 8 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
   rules:
-    - host: auth.myproperty.works
+    - host: {{ .Values.hosts.auth }}
       http:
         paths:
           - path: /
@@ -31,3 +29,4 @@ spec:
                 name: keycloak
                 port:
                   name: http
+{{- end }}
