@@ -157,24 +157,26 @@ public static class DependencyInjection
     private static IServiceCollection AddFeatureFlags(
         this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<UnleashOptions>()
-            .Bind(configuration.GetSection(UnleashOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        var options = configuration.GetSection(UnleashOptions.SectionName).Get<UnleashOptions>()
-            ?? throw new InvalidOperationException(
-                $"Missing '{UnleashOptions.SectionName}' section in configuration.");
+        var options = configuration.GetSection(UnleashOptions.SectionName).Get<UnleashOptions>();
 
         // No token configured → register the no-op provider (returns the caller
-        // default everywhere) and skip the live SDK, which would otherwise spin
-        // up a background poller against an unconfigured server. Mirrors the
-        // NullEventPublisher path in AddMessaging.
-        if (string.IsNullOrWhiteSpace(options.ApiToken))
+        // default everywhere) and skip both the live SDK and options validation,
+        // which would otherwise spin up a background poller against an
+        // unconfigured server / reject the empty ApiUrl that a no-Unleash
+        // environment legitimately ships. Mirrors the NullEventPublisher path in
+        // AddMessaging, which likewise validates RabbitMqOptions only when enabled.
+        if (options is null || string.IsNullOrWhiteSpace(options.ApiToken))
         {
             services.AddSingleton<IFeatureFlags, NullFeatureFlags>();
             return services;
         }
+
+        // Token present → we intend to use Unleash, so now require a well-formed
+        // ApiUrl (etc.) and fail fast at startup if it's missing/malformed.
+        services.AddOptions<UnleashOptions>()
+            .Bind(configuration.GetSection(UnleashOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
 
         // Singleton IUnleash — owns a background fetch + metrics sender and is
         // thread-safe. DI disposes it on shutdown (DefaultUnleash : IDisposable).

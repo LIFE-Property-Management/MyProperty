@@ -100,6 +100,12 @@ Toggle round-trip:
   (`templates/data/unleash-*.yaml`), reusing the in-cluster Postgres `unleash`
   database (created by `files/postgres-init.sh`) with the app Postgres
   credentials. `DATABASE_SSL=false` is correct for in-cluster Postgres.
+  - **Already-running cluster — create the database manually.**
+    `files/postgres-init.sh` only runs on a *fresh* Postgres data directory
+    (first init). On a cluster whose Postgres PVC already has data, the `unleash`
+    database is never created and the Unleash pod crashloops with
+    `database "unleash" does not exist`. Create it once before/with the deploy:
+    `kubectl -n <ns> exec <postgres-pod> -- psql -U postgres -c "CREATE DATABASE unleash;"`
 - **Client token** lives in the `myproperty-unleash` Secret, key
   `client-api-token`. Both the Unleash server (`INIT_CLIENT_API_TOKENS`) and the
   backend (`Unleash__ApiToken`) read it, so they agree. Both references are
@@ -112,8 +118,13 @@ Toggle round-trip:
     `kubectl -n <ns> create secret generic myproperty-unleash --from-literal=client-api-token='default:production.<secret>'`.
 - Create the flag once via the Unleash UI (or replay the Admin-API seed) and
   change the default admin password.
-- **NetworkPolicies:** when enabled, add allow rules `backend → unleash:4242` and
-  `unleash → postgres:5432` (the default-deny baseline blocks them otherwise).
+- **NetworkPolicies:** when `networkPolicies.enabled`, the chart renders (gated on
+  `unleash.enabled`) a `myproperty-unleash` policy — ingress from backend on 4242,
+  egress to postgres on 5432 — plus the matching `backend → unleash:4242` egress
+  and `unleash` entry on the postgres ingress. Without these the default-deny
+  baseline silently blocks the integration (backend then falls back to the flag
+  defaults). Kuma probes reach Unleash via the existing `allow-uptime-kuma-probe`
+  catch-all — no extra rule needed.
 
 ## Follow-ups
 
