@@ -77,6 +77,18 @@ redis:
     limits:
       memory: 128Mi
 
+unleash:
+  enabled: true
+  image:
+    repository: unleashorg/unleash-server
+    tag: "7.6.4"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
 rabbitmq:
   enabled: true
   image:
@@ -335,6 +347,7 @@ externalSecrets:
     discordUptimeWebhookUrl: myproperty-discord-uptime-webhook-url
     grafanaAdminUser: myproperty-grafana-admin-user
     grafanaAdminPassword: myproperty-grafana-admin-password
+    unleashClientApiToken: myproperty-unleash-client-api-token
 
 # ─────────────────────────────────────────────────────────────────────────
 # NetworkPolicies (M4.8 — security hardening).
