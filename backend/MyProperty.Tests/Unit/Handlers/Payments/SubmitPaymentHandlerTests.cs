@@ -71,7 +71,9 @@ public sealed class SubmitPaymentHandlerTests
             paymentId,
             PaymentMethod.ReceiptUpload,
             Notes: "Paid via bank transfer",
-            FileStream: new MemoryStream([1, 2, 3, 4]),
+            // Stream.Null: a non-null stream is required, but IFileStorage.UploadAsync
+            // is mocked and never reads it, so no real content (or disposal) is needed.
+            FileStream: Stream.Null,
             FileName: "receipt.png",
             ContentType: "image/png",
             FileSizeBytes: 4);

@@ -23,7 +23,8 @@ public sealed class SubmitPaymentValidatorTests
             paymentId ?? Guid.NewGuid(),
             PaymentMethod.ReceiptUpload,
             Notes: null,
-            FileStream: fileStream ?? new MemoryStream([1, 2, 3]),
+            // Stream.Null: the validator only checks FileStream for non-null, never reads it.
+            FileStream: fileStream ?? Stream.Null,
             FileName: fileName,
             ContentType: contentType,
             FileSizeBytes: fileSizeBytes);
@@ -121,7 +122,7 @@ public sealed class SubmitPaymentValidatorTests
             Guid.NewGuid(),
             PaymentMethod.ManualRequest,
             Notes: null,
-            FileStream: new MemoryStream([1, 2, 3]),
+            FileStream: Stream.Null, // non-null on a ManualRequest → expected to fail validation
             FileName: "receipt.png",
             ContentType: "image/png",
             FileSizeBytes: 1024);

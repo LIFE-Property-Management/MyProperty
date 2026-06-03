@@ -63,7 +63,7 @@ public sealed class DownloadReceiptHandlerTests
     {
         var user = SeedUser(Guid.NewGuid());
         var payment = SeedPayment(tenantId: user.Id, landlordId: Guid.NewGuid());
-        var stream = new MemoryStream([1, 2, 3]);
+        using var stream = new MemoryStream([1, 2, 3]);
 
         SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
@@ -83,7 +83,7 @@ public sealed class DownloadReceiptHandlerTests
     {
         var user = SeedUser(Guid.NewGuid());
         var payment = SeedPayment(tenantId: Guid.NewGuid(), landlordId: user.Id);
-        var stream = new MemoryStream([1, 2, 3]);
+        using var stream = new MemoryStream([1, 2, 3]);
 
         SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
@@ -103,7 +103,7 @@ public sealed class DownloadReceiptHandlerTests
         var payment = SeedPayment(
             tenantId: user.Id, landlordId: Guid.NewGuid(),
             receiptFileName: null, receiptContentType: null);
-        var stream = new MemoryStream([1, 2, 3]);
+        using var stream = new MemoryStream([1, 2, 3]);
 
         SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
