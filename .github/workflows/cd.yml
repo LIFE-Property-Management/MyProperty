@@ -92,7 +92,7 @@ jobs:
         # bypass lists, so its short-lived (~1h) installation token can push the
         # one-line tag bump directly. Humans still go through reviewed PRs.
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ vars.CD_BOT_APP_ID }}
           private-key: ${{ secrets.CD_BOT_APP_PRIVATE_KEY }}
