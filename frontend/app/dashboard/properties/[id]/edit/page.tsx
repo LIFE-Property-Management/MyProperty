@@ -1,13 +1,13 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import { useLandlordPropertyDetail } from "@/lib/hooks/useLandlordPropertyDetail";
 import { useUpdateProperty } from "@/lib/hooks/useUpdateProperty";
-import type { PropertyType } from "@/lib/types/landlord/property";
+import type { PropertyDetail, PropertyType } from "@/lib/types/landlord/property";
 
 const PROPERTY_TYPES: { value: PropertyType; label: string }[] = [
     { value: "House", label: "House" },
@@ -22,28 +22,32 @@ interface Props {
 
 export default function EditPropertyPage({ params }: Props) {
     const { id } = use(params);
-    const router = useRouter();
     const query = useLandlordPropertyDetail(id);
-    const mutation = useUpdateProperty();
-
-    const [name, setName] = useState("");
-    const [address, setAddress] = useState("");
-    const [unitNumber, setUnitNumber] = useState("");
-    const [propertyType, setPropertyType] = useState<PropertyType>("Apartment");
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        if (query.data) {
-            setName(query.data.name);
-            setAddress(query.data.address);
-            setUnitNumber(query.data.unitNumber ?? "");
-            setPropertyType(query.data.propertyType);
-        }
-    }, [query.data]);
 
     if (query.isLoading) {
         return <div className="flex items-center justify-center py-20"><Spinner size="lg" /></div>;
     }
+
+    if (!query.data) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <p className="text-danger font-medium">Property not found.</p>
+            </div>
+        );
+    }
+
+    return <EditPropertyForm propertyId={id} property={query.data} />;
+}
+
+function EditPropertyForm({ propertyId, property }: { propertyId: string; property: PropertyDetail }) {
+    const router = useRouter();
+    const mutation = useUpdateProperty();
+
+    const [name, setName] = useState(property.name);
+    const [address, setAddress] = useState(property.address);
+    const [unitNumber, setUnitNumber] = useState(property.unitNumber ?? "");
+    const [propertyType, setPropertyType] = useState<PropertyType>(property.propertyType);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -52,21 +56,21 @@ export default function EditPropertyPage({ params }: Props) {
         return e;
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const errs = validate();
         if (Object.keys(errs).length > 0) { setErrors(errs); return; }
         setErrors({});
 
         await mutation.mutateAsync({
-            id,
+            id: propertyId,
             name: name.trim(),
             address: address.trim(),
             unitNumber: unitNumber.trim() || undefined,
             propertyType,
         });
 
-        router.push(`/dashboard/properties/${id}`);
+        router.push(`/dashboard/properties/${propertyId}`);
     };
 
     const inputClass = (field: string) =>
@@ -78,7 +82,7 @@ export default function EditPropertyPage({ params }: Props) {
         <div className="flex flex-col gap-6">
             <div className="flex items-center gap-3">
                 <Link
-                    href={`/dashboard/properties/${id}`}
+                    href={`/dashboard/properties/${propertyId}`}
                     className="text-sm text-muted-text hover:text-primary-text transition-colors duration-150 focus-visible:outline-none focus-visible:underline"
                 >
                     ← Property
@@ -130,7 +134,7 @@ export default function EditPropertyPage({ params }: Props) {
                             className="px-6 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150 disabled:opacity-60">
                             {mutation.isPending ? "Saving…" : "Save Changes"}
                         </button>
-                        <Link href={`/dashboard/properties/${id}`}
+                        <Link href={`/dashboard/properties/${propertyId}`}
                             className="px-6 py-2 rounded-lg border border-border text-sm font-medium text-primary-text hover:bg-neutral-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150">
                             Cancel
                         </Link>
