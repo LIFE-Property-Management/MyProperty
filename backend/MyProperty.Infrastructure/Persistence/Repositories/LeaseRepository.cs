@@ -69,21 +69,26 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
     public async Task<(IReadOnlyList<Lease> Items, int TotalCount)> ListActiveTenantsByLandlordAsync(
         Guid landlordId, int page, int pageSize, CancellationToken ct)
     {
-        var baseQuery = db.Leases
-            .Where(l => l.LandlordId == landlordId && l.Status == LeaseStatus.Active);
-
-        var distinctTenantsQuery = baseQuery
+        // Step 1: get one lease ID per tenant (latest StartDate) — no Include here
+        var latestLeaseIds = await db.Leases
+            .Where(l => l.LandlordId == landlordId && l.Status == LeaseStatus.Active)
             .GroupBy(l => l.TenantId)
-            .Select(g => g.OrderByDescending(l => l.StartDate).First());
+            .Select(g => g.OrderByDescending(l => l.StartDate).Select(l => l.Id).First())
+            .ToListAsync(ct);
 
-        var totalCount = await distinctTenantsQuery.CountAsync(ct);
+        var totalCount = latestLeaseIds.Count;
 
-        var items = await distinctTenantsQuery
-            .Include(l => l.Property)
-            .Include(l => l.Tenant)
-            .OrderByDescending(l => l.StartDate)
+        // Step 2: load those leases with navigation properties, paginated
+        var pageIds = latestLeaseIds
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .ToList();
+
+        var items = await db.Leases
+            .Include(l => l.Property)
+            .Include(l => l.Tenant)
+            .Where(l => pageIds.Contains(l.Id))
+            .OrderByDescending(l => l.StartDate)
             .ToListAsync(ct);
 
         return (items, totalCount);

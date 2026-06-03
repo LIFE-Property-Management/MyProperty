@@ -21,7 +21,7 @@ public sealed class GetLandlordPropertiesHandler(
             landlord.Id, query.Page, query.PageSize, ct);
 
         var dtos = items.Select(p => new PropertyDto(
-            p.Id, p.Name, p.Address, p.UnitNumber, p.CreatedAt)).ToList();
+            p.Id, p.Name, p.Address, p.UnitNumber, p.PropertyType, p.CreatedAt)).ToList();
 
         return new PagedResult<PropertyDto>(dtos, query.Page, query.PageSize, totalCount);
     }

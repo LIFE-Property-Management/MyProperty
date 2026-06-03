@@ -3,9 +3,13 @@ import { paymentMethodSchema } from "@/lib/types/enums";
 
 const isoDateSchema = z.string().date();
 
-export const landlordStatsSchema = z.object({
+export const landlordDashboardSchema = z.object({
   totalProperties: z.number().int().nonnegative(),
-  totalActiveTenants: z.number().int().nonnegative(),
+  activeLeases: z.number().int().nonnegative(),
+  activeTenants: z.number().int().nonnegative(),
+  pendingPayments: z.number().int().nonnegative(),
+  overduePayments: z.number().int().nonnegative(),
+  generatedAt: z.string(),
 });
 
 export const overduePaymentRowSchema = z.object({
@@ -48,13 +52,6 @@ export const upcomingPaymentRowSchema = z.object({
   dueDate: isoDateSchema,
 });
 
-export const landlordDashboardSchema = z.object({
-  stats: landlordStatsSchema,
-  overduePayments: z.array(overduePaymentRowSchema),
-  expiringLeases: z.array(expiringLeaseRowSchema),
-  recentPayments: z.array(recentPaymentRowSchema).max(5),
-});
-
 export const upcomingPaymentsResponseSchema = z.object({
   items: z.array(upcomingPaymentRowSchema),
   totalCount: z.number().int().nonnegative(),
@@ -62,7 +59,6 @@ export const upcomingPaymentsResponseSchema = z.object({
   pageSize: z.number().int().positive(),
 });
 
-export type LandlordStats = z.infer<typeof landlordStatsSchema>;
 export type OverduePaymentRow = z.infer<typeof overduePaymentRowSchema>;
 export type ExpiringLeaseRow = z.infer<typeof expiringLeaseRowSchema>;
 export type RecentPaymentRow = z.infer<typeof recentPaymentRowSchema>;

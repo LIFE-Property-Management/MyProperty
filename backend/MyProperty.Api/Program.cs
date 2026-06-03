@@ -28,6 +28,7 @@ using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Application.Landlord.Queries.GetLandlordTenants;
 using MyProperty.Application.Landlord.Queries.GetTenantDetail;
+using MyProperty.Application.Landlord.Queries.GetUpcomingPayments;
 using MyProperty.Application.Leases.Commands.TerminateLease;
 using MyProperty.Application.Leases.Queries.GetLandlordLeases;
 using MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
@@ -38,7 +39,10 @@ using MyProperty.Application.Payments.Commands.RejectPayment;
 using MyProperty.Application.Payments.Commands.SubmitPayment;
 using MyProperty.Application.Payments.Queries.DownloadReceipt;
 using MyProperty.Application.Properties.Commands.CreateProperty;
+using MyProperty.Application.Properties.Commands.DeleteProperty;
+using MyProperty.Application.Properties.Commands.UpdateProperty;
 using MyProperty.Application.Properties.Queries.GetLandlordProperties;
+using MyProperty.Application.Properties.Queries.GetPropertyById;
 using MyProperty.Infrastructure;
 using Prometheus;
 using Serilog;
@@ -180,10 +184,14 @@ try
     builder.Services.AddScoped<GetLandlordDashboardHandler>();
     builder.Services.AddScoped<GetLandlordTenantsHandler>();
     builder.Services.AddScoped<GetTenantDetailHandler>();
+    builder.Services.AddScoped<GetUpcomingPaymentsHandler>();
 
     // Property handlers
     builder.Services.AddScoped<CreatePropertyHandler>();
     builder.Services.AddScoped<GetLandlordPropertiesHandler>();
+    builder.Services.AddScoped<GetPropertyByIdHandler>();
+    builder.Services.AddScoped<UpdatePropertyHandler>();
+    builder.Services.AddScoped<DeletePropertyHandler>();
 
     // Lease handlers
     builder.Services.AddScoped<GetLandlordLeasesHandler>();
@@ -365,7 +373,12 @@ try
     }
 
     // ── API + Swagger ─────────────────────────────────────────────────────────────
-    builder.Services.AddControllers();
+    builder.Services.AddControllers()
+        .AddJsonOptions(o =>
+        {
+            o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+            o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        });
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
     builder.Services.AddSwaggerGen(c =>

@@ -58,41 +58,65 @@ export default function PropertiesPage() {
     }
 
     const totalCount = query.data?.totalCount ?? 0;
+    const isEmpty = !query.isLoading && totalCount === 0;
 
     return (
         <div className="flex flex-col gap-6">
-            <div>
-                <h1 className="text-xl font-semibold text-primary-text">Properties</h1>
-                {!query.isLoading && totalCount > 0 && (
-                    <p className="text-sm text-muted-text mt-1 flex items-center gap-2">
-                        <span>
-                            {totalCount} propert{totalCount === 1 ? "y" : "ies"}
-                        </span>
-                        {query.isFetching && <Spinner size="sm" />}
-                    </p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-xl font-semibold text-primary-text">Properties</h1>
+                    {!query.isLoading && totalCount > 0 && (
+                        <p className="text-sm text-muted-text mt-1 flex items-center gap-2">
+                            <span>
+                                {totalCount} propert{totalCount === 1 ? "y" : "ies"}
+                            </span>
+                            {query.isFetching && <Spinner size="sm" />}
+                        </p>
+                    )}
+                </div>
+                {!isEmpty && (
+                    <Link
+                        href="/dashboard/properties/new"
+                        className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150"
+                    >
+                        Add Property
+                    </Link>
                 )}
             </div>
 
-            <Card as="section" padding="none" className={query.isFetching ? "opacity-60 transition-opacity duration-150" : "transition-opacity duration-150"}>
-                <DataTable
-                    columns={columns}
-                    data={query.data?.items ?? []}
-                    isLoading={query.isLoading}
-                    getRowKey={(row) => row.id}
-                    emptyMessage="No properties found."
-                    caption="Properties list"
-                />
-                {totalCount > PAGE_SIZE && (
-                    <div className="px-4 py-3 border-t border-border">
-                        <Pagination
-                            page={page}
-                            totalCount={totalCount}
-                            pageSize={PAGE_SIZE}
-                            onPageChange={setPage}
-                        />
-                    </div>
-                )}
-            </Card>
+            {isEmpty ? (
+                <Card as="section" className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                    <p className="text-primary-text font-medium">You have no properties!</p>
+                    <p className="text-sm text-muted-text">Add your first property to start managing leases.</p>
+                    <Link
+                        href="/dashboard/properties/new"
+                        className="mt-2 px-5 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150"
+                    >
+                        Add your first property
+                    </Link>
+                </Card>
+            ) : (
+                <Card as="section" padding="none" className={query.isFetching ? "opacity-60 transition-opacity duration-150" : "transition-opacity duration-150"}>
+                    <DataTable
+                        columns={columns}
+                        data={query.data?.items ?? []}
+                        isLoading={query.isLoading}
+                        getRowKey={(row) => row.id}
+                        emptyMessage="No properties found."
+                        caption="Properties list"
+                    />
+                    {totalCount > PAGE_SIZE && (
+                        <div className="px-4 py-3 border-t border-border">
+                            <Pagination
+                                page={page}
+                                totalCount={totalCount}
+                                pageSize={PAGE_SIZE}
+                                onPageChange={setPage}
+                            />
+                        </div>
+                    )}
+                </Card>
+            )}
         </div>
     );
 }
