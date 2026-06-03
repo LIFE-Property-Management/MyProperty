@@ -176,6 +176,8 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, MailKitEmailSender>();
         services.AddScoped<SendEmailJob>();
         services.AddScoped<ReceiptOcrJob>();
+        services.AddScoped<MarkExpiredInvitesJob>();
+        services.AddScoped<OrphanCleanupJob>();
         services.AddSingleton<EmailDeadLetterFilter>();
 
         services.AddHangfire((sp, config) =>

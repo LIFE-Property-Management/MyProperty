@@ -19,4 +19,22 @@ public interface IInviteRepository
     /// via ILeaseRepository during accept).
     /// </summary>
     Task SaveChangesAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Returns all <c>Pending</c> invites whose <c>ExpiresAt</c> is before
+    /// <paramref name="asOfUtc"/>. Used by the hourly <c>MarkExpiredInvites</c>
+    /// job, which marks each as <c>Expired</c> through the change tracker so the
+    /// auditing interceptor stamps <c>UpdatedAt</c> — callers must then invoke
+    /// <see cref="SaveChangesAsync"/>.
+    /// </summary>
+    Task<IReadOnlyList<Invite>> GetPendingExpiredAsOfAsync(DateTime asOfUtc, CancellationToken ct);
+
+    /// <summary>
+    /// Hard-deletes <c>Expired</c> invites created before <paramref name="cutoffUtc"/>
+    /// in a single set-based SQL <c>DELETE</c> (no entity loading, no change
+    /// tracker — deliberately bypasses the auditing interceptor for this true
+    /// purge). Returns the number of rows deleted. Used by the daily
+    /// <c>OrphanCleanup</c> job.
+    /// </summary>
+    Task<int> DeleteExpiredOlderThanAsync(DateTime cutoffUtc, CancellationToken ct);
 }
