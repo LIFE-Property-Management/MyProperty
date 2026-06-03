@@ -39,6 +39,11 @@ REDIS_PASSWORD="${REDIS_PASSWORD:-$(gen)}";              persist REDIS_PASSWORD 
 MYPROPERTY_API_CLIENT_SECRET="${MYPROPERTY_API_CLIENT_SECRET:-$(gen)}"; persist MYPROPERTY_API_CLIENT_SECRET "$MYPROPERTY_API_CLIENT_SECRET"
 GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-$(gen)}";              persist GRAFANA_ADMIN_PASSWORD "$GRAFANA_ADMIN_PASSWORD"
 KUMA_ADMIN_PASSWORD="${KUMA_ADMIN_PASSWORD:-$(gen)}";                    persist KUMA_ADMIN_PASSWORD "$KUMA_ADMIN_PASSWORD"
+# Unleash client API token: format is <project>:<environment>.<secret>. The
+# secret half is generated; default:production. targets the prod environment
+# (enable the flag there in the Unleash UI). Both the Unleash server
+# (INIT_CLIENT_API_TOKENS) and the backend (Unleash__ApiToken) read this value.
+UNLEASH_CLIENT_API_TOKEN="${UNLEASH_CLIENT_API_TOKEN:-default:production.$(gen)}"; persist UNLEASH_CLIENT_API_TOKEN "$UNLEASH_CLIENT_API_TOKEN"
 
 # 4. Refuse to run with unreplaced placeholders.
 for v in GHCR_USERNAME GHCR_PAT GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ANTHROPIC_API_KEY DISCORD_WEBHOOK_URL; do
@@ -97,6 +102,9 @@ apply secret generic myproperty-discord \
 apply secret generic myproperty-uptime-kuma \
   --from-literal=admin-username="$KUMA_ADMIN_USERNAME" \
   --from-literal=admin-password="$KUMA_ADMIN_PASSWORD"
+
+apply secret generic myproperty-unleash \
+  --from-literal=client-api-token="$UNLEASH_CLIENT_API_TOKEN"
 
 echo "✓ Secrets applied in namespace $NS:"
 kc get secrets
