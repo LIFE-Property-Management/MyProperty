@@ -207,6 +207,15 @@ try
         .ValidateDataAnnotations()
         .ValidateOnStart();
 
+    // Anthropic receipt-OCR options. Bound here (not in Infrastructure's
+    // AddAiServices) so the app fails fast on a bad Model/TimeoutSeconds, in
+    // line with the other options classes. The type lives in
+    // Application/Common/Options because Infrastructure consumes it.
+    builder.Services.AddOptions<AnthropicOcrOptions>()
+        .Bind(builder.Configuration.GetSection(AnthropicOcrOptions.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
     // ── CORS ──────────────────────────────────────────────────────────────────────
     // Allowed origins are configured per-environment. Strict allowlist (no
     // AllowAnyOrigin) because AllowCredentials is required for the SignalR

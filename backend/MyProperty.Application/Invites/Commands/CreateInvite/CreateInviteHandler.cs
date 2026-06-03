@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -36,7 +35,7 @@ public sealed class CreateInviteHandler(
             throw new ForbiddenException("Property does not belong to current landlord.");
 
         var plainToken = GeneratePlainToken();
-        var tokenHash = HashToken(plainToken);
+        var tokenHash = InviteTokenHasher.Hash(plainToken);
 
         var invite = new Invite
         {
@@ -79,10 +78,6 @@ public sealed class CreateInviteHandler(
             .Replace("/", "_")
             .TrimEnd('=');
     }
-
-    private static string HashToken(string plainToken)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainToken)))
-            .ToLowerInvariant();
 
     private static string BuildEmailBody(
         CreateInviteCommand cmd,
