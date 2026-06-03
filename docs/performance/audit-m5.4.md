@@ -18,7 +18,7 @@ This audit consolidates the project's performance evidence into a single full-st
 |---|---|---|---|---|
 | 1 | Lighthouse (frontend) | ✅ Strong | Performance **97/100** on both audited pages; LCP (2.7 s mobile) is the one watch-item | — |
 | 2 | HTTP caching headers | 🟡 Partial | Next.js framework default caches `/_next/static/` immutably; **no explicit policy** at app/proxy layer; API sends none | **P1** (make explicit + verify) |
-| 3 | Redis cache impact | ✅ Effective | Landlord dashboard **11.4× faster** on a cache hit (5.18 ms → 0.45 ms median), measured | P2 (finish invalidation wiring) |
+| 3 | Redis cache impact | ✅ Effective | Landlord dashboard **11.4× faster** on a cache hit (5.18 ms → 0.45 ms median), measured; invalidation wired across all write handlers | P3 (doc-only: refresh stale README table) |
 | 4 | Image optimization | 🟡 N/A today | App renders **no raster images** (5 static SVGs only); `next/image` unused, no `images` config | P3 (configure before adding raster/user images) |
 | 5 | CDN | ⚪ Out of scope | ingress-nginx is the edge; external CDN is a future infra decision | — |
 
@@ -133,7 +133,7 @@ These are the real numbers for the `_TBD_` placeholders in `docs/performance/m3-
 - **11.4× median speedup** lands inside the 10–30× range predicted from the M3.4 query analysis, and validates the cache-aside choice for this endpoint. The win is structural — it collapses five sequential round-trips into one Redis read — not the elimination of one slow query.
 - The **miss path (5.18 ms)** is consistent with the M3.4 SQL-optimization results (`docs/performance/m3-sql-optimization/`): each of the five counts is index-backed and sub-millisecond warm (Q1, the dashboard's upcoming-payments shape, measured 0.739 ms warm at 22× speedup), so the aggregate cost is EF/round-trip overhead, exactly what caching removes.
 - **Tail (p95 12.3 ms miss vs 0.63 ms hit)** shows the cache also tightens latency variance, not just the median — relevant under load.
-- **Outstanding work (correctness, not speed):** only `AcceptInviteHandler` currently invalidates the dashboard cache. `SubmitPaymentHandler`, `ConfirmPaymentHandler`, and `RejectPaymentHandler` are marked **⏳ to-wire** in the M3.5 doc. Until then, a landlord's payment actions are reflected only after the 60 s TTL lapses. The `ILandlordDashboardCache.InvalidateAsync` hook already exists; each handler needs one call. **Recommendation (P2):** finish this wiring.
+- **Invalidation is fully wired (verified in code on this branch):** every relevant write handler calls `await dashboardCache.InvalidateAsync(...)`, so a landlord's writes are reflected immediately rather than after the 60 s TTL — `CreatePropertyHandler`, `CreatePaymentHandler`, `SubmitPaymentHandler`, `ConfirmPaymentHandler`, `RejectPaymentHandler`, `AcceptInviteHandler`, and `TerminateLeaseHandler` (confirm with `grep -rn "InvalidateAsync" backend --include='*.cs'`). The only stale artifact is the status table in `docs/performance/m3-redis-caching/README.md` (lines ~151–154), which still marks the payment handlers **⏳ wire on creation** even though they ship wired. **Recommendation (P3, doc-only):** update that README table to reflect the wired state; no code change is needed.
 
 ---
 
@@ -166,7 +166,7 @@ The current architecture has no external CDN: the Kubernetes **ingress-nginx** c
 | Priority | Area | Action | Effort |
 |---|---|---|---|
 | **P1** | Caching | Make the static-asset `Cache-Control` policy explicit and verify it survives the ingress hop (`curl -I` against a running instance); set `no-store` on API + SSR pages | S |
-| **P2** | Redis | Wire `InvalidateAsync` into `SubmitPaymentHandler` / `ConfirmPaymentHandler` / `RejectPaymentHandler` (freshness on landlord writes) | S |
+| **P3** | Redis (docs) | Invalidation is already wired across all relevant write handlers; update the stale status table in `m3-redis-caching/README.md` (lines ~151–154) to reflect that it is wired | S |
 | **P2** | Lighthouse | Identify the LCP element on `/` and `/dashboard`; preload the web font / confirm `font-display: swap` to pull LCP under 2.5 s | S |
 | **P3** | Images | Configure `next/image` (`images` policy + `<Image>`) before shipping any raster/user images; prune starter SVGs | S |
 | **P3** | Fixtures | Refresh the stale benchmark fixtures (see appendix) so the proof is re-runnable without scratch patches | S |
