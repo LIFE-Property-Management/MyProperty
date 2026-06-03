@@ -40,6 +40,7 @@ using MyProperty.Application.Payments.Queries.DownloadReceipt;
 using MyProperty.Application.Properties.Commands.CreateProperty;
 using MyProperty.Application.Properties.Queries.GetLandlordProperties;
 using MyProperty.Infrastructure;
+using MyProperty.Infrastructure.Identity;
 using Prometheus;
 using Serilog;
 using Serilog.Events;
@@ -165,6 +166,7 @@ try
     // ── Current-user abstraction ──────────────────────────────────────────────────
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+    builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
     builder.Services.AddInfrastructure(builder.Configuration);
 
     // Auth handlers

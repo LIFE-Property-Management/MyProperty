@@ -11,20 +11,16 @@ namespace MyProperty.Tests.Unit.Handlers.Payments;
 
 public sealed class CreatePaymentHandlerTests
 {
-    private readonly Mock<ICurrentUser> _currentUser = new();
-    private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
+    private readonly Mock<ICurrentUserContext> _currentUserContext = new();
     private readonly Mock<ILeaseRepository> _leases = new(MockBehavior.Strict);
     private readonly Mock<IPaymentRepository> _payments = new(MockBehavior.Strict);
     private readonly Mock<ILandlordDashboardCache> _cache = new(MockBehavior.Strict);
     private readonly RecordingEventPublisher _events = new();
 
-    private const string LandlordSub = "kc-landlord-sub";
-
     private CreatePaymentHandler BuildSut() =>
         new(
             new CreatePaymentValidator(),
-            _currentUser.Object,
-            _users.Object,
+            _currentUserContext.Object,
             _leases.Object,
             _payments.Object,
             _cache.Object,
@@ -33,7 +29,7 @@ public sealed class CreatePaymentHandlerTests
     private static User SeedLandlord(Guid id) => new()
     {
         Id = id,
-        KeycloakSubId = LandlordSub,
+        KeycloakSubId = "kc-landlord-sub",
         Email = "landlord@example.com",
         FirstName = "Landlord",
         LastName = "One",
@@ -51,6 +47,10 @@ public sealed class CreatePaymentHandlerTests
         Currency = "EUR",
     };
 
+    private void SetupCurrentUser(User user) =>
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(user);
+
     private static CreatePaymentCommand ValidCommand(Guid leaseId, decimal amount = 1000m, string currency = "EUR") =>
         new(leaseId, amount, currency, DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(30));
 
@@ -60,9 +60,7 @@ public sealed class CreatePaymentHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var lease = SeedLease(landlord.Id);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _leases.Setup(l => l.GetByIdAsync(lease.Id, It.IsAny<CancellationToken>()))
                .ReturnsAsync(lease);
 
@@ -97,31 +95,19 @@ public sealed class CreatePaymentHandlerTests
     }
 
     [Fact]
-    public async Task Throws_Forbidden_when_unauthenticated()
+    public async Task Propagates_Forbidden_when_current_user_cannot_be_resolved()
     {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns((string?)null);
+        // Unauthenticated / not-in-table both surface from ICurrentUserContext now
+        // (covered directly by CurrentUserContextTests); the handler just propagates.
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ThrowsAsync(new ForbiddenException("Authentication required."));
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => BuildSut().Handle(ValidCommand(Guid.NewGuid()), CancellationToken.None));
 
-        _users.VerifyNoOtherCalls();
         _leases.VerifyNoOtherCalls();
         _payments.VerifyNoOtherCalls();
         Assert.Empty(_events.Events);
-    }
-
-    [Fact]
-    public async Task Throws_Forbidden_when_user_not_in_table()
-    {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync((User?)null);
-
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => BuildSut().Handle(ValidCommand(Guid.NewGuid()), CancellationToken.None));
-
-        _leases.VerifyNoOtherCalls();
-        _payments.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -130,9 +116,7 @@ public sealed class CreatePaymentHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var leaseId = Guid.NewGuid();
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _leases.Setup(l => l.GetByIdAsync(leaseId, It.IsAny<CancellationToken>()))
                .ReturnsAsync((Lease?)null);
 
@@ -150,9 +134,7 @@ public sealed class CreatePaymentHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var lease = SeedLease(landlordId: Guid.NewGuid()); // different owner
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _leases.Setup(l => l.GetByIdAsync(lease.Id, It.IsAny<CancellationToken>()))
                .ReturnsAsync(lease);
 
@@ -170,12 +152,10 @@ public sealed class CreatePaymentHandlerTests
     [InlineData(1_000_000)]
     public async Task Throws_Validation_for_out_of_range_amount(decimal amount)
     {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-
+        // Validation runs before user resolution, so GetUserAsync is never reached.
         await Assert.ThrowsAsync<ValidationException>(
             () => BuildSut().Handle(ValidCommand(Guid.NewGuid(), amount), CancellationToken.None));
 
-        _users.VerifyNoOtherCalls();
         _leases.VerifyNoOtherCalls();
         _payments.VerifyNoOtherCalls();
     }

@@ -9,24 +9,25 @@ namespace MyProperty.Tests.Unit.Handlers.Payments;
 
 public sealed class DownloadReceiptHandlerTests
 {
-    private readonly Mock<ICurrentUser> _currentUser = new();
-    private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
+    private readonly Mock<ICurrentUserContext> _currentUserContext = new();
     private readonly Mock<IPaymentRepository> _payments = new(MockBehavior.Strict);
     private readonly Mock<IFileStorage> _files = new(MockBehavior.Strict);
 
-    private const string UserSub = "kc-user-sub";
-
     private DownloadReceiptHandler BuildSut() =>
-        new(_currentUser.Object, _users.Object, _payments.Object, _files.Object);
+        new(_currentUserContext.Object, _payments.Object, _files.Object);
 
     private static User SeedUser(Guid id) => new()
     {
         Id = id,
-        KeycloakSubId = UserSub,
+        KeycloakSubId = "kc-user-sub",
         Email = "user@example.com",
         FirstName = "User",
         LastName = "One",
     };
+
+    private void SetupCurrentUser(User user) =>
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(user);
 
     private static Payment SeedPayment(
         Guid tenantId,
@@ -64,9 +65,7 @@ public sealed class DownloadReceiptHandlerTests
         var payment = SeedPayment(tenantId: user.Id, landlordId: Guid.NewGuid());
         var stream = new MemoryStream([1, 2, 3]);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(UserSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(UserSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(user);
+        SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
         _files.Setup(f => f.DownloadAsync(payment.ReceiptFileKey!, It.IsAny<CancellationToken>()))
@@ -86,9 +85,7 @@ public sealed class DownloadReceiptHandlerTests
         var payment = SeedPayment(tenantId: Guid.NewGuid(), landlordId: user.Id);
         var stream = new MemoryStream([1, 2, 3]);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(UserSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(UserSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(user);
+        SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
         _files.Setup(f => f.DownloadAsync(payment.ReceiptFileKey!, It.IsAny<CancellationToken>()))
@@ -108,9 +105,7 @@ public sealed class DownloadReceiptHandlerTests
             receiptFileName: null, receiptContentType: null);
         var stream = new MemoryStream([1, 2, 3]);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(UserSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(UserSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(user);
+        SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
         _files.Setup(f => f.DownloadAsync(payment.ReceiptFileKey!, It.IsAny<CancellationToken>()))
@@ -123,24 +118,10 @@ public sealed class DownloadReceiptHandlerTests
     }
 
     [Fact]
-    public async Task Throws_Forbidden_when_unauthenticated()
+    public async Task Propagates_Forbidden_when_current_user_cannot_be_resolved()
     {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns((string?)null);
-
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => BuildSut().Handle(Guid.NewGuid(), CancellationToken.None));
-
-        _users.VerifyNoOtherCalls();
-        _payments.VerifyNoOtherCalls();
-        _files.VerifyNoOtherCalls();
-    }
-
-    [Fact]
-    public async Task Throws_Forbidden_when_user_not_in_table()
-    {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(UserSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(UserSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync((User?)null);
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ThrowsAsync(new ForbiddenException("Authentication required."));
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => BuildSut().Handle(Guid.NewGuid(), CancellationToken.None));
@@ -155,9 +136,7 @@ public sealed class DownloadReceiptHandlerTests
         var user = SeedUser(Guid.NewGuid());
         var paymentId = Guid.NewGuid();
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(UserSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(UserSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(user);
+        SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(paymentId, It.IsAny<CancellationToken>()))
                  .ReturnsAsync((Payment?)null);
 
@@ -174,9 +153,7 @@ public sealed class DownloadReceiptHandlerTests
         var user = SeedUser(Guid.NewGuid());
         var payment = SeedPayment(tenantId: Guid.NewGuid(), landlordId: Guid.NewGuid());
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(UserSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(UserSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(user);
+        SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
 
@@ -192,9 +169,7 @@ public sealed class DownloadReceiptHandlerTests
         var user = SeedUser(Guid.NewGuid());
         var payment = SeedPayment(tenantId: user.Id, landlordId: Guid.NewGuid(), receiptFileKey: null);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(UserSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(UserSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(user);
+        SetupCurrentUser(user);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
 

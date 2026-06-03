@@ -14,11 +14,10 @@ namespace MyProperty.Application.Invites.Commands.CreateInvite;
 
 public sealed class CreateInviteHandler(
     IValidator<CreateInviteCommand> validator,
-    IUserRepository users,
     IPropertyRepository properties,
     IInviteRepository invites,
     IBackgroundJobQueue jobs,
-    ICurrentUser currentUser,
+    ICurrentUserContext currentUserContext,
     IOptions<InviteOptions> options,
     ILogger<CreateInviteHandler> logger)
 {
@@ -26,7 +25,7 @@ public sealed class CreateInviteHandler(
     {
         await validator.EnsureValidAsync(cmd, ct);
 
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
         var property = await properties.GetByIdAsync(cmd.PropertyId, ct)
             ?? throw new NotFoundException("Property", cmd.PropertyId);

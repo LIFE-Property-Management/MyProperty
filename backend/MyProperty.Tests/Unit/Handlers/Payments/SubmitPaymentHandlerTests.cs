@@ -11,20 +11,16 @@ namespace MyProperty.Tests.Unit.Handlers.Payments;
 
 public sealed class SubmitPaymentHandlerTests
 {
-    private readonly Mock<ICurrentUser> _currentUser = new();
-    private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
+    private readonly Mock<ICurrentUserContext> _currentUserContext = new();
     private readonly Mock<IPaymentRepository> _payments = new(MockBehavior.Strict);
     private readonly Mock<ILandlordDashboardCache> _cache = new(MockBehavior.Strict);
     private readonly Mock<IFileStorage> _files = new(MockBehavior.Strict);
     private readonly RecordingEventPublisher _events = new();
 
-    private const string TenantSub = "kc-tenant-sub";
-
     private SubmitPaymentHandler BuildSut() =>
         new(
             new SubmitPaymentValidator(),
-            _currentUser.Object,
-            _users.Object,
+            _currentUserContext.Object,
             _payments.Object,
             _cache.Object,
             _events,
@@ -33,11 +29,15 @@ public sealed class SubmitPaymentHandlerTests
     private static User SeedTenant(Guid id) => new()
     {
         Id = id,
-        KeycloakSubId = TenantSub,
+        KeycloakSubId = "kc-tenant-sub",
         Email = "tenant@example.com",
         FirstName = "Tenant",
         LastName = "One",
     };
+
+    private void SetupCurrentUser(User user) =>
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(user);
 
     private static Payment SeedPayment(
         Guid tenantId,
@@ -82,9 +82,7 @@ public sealed class SubmitPaymentHandlerTests
         var tenant = SeedTenant(Guid.NewGuid());
         var payment = SeedPayment(tenant.Id);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(TenantSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
+        SetupCurrentUser(tenant);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
         _payments.Setup(p => p.SaveChangesAsync(It.IsAny<CancellationToken>()))
@@ -118,9 +116,7 @@ public sealed class SubmitPaymentHandlerTests
         var payment = SeedPayment(tenant.Id);
         const string storageKey = "receipts/2026/06/abc.png";
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(TenantSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
+        SetupCurrentUser(tenant);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
         _files.Setup(f => f.UploadAsync(
@@ -154,9 +150,7 @@ public sealed class SubmitPaymentHandlerTests
         payment.RejectionReason = "Receipt was illegible";
         payment.RejectedAt = DateTime.UtcNow.AddDays(-1);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(TenantSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
+        SetupCurrentUser(tenant);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
         _payments.Setup(p => p.SaveChangesAsync(It.IsAny<CancellationToken>()))
@@ -172,29 +166,16 @@ public sealed class SubmitPaymentHandlerTests
     }
 
     [Fact]
-    public async Task Throws_Forbidden_when_unauthenticated()
+    public async Task Propagates_Forbidden_when_current_user_cannot_be_resolved()
     {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns((string?)null);
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ThrowsAsync(new ForbiddenException("Authentication required."));
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => BuildSut().Handle(ManualCommand(Guid.NewGuid()), CancellationToken.None));
 
-        _users.VerifyNoOtherCalls();
         _payments.VerifyNoOtherCalls();
         Assert.Empty(_events.Events);
-    }
-
-    [Fact]
-    public async Task Throws_Forbidden_when_user_not_in_table()
-    {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(TenantSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync((User?)null);
-
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => BuildSut().Handle(ManualCommand(Guid.NewGuid()), CancellationToken.None));
-
-        _payments.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -203,9 +184,7 @@ public sealed class SubmitPaymentHandlerTests
         var tenant = SeedTenant(Guid.NewGuid());
         var paymentId = Guid.NewGuid();
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(TenantSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
+        SetupCurrentUser(tenant);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(paymentId, It.IsAny<CancellationToken>()))
                  .ReturnsAsync((Payment?)null);
 
@@ -220,9 +199,7 @@ public sealed class SubmitPaymentHandlerTests
         var tenant = SeedTenant(Guid.NewGuid());
         var payment = SeedPayment(tenantId: Guid.NewGuid()); // different tenant
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(TenantSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
+        SetupCurrentUser(tenant);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
 
@@ -241,9 +218,7 @@ public sealed class SubmitPaymentHandlerTests
         var tenant = SeedTenant(Guid.NewGuid());
         var payment = SeedPayment(tenant.Id, status: status);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(TenantSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
+        SetupCurrentUser(tenant);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
 
@@ -257,16 +232,13 @@ public sealed class SubmitPaymentHandlerTests
     [Fact]
     public async Task Throws_Validation_when_receipt_method_missing_file()
     {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(TenantSub);
-
-        // ReceiptUpload method but no file fields → validator fails before any repo touch.
+        // Validation runs before user resolution; GetUserAsync is never reached.
         var cmd = new SubmitPaymentCommand(
             Guid.NewGuid(), PaymentMethod.ReceiptUpload, null, null, null, null, null);
 
         await Assert.ThrowsAsync<ValidationException>(
             () => BuildSut().Handle(cmd, CancellationToken.None));
 
-        _users.VerifyNoOtherCalls();
         _payments.VerifyNoOtherCalls();
         _files.VerifyNoOtherCalls();
     }

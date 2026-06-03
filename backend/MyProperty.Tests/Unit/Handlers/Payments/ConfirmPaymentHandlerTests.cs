@@ -11,19 +11,15 @@ namespace MyProperty.Tests.Unit.Handlers.Payments;
 
 public sealed class ConfirmPaymentHandlerTests
 {
-    private readonly Mock<ICurrentUser> _currentUser = new();
-    private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
+    private readonly Mock<ICurrentUserContext> _currentUserContext = new();
     private readonly Mock<IPaymentRepository> _payments = new(MockBehavior.Strict);
     private readonly Mock<ILandlordDashboardCache> _cache = new(MockBehavior.Strict);
     private readonly RecordingEventPublisher _events = new();
 
-    private const string LandlordSub = "kc-landlord-sub";
-
     private ConfirmPaymentHandler BuildSut() =>
         new(
             new ConfirmPaymentValidator(),
-            _currentUser.Object,
-            _users.Object,
+            _currentUserContext.Object,
             _payments.Object,
             _cache.Object,
             _events);
@@ -31,11 +27,15 @@ public sealed class ConfirmPaymentHandlerTests
     private static User SeedLandlord(Guid id) => new()
     {
         Id = id,
-        KeycloakSubId = LandlordSub,
+        KeycloakSubId = "kc-landlord-sub",
         Email = "landlord@example.com",
         FirstName = "Landlord",
         LastName = "One",
     };
+
+    private void SetupCurrentUser(User user) =>
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(user);
 
     private static Payment SeedPayment(
         Guid landlordId,
@@ -66,9 +66,7 @@ public sealed class ConfirmPaymentHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var payment = SeedPayment(landlord.Id);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
         _payments.Setup(p => p.SaveChangesAsync(It.IsAny<CancellationToken>()))
@@ -92,29 +90,16 @@ public sealed class ConfirmPaymentHandlerTests
     }
 
     [Fact]
-    public async Task Throws_Forbidden_when_unauthenticated()
+    public async Task Propagates_Forbidden_when_current_user_cannot_be_resolved()
     {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns((string?)null);
+        _currentUserContext.Setup(c => c.GetUserAsync(It.IsAny<CancellationToken>()))
+                           .ThrowsAsync(new ForbiddenException("Authentication required."));
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => BuildSut().Handle(new ConfirmPaymentCommand(Guid.NewGuid()), CancellationToken.None));
 
-        _users.VerifyNoOtherCalls();
         _payments.VerifyNoOtherCalls();
         Assert.Empty(_events.Events);
-    }
-
-    [Fact]
-    public async Task Throws_Forbidden_when_user_not_in_table()
-    {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync((User?)null);
-
-        await Assert.ThrowsAsync<ForbiddenException>(
-            () => BuildSut().Handle(new ConfirmPaymentCommand(Guid.NewGuid()), CancellationToken.None));
-
-        _payments.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -123,9 +108,7 @@ public sealed class ConfirmPaymentHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var paymentId = Guid.NewGuid();
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(paymentId, It.IsAny<CancellationToken>()))
                  .ReturnsAsync((Payment?)null);
 
@@ -140,9 +123,7 @@ public sealed class ConfirmPaymentHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var payment = SeedPayment(landlordId: Guid.NewGuid()); // different owner
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
 
@@ -162,9 +143,7 @@ public sealed class ConfirmPaymentHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var payment = SeedPayment(landlord.Id, status: status);
 
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-        _users.Setup(u => u.GetByKeycloakSubIdAsync(LandlordSub, It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _payments.Setup(p => p.GetByIdWithLeaseAsync(payment.Id, It.IsAny<CancellationToken>()))
                  .ReturnsAsync(payment);
 
@@ -178,12 +157,10 @@ public sealed class ConfirmPaymentHandlerTests
     [Fact]
     public async Task Throws_Validation_when_payment_id_empty()
     {
-        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(LandlordSub);
-
+        // Validation runs before user resolution; GetUserAsync is never reached.
         await Assert.ThrowsAsync<ValidationException>(
             () => BuildSut().Handle(new ConfirmPaymentCommand(Guid.Empty), CancellationToken.None));
 
-        _users.VerifyNoOtherCalls();
         _payments.VerifyNoOtherCalls();
     }
 }
