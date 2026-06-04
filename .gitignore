@@ -84,6 +84,11 @@ backend/obj/
 **/bin/
 **/obj/
 backend/artifacts/
+# Literal-backslash dirs Rider/MSBuild on Linux writes as a single component
+# named "bin\Debug" (not bin/Debug); **/bin/ above does NOT match these, and
+# they break the backend Docker build (bogus MSB3552 **/*.resx). Escape the \.
+**/bin\\Debug/
+**/obj\\Debug/
 
 # User-specific VS / Rider files
 *.user
