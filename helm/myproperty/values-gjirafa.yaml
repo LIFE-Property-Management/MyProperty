@@ -36,7 +36,7 @@ migration:
 frontend:
   enabled: true
   image:
-    tag: "feb031d"
+    tag: "d9e6a55"
 
 ingress:
   enabled: true
