@@ -1,0 +1,70 @@
+{
+  "annotations": { "list": [ { "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard" } ] },
+  "description": "Logs from RabbitMQ — the event message broker.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "text",
+      "id": 1,
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## RabbitMQ — Message Broker\nThe backend publishes domain events here (payment submitted/confirmed, invite accepted) and consumers fan them out to email, OCR, and SignalR. **Look here when:** notifications or emails stop arriving, or the backend logs connection/channel errors. Common red flags: connection churn, `channel error`, `closing AMQP connection`, unroutable/returned messages. Plain-text logs — panels use text matching."
+      }
+    },
+    {
+      "type": "stat", "id": 2, "title": "Total log lines (range)",
+      "description": "All RabbitMQ lines over the selected time range.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" }, "unit": "short" }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum(count_over_time({namespace=\"project-02\", component=\"rabbitmq\"} [$__range]))", "queryType": "instant", "refId": "A" } ]
+    },
+    {
+      "type": "stat", "id": 3, "title": "Errors & warnings (range)",
+      "description": "Lines matching error/warn/closing/refused. Red when any are present.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum(count_over_time({namespace=\"project-02\", component=\"rabbitmq\"} |~ \"(?i)error|warn|closing|refused\" [$__range]))", "queryType": "instant", "refId": "A" } ]
+    },
+    {
+      "type": "timeseries", "id": 4, "title": "Log volume over time",
+      "description": "Lines per bucket. A flat-zero stretch means RabbitMQ restarted or went idle.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 7 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 1, "showPoints": "never" }, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["sum"], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "single", "sort": "none" } },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum(count_over_time({namespace=\"project-02\", component=\"rabbitmq\"} [$__auto]))", "legendFormat": "lines", "refId": "A" } ]
+    },
+    {
+      "type": "logs", "id": 5, "title": "Errors & warnings",
+      "description": "Only the problem lines (error/warn/closing/refused), newest first. Empty is good.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 14 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "{namespace=\"project-02\", component=\"rabbitmq\"} |~ \"(?i)error|warn|closing|refused\"", "queryType": "range", "refId": "A" } ]
+    },
+    {
+      "type": "logs", "id": 6, "title": "All RabbitMQ logs",
+      "description": "The full raw stream, newest first. Use Explore for ad-hoc filtering.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 23 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "{namespace=\"project-02\", component=\"rabbitmq\"}", "queryType": "range", "refId": "A" } ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["myproperty", "loki", "logs", "rabbitmq", "messaging"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "RabbitMQ — Broker Logs",
+  "uid": "myproperty-rabbitmq-logs",
+  "version": 1
+}

@@ -1,0 +1,112 @@
+{{- if .Values.unleash.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-unleash
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: unleash
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-unleash
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: unleash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "myproperty.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: unleash
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: unleash
+    spec:
+      serviceAccountName: {{ .Release.Name }}-unleash
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000        # the image's built-in `node` user
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: unleash
+          image: {{ .Values.unleash.image.repository }}:{{ .Values.unleash.image.tag }}
+          ports:
+            - name: http
+              containerPort: 4242
+              protocol: TCP
+          env:
+            # Reuses the shared Postgres (dedicated `unleash` DB created by the
+            # postgres-init configmap) with the app superuser credentials —
+            # proportionate for the deliverable. DATABASE_SSL=false is correct
+            # for in-cluster Postgres; set true (+ CA config) for managed PG.
+            - name: DATABASE_HOST
+              value: "postgres"
+            - name: DATABASE_PORT
+              value: "5432"
+            - name: DATABASE_NAME
+              value: "unleash"
+            - name: DATABASE_SSL
+              value: "false"
+            - name: DATABASE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-user
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-password
+            # Pre-seeds the client token the backend uses. Optional: if the
+            # myproperty-unleash Secret is absent, Unleash starts with no seeded
+            # token and the backend falls back to NullFeatureFlags (flags inert,
+            # app healthy). Create the Secret + flag to go live.
+            - name: INIT_CLIENT_API_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-unleash
+                  key: client-api-token
+                  optional: true
+            - name: LOG_LEVEL
+              value: "warn"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.unleash.resources.requests.cpu }}
+              memory: {{ .Values.unleash.resources.requests.memory }}
+            limits:
+              memory: {{ .Values.unleash.resources.limits.memory }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            # Unleash is stateless (state in Postgres) but the Node runtime
+            # writes to a temp dir, so the root FS is left writable. Harden with
+            # a tmpfs emptyDir mount as a follow-up.
+            readOnlyRootFilesystem: false
+{{- end }}

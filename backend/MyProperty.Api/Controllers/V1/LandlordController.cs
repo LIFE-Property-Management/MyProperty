@@ -23,8 +23,7 @@ public sealed class LandlordController(
     GetLandlordTenantsHandler getLandlordTenants,
     GetTenantDetailHandler getTenantDetail,
     GetUpcomingPaymentsHandler getUpcomingPayments,
-    IUserRepository users,
-    ICurrentUser currentUser) : ControllerBase
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     /// <summary>
     /// Aggregate counters for the authenticated landlord — total properties,
@@ -41,7 +40,7 @@ public sealed class LandlordController(
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<LandlordDashboardDto>> Dashboard(CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
         var result = await getDashboard.Handle(new GetLandlordDashboardQuery(landlord.Id), ct);
         return Ok(result);
     }
@@ -56,7 +55,7 @@ public sealed class LandlordController(
         [FromQuery] int pageSize = 10,
         CancellationToken ct = default)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
         var result = await getUpcomingPayments.Handle(
             new GetUpcomingPaymentsQuery(landlord.Id, page, pageSize), ct);
         return Ok(result);
@@ -73,7 +72,6 @@ public sealed class LandlordController(
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLandlordTenants.Handle(
             new GetLandlordTenantsQuery(page, pageSize), ct);
         return Ok(result);
@@ -91,7 +89,6 @@ public sealed class LandlordController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TenantDetailDto>> TenantDetail(Guid id, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getTenantDetail.Handle(new GetTenantDetailQuery(id), ct);
         return Ok(result);
     }

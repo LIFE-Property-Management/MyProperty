@@ -168,6 +168,15 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+    {{- if .Values.unleash.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: unleash
+      ports:
+        - protocol: TCP
+          port: 4242
+    {{- end }}
     - to:
         - podSelector:
             matchLabels:
@@ -214,6 +223,11 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: migration
+        {{- if .Values.unleash.enabled }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: unleash
+        {{- end }}
       ports:
         - protocol: TCP
           port: 5432
@@ -261,6 +275,41 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+{{- if .Values.unleash.enabled }}
+---
+# Unleash: ingress from backend (flag fetch on 4242); egress to postgres (its
+# state store). Prometheus-scrape and Kuma-probe ingress are covered by the
+# catch-all policies above; DNS egress by the catch-all DNS policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-unleash
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: unleash
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 4242
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
 ---
 # Keycloak: ingress from ingress controller (browser auth flows), backend
 # (token validation), and frontend (OIDC discovery). Egress to postgres

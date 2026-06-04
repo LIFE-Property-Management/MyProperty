@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Common;
-using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Properties.Commands.CreateProperty;
 using MyProperty.Application.Properties.Commands.DeleteProperty;
 using MyProperty.Application.Properties.Commands.UpdateProperty;
@@ -24,9 +23,7 @@ public sealed class PropertiesController(
     GetLandlordPropertiesHandler getLandlordProperties,
     GetPropertyByIdHandler getPropertyById,
     UpdatePropertyHandler updateProperty,
-    DeletePropertyHandler deleteProperty,
-    IUserRepository users,
-    ICurrentUser currentUser) : ControllerBase
+    DeletePropertyHandler deleteProperty) : ControllerBase
 {
     /// <summary>Creates a new property for the authenticated landlord.</summary>
     [HttpPost]
@@ -37,7 +34,6 @@ public sealed class PropertiesController(
     public async Task<ActionResult<PropertyCreatedDto>> Create(
         [FromBody] CreatePropertyRequest request, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var cmd = new CreatePropertyCommand(request.Name, request.Address, request.UnitNumber, request.PropertyType);
         var result = await createProperty.Handle(cmd, ct);
         return CreatedAtAction(nameof(List), new { }, result);
@@ -49,8 +45,7 @@ public sealed class PropertiesController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<PropertyDetailDto>> GetById(Guid id, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        var result = await getPropertyById.Handle(new GetPropertyByIdQuery(id, landlord.Id), ct);
+        var result = await getPropertyById.Handle(new GetPropertyByIdQuery(id), ct);
         return Ok(result);
     }
 
@@ -62,7 +57,6 @@ public sealed class PropertiesController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdatePropertyRequest request, CancellationToken ct)
     {
-        await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         await updateProperty.Handle(
             new UpdatePropertyCommand(id, request.Name, request.Address, request.UnitNumber, request.PropertyType), ct);
         return NoContent();
@@ -75,7 +69,6 @@ public sealed class PropertiesController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         await deleteProperty.Handle(id, ct);
         return NoContent();
     }
@@ -89,8 +82,8 @@ public sealed class PropertiesController(
         [FromQuery] int pageSize = 10,
         CancellationToken ct = default)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
-        var result = await getLandlordProperties.Handle(new GetLandlordPropertiesQuery(page, pageSize), ct);
+        var result = await getLandlordProperties.Handle(
+            new GetLandlordPropertiesQuery(page, pageSize), ct);
         return Ok(result);
     }
 }

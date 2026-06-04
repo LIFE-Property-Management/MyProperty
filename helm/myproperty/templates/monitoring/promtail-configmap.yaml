@@ -47,4 +47,33 @@ data:
             regex: "true"
             replacement: "true"
             target_label: __tmp_is_running
+        pipeline_stages:
+          # Only the .NET backend writes CLEF JSON to stdout. Other services (Keycloak,
+          # Postgres, RabbitMQ, Redis, frontend) are plain text — they pass through with no
+          # parsing and stay fully searchable, just without a parsed `level` label.
+          - match:
+              selector: '{component="backend"}'
+              stages:
+                - json:
+                    expressions:
+                      # CLEF keys are @-prefixed, so they must be quoted JMESPath literals.
+                      # CompactJsonFormatter OMITS @l for Information (it's the default), so
+                      # `level` is empty for info lines and is defaulted below.
+                      level: '"@l"'
+                      ts: '"@t"'
+                # Default the omitted Information level so every backend line carries one.
+                # The backtick wrapper makes Helm emit this Go template verbatim instead of
+                # trying to evaluate `.Value` itself at chart-render time.
+                - template:
+                    source: level
+                    template: '{{ `{{ if .Value }}{{ .Value }}{{ else }}Information{{ end }}` }}'
+                # `level` is low-cardinality (a handful of values) → safe as a label.
+                # CorrelationId / RequestId are deliberately NOT promoted (high cardinality
+                # would bloat Loki's index); query them in the body with `| json` instead.
+                - labels:
+                    level:
+                # Use the event's own timestamp, not ingest time.
+                - timestamp:
+                    source: ts
+                    format: RFC3339Nano
 {{- end }}

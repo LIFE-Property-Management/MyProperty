@@ -5,13 +5,12 @@ namespace MyProperty.Application.Properties.Commands.UpdateProperty;
 
 public sealed class UpdatePropertyHandler(
     IPropertyRepository properties,
-    IUserRepository users,
-    ICurrentUser currentUser,
+    ICurrentUserContext currentUserContext,
     ILandlordDashboardCache dashboardCache)
 {
     public async Task Handle(UpdatePropertyCommand cmd, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
         var property = await properties.GetByIdAsync(cmd.PropertyId, ct)
             ?? throw new NotFoundException("Property", cmd.PropertyId);

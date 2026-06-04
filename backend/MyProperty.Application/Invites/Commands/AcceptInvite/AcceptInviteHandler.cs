@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
@@ -21,7 +19,7 @@ public sealed class AcceptInviteHandler(
     {
         await validator.EnsureValidAsync(cmd, ct);
 
-        var tokenHash = HashToken(cmd.Token);
+        var tokenHash = InviteTokenHasher.Hash(cmd.Token);
 
         var invite = await invites.GetByTokenHashAsync(tokenHash, ct)
             ?? throw new NotFoundException("Invite", "token");
@@ -79,8 +77,4 @@ public sealed class AcceptInviteHandler(
 
         return new InviteAcceptedDto(invite.Id, lease.Id);
     }
-
-    private static string HashToken(string plainToken)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainToken)))
-            .ToLowerInvariant();
 }

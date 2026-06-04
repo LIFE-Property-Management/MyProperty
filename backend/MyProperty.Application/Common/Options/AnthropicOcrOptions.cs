@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace MyProperty.Application.Common.Ocr;
+namespace MyProperty.Application.Common.Options;
 
 public sealed class AnthropicOcrOptions
 {

@@ -5,13 +5,12 @@ namespace MyProperty.Application.Properties.Commands.DeleteProperty;
 
 public sealed class DeletePropertyHandler(
     IPropertyRepository properties,
-    IUserRepository users,
-    ICurrentUser currentUser,
+    ICurrentUserContext currentUserContext,
     ILandlordDashboardCache dashboardCache)
 {
     public async Task Handle(Guid propertyId, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
         var property = await properties.GetByIdAsync(propertyId, ct)
             ?? throw new NotFoundException("Property", propertyId);

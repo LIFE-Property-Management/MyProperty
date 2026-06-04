@@ -283,15 +283,13 @@ Each technology has a distinct role; do not blur them.
 
 - ~~Keycloak admin client for fresh-tenant role assignment.~~ **DELIVERED (M5).** `KeycloakAdminClient` (`Infrastructure/Keycloak/`, behind `IUserAccountProvisioner`) provisions Keycloak users and assigns realm roles via the Admin REST API using the `myproperty-api` client-credentials service account (token cached by `IKeycloakAdminTokenCache`; unit + integration tested). Email+password self-registration now assigns the role server-side. **Residual gap:** Google/IdP first-login provisioning (an OIDC-brokered user still lands without a portal role/entity) — tracked as Batch 8 in [deployment-roadmap.md](../docs/operations/deployment-roadmap.md).
 - Mapperly retrofit. Handlers currently construct DTOs by hand. Single retrofit batch post-M3.
-- Remove `ClaimsPrincipal? Principal` from `ICurrentUser`. Acknowledged abstraction leak — only exists because `IUserRepository.GetOrSyncFromClaimsAsync` takes a `ClaimsPrincipal`. Cleanup once role assignment moves server-side.
+- Remove `ClaimsPrincipal? Principal` from `ICurrentUser`. **Partially addressed:** the `KeycloakSubId → User` lookup and the `currentUser.Principal!` dereference are now centralized behind `ICurrentUserContext` (`GetUserAsync` / `GetOrSyncUserAsync`, impl in `Infrastructure/Identity/CurrentUserContext.cs`); no handler touches `Principal` anymore. **Still deferred:** fully deleting `Principal` requires reworking `IUserRepository.GetOrSyncFromClaimsAsync` to take sub/email/name (exposed on `ICurrentUser`) instead of a `ClaimsPrincipal`. The single guarded `Principal` read now lives only in `CurrentUserContext`.
 - FluentValidation validators on commands (M3.12).
 - Invite audit fields (`AcceptedByUserId`, `ResultingLeaseId`, `RejectionReason`) — skipped this batch.
 - RabbitMQ `InviteAccepted` / `InviteRejected` event publishing (M3.8).
 - SignalR push to landlord on accept/reject (M3.6).
 - **Per-IP rate limiting on anonymous invite endpoints** (`GET /by-token/{token}`, `POST /{token}/reject`). Without it, an attacker can enumerate token validity via the 404-vs-200/204 distinction. Owned by **M3.12** — limit per IP, not per user.
-- `HashToken` duplication — identical private static in `CreateInviteHandler`, `AcceptInviteHandler`, `RejectInviteHandler`, `GetInviteByTokenHandler`, `InvitePreviewAndRejectTests` . Extract to `Application/Invites/InviteTokenHasher.cs` post-M3. Also delete MyProperty.Tests/Unit/Handlers/TestUtils/TokenHasher.cs and replace its usages with the extracted class.
-- The hardcoded cache key string landlord:{landlordId}:dashboard in EvictDashboardCacheAsync — should reference a shared constant post-M3.
-- `AnthropicOcrOptions` defined in `Application/Common/Ocr/` — violates the options-in-Api convention. Move to `Api/Options/`, register in `Program.cs` alongside other options, strip `ValidateOnStart()` from `AddAiServices` in Infrastructure. `AddAiServices` should only register `IReceiptOcrService`.
+- ~~`AnthropicOcrOptions` defined in `Application/Common/Ocr/`.~~ **DONE.** Moved to `Application/Common/Options/` (not `Api/Options/` — Infrastructure consumes it, so the type must live in a layer Infrastructure can reference). Binding + `ValidateDataAnnotations().ValidateOnStart()` now in `Program.cs` alongside the other options; `AddAiServices` only wires `IReceiptOcrService` + its `HttpClient`.
 
 
 ## (For Later) Single active lease per tenant — enforce as domain invariant

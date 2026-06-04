@@ -16,6 +16,8 @@ postgres:
   sslMode: Disable
 redis:
   enabled: true
+unleash:
+  enabled: true
 rabbitmq:
   enabled: true
   storage:
@@ -25,16 +27,16 @@ keycloak:
 backend:
   enabled: true
   image:
-    tag: "2a5e323"
+    tag: "b5398f7"
   storage:
     storageClassName: longhorn
 migration:
   image:
-    tag: "2a5e323"
+    tag: "b5398f7"
 frontend:
   enabled: true
   image:
-    tag: "feb031d"
+    tag: "d9e6a55"
 
 ingress:
   enabled: true
@@ -57,7 +59,7 @@ uptimeKuma:
   storage:
     storageClassName: longhorn
   seedImage:
-    tag: "66d10b4"
+    tag: "54f096d"
 
 aiopsWebhook:
   image:
