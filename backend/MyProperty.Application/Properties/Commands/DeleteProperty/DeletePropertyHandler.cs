@@ -5,6 +5,7 @@ namespace MyProperty.Application.Properties.Commands.DeleteProperty;
 
 public sealed class DeletePropertyHandler(
     IPropertyRepository properties,
+    ILeaseRepository leases,
     ICurrentUserContext currentUserContext,
     ILandlordDashboardCache dashboardCache)
 {
@@ -17,6 +18,10 @@ public sealed class DeletePropertyHandler(
 
         if (property.LandlordId != landlord.Id)
             throw new ForbiddenException("You do not own this property.");
+
+        if (await leases.HasActiveLeaseForPropertyAsync(propertyId, ct))
+            throw new ConflictException(
+                "This property has active leases. Terminate or reassign them before deleting.");
 
         property.DeletedAt = DateTime.UtcNow;
         await properties.SaveChangesAsync(ct);

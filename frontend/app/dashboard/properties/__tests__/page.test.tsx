@@ -96,11 +96,14 @@ describe("PropertiesPage", () => {
   });
 
   describe("empty state", () => {
-    it('shows "No properties found." and no pagination', () => {
+    it("shows the empty-state card (not the table) and no count or pagination", () => {
       mockProperties.mockReturnValue(makeQueryReturn({ data: makeResponse([], 0) }));
       render(<PropertiesPage />);
 
-      expect(screen.getByText("No properties found.")).toBeInTheDocument();
+      // totalCount === 0 renders the dedicated empty card with its own CTA,
+      // not the DataTable (so DataTable's "No properties found." never shows).
+      expect(screen.getByText("You have no properties!")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Add your first property" })).toBeInTheDocument();
       expect(screen.queryByText(/\d+ propert/)).toBeNull();
       expect(screen.queryByRole("button", { name: "Page 2" })).toBeNull();
     });

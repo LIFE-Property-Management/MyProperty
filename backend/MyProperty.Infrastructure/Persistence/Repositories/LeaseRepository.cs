@@ -93,4 +93,8 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
 
         return (items, totalCount);
     }
+
+    public Task<bool> HasActiveLeaseForPropertyAsync(Guid propertyId, CancellationToken ct)
+        => db.Leases.AnyAsync(
+            l => l.PropertyId == propertyId && l.Status == LeaseStatus.Active, ct);
 }

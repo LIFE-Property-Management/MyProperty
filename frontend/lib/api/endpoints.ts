@@ -12,8 +12,6 @@ export const ENDPOINTS = {
   landlordDashboard: "/landlord/dashboard",
   landlordUpcomingPayments: "/landlord/payments/upcoming",
   properties: "/properties",
-  // TODO(backend): no GET /api/v1/properties/{id} endpoint exists yet.
-  // Add it on PropertiesController before wiring the detail page.
   propertyById: (id: string) => `/properties/${encodeURIComponent(id)}`,
   landlordTenants: "/landlord/tenants",
   landlordTenantById: (id: string) => `/landlord/tenants/${encodeURIComponent(id)}`,

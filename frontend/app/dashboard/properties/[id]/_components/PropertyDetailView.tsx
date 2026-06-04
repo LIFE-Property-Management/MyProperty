@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Spinner from "@/components/ui/Spinner";
@@ -79,6 +80,7 @@ export default function PropertyDetailView({ propertyId }: { propertyId: string 
     const query = useLandlordPropertyDetail(propertyId);
     const deleteMutation = useDeleteProperty();
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     if (query.isLoading) {
         return (
@@ -100,8 +102,17 @@ export default function PropertyDetailView({ propertyId }: { propertyId: string 
     const p = query.data!;
 
     const handleDelete = async () => {
-        await deleteMutation.mutateAsync(propertyId);
-        router.push("/dashboard/properties");
+        setDeleteError(null);
+        try {
+            await deleteMutation.mutateAsync(propertyId);
+            router.push("/dashboard/properties");
+        } catch (err) {
+            const detail =
+                axios.isAxiosError(err) && typeof err.response?.data?.detail === "string"
+                    ? err.response.data.detail
+                    : "Could not delete this property. Please try again.";
+            setDeleteError(detail);
+        }
     };
 
     return (
@@ -148,6 +159,8 @@ export default function PropertyDetailView({ propertyId }: { propertyId: string 
                     )}
                 </div>
             </div>
+
+            {deleteError && <p className="text-sm text-danger">{deleteError}</p>}
 
             <div>
                 <h1 className="text-xl font-semibold text-primary-text">{p.name}</h1>
@@ -200,8 +213,14 @@ export default function PropertyDetailView({ propertyId }: { propertyId: string 
                             {p.tenants.length} lease{p.tenants.length === 1 ? "" : "s"} on this property
                         </p>
                     </div>
+                    {/* ⚠️ PLACEHOLDER LINK — the invite-CREATION flow does not exist yet (the
+                        /dashboard/invites page is currently a stub, and there is no
+                        /dashboard/properties/[id]/invite route). This points at the invites list so the
+                        button doesn't 404. Repoint this at the real "new invite" route, ideally prefilled
+                        with propertyId={propertyId}, once that flow is built. DO NOT ship the invite button
+                        as a primary CTA without revisiting this. */}
                     <Link
-                        href={`/dashboard/properties/${propertyId}/invite`}
+                        href="/dashboard/invites"
                         className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150"
                     >
                         Invite Tenant
