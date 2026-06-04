@@ -10,8 +10,7 @@ namespace MyProperty.Application.Payments.Commands.SubmitPayment;
 
 public sealed class SubmitPaymentHandler(
     IValidator<SubmitPaymentCommand> validator,
-    ICurrentUser currentUser,
-    IUserRepository userRepo,
+    ICurrentUserContext currentUserContext,
     IPaymentRepository paymentRepo,
     ILandlordDashboardCache dashboardCache,
     IEventPublisher events,
@@ -22,12 +21,7 @@ public sealed class SubmitPaymentHandler(
         await validator.EnsureValidAsync(cmd, ct);
 
         // Resource-scoped authorization: tenant must own the lease this payment is on.
-        // TODO post-M3: extract KeycloakSubId → User lookup into ICurrentUserContext.
-        if (currentUser.KeycloakSubId is null)
-            throw new ForbiddenException("Authentication required.");
-
-        var tenant = await userRepo.GetByKeycloakSubIdAsync(currentUser.KeycloakSubId, ct)
-            ?? throw new ForbiddenException("Authenticated user not found in user table.");
+        var tenant = await currentUserContext.GetUserAsync(ct);
 
         var payment = await paymentRepo.GetByIdWithLeaseAsync(cmd.PaymentId, ct)
             ?? throw new NotFoundException("Payment", cmd.PaymentId);

@@ -21,7 +21,7 @@ namespace MyProperty.Api.Controllers.V1;
 [Authorize]
 [EnableRateLimiting("authenticated")]
 public sealed class MeController(
-    IUserRepository userRepository,
+    ICurrentUserContext currentUserContext,
     GetTenantLeaseHandler getTenantLease,
     ICurrentUser currentUser) : ControllerBase
 {
@@ -38,7 +38,7 @@ public sealed class MeController(
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<MeDto>> Get(CancellationToken ct)
     {
-        var user = await userRepository.GetOrSyncFromClaimsAsync(User, ct);
+        var user = await currentUserContext.GetOrSyncUserAsync(ct);
 
         return Ok(new MeDto(
             Id: user.Id,
@@ -65,7 +65,7 @@ public sealed class MeController(
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<MeDto>> GetTenantOnly(CancellationToken ct)
     {
-        var user = await userRepository.GetOrSyncFromClaimsAsync(User, ct);
+        var user = await currentUserContext.GetOrSyncUserAsync(ct);
 
         return Ok(new MeDto(
             Id: user.Id,
@@ -93,7 +93,6 @@ public sealed class MeController(
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<TenantLeaseDto>> Lease(CancellationToken ct)
     {
-        var user = await userRepository.GetOrSyncFromClaimsAsync(User, ct);
         var result = await getTenantLease.Handle(new GetTenantLeaseQuery(), ct);
         if (result is null)
             return NoContent();

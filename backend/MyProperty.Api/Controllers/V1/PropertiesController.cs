@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Common;
-using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Properties.Commands.CreateProperty;
 using MyProperty.Application.Properties.Queries.GetLandlordProperties;
 using Swashbuckle.AspNetCore.Annotations;
@@ -18,9 +17,7 @@ namespace MyProperty.Api.Controllers.V1;
 [EnableRateLimiting("authenticated")]
 public sealed class PropertiesController(
     CreatePropertyHandler createProperty,
-    GetLandlordPropertiesHandler getLandlordProperties,
-    IUserRepository users,
-    ICurrentUser currentUser) : ControllerBase
+    GetLandlordPropertiesHandler getLandlordProperties) : ControllerBase
 {
     /// <summary>Creates a new property for the authenticated landlord.</summary>
     [HttpPost]
@@ -32,7 +29,6 @@ public sealed class PropertiesController(
     public async Task<ActionResult<PropertyCreatedDto>> Create(
         [FromBody] CreatePropertyRequest request, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var cmd = new CreatePropertyCommand(request.Name, request.Address, request.UnitNumber);
         var result = await createProperty.Handle(cmd, ct);
         return CreatedAtAction(nameof(List), new { }, result);
@@ -50,7 +46,6 @@ public sealed class PropertiesController(
         [FromQuery] int pageSize = 10,
         CancellationToken ct = default)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLandlordProperties.Handle(
             new GetLandlordPropertiesQuery(page, pageSize), ct);
         return Ok(result);

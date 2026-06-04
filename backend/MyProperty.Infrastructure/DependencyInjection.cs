@@ -8,7 +8,6 @@ using MyProperty.Application.Common.Email;
 using MyProperty.Application.Common.FeatureFlags;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Messaging;
-using MyProperty.Application.Common.Ocr;
 using MyProperty.Application.Common.Options;
 using MyProperty.Infrastructure.Ai;
 using MyProperty.Infrastructure.Caching;
@@ -138,11 +137,9 @@ public static class DependencyInjection
     private static IServiceCollection AddAiServices(
         this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<AnthropicOcrOptions>()
-            .Bind(configuration.GetSection(AnthropicOcrOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
+        // AnthropicOcrOptions is bound + validated in Program.cs alongside the
+        // other options classes (it lives in Application/Common/Options). This
+        // method only wires the OCR service and its HttpClient.
         var timeoutSeconds = configuration
             .GetValue<int?>($"{AnthropicOcrOptions.SectionName}:TimeoutSeconds") ?? 30;
 
@@ -224,6 +221,8 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, MailKitEmailSender>();
         services.AddScoped<SendEmailJob>();
         services.AddScoped<ReceiptOcrJob>();
+        services.AddScoped<MarkExpiredInvitesJob>();
+        services.AddScoped<OrphanCleanupJob>();
         services.AddSingleton<EmailDeadLetterFilter>();
 
         services.AddHangfire((sp, config) =>

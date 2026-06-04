@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
+using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Persistence;
 using Testcontainers.Keycloak;
 using Testcontainers.PostgreSql;
@@ -142,6 +143,6 @@ public sealed class ApiFixture : IAsyncLifetime
     {
         using var scope = Factory.Services.CreateScope();
         var cache = scope.ServiceProvider.GetRequiredService<IDistributedCache>();
-        await cache.RemoveAsync($"landlord:{landlordId}:dashboard");
+        await cache.RemoveAsync(CacheKeys.LandlordDashboard(landlordId));
     }
 }
