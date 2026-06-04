@@ -164,6 +164,17 @@
       "maxretries": 2,
       "retryInterval": 30,
       "accepted_statuscodes": ["200-299"]
+    },
+    {
+      "name": "Unleash (feature flags)",
+      "type": "http",
+      "url": "http://unleash:4242/health",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "Unleash built-in /health endpoint (returns {\"health\":\"GOOD\"}). Non-critical: the backend defaults flags ON when Unleash is unreachable, so an outage is otherwise silent — this monitor surfaces it (e.g. the missing-`unleash`-database crashloop) before a flag flip mysteriously has no effect. Kuma reaches it via the allow-uptime-kuma-probe catch-all NetworkPolicy."
     }
   ],
 
@@ -192,7 +203,8 @@
       "Prometheus",
       "Alertmanager",
       "AIOps webhook",
-      "Grafana"
+      "Grafana",
+      "Unleash (feature flags)"
     ]
   }
 }

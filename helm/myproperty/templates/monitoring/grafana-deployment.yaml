@@ -46,6 +46,13 @@ spec:
       app.kubernetes.io/component: grafana
   template:
     metadata:
+      annotations:
+        # Roll Grafana when datasource or provider config changes — those are read only at
+        # startup. Dashboards are deliberately NOT checksummed: they mount as a directory
+        # and hot-reload via the provider's 30s rescan, so dashboard edits need no restart
+        # (which matters here — the Recreate strategy means a restart is brief downtime).
+        checksum/datasources: {{ include (print $.Template.BasePath "/monitoring/grafana-datasources-configmap.yaml") . | sha256sum }}
+        checksum/provider: {{ include (print $.Template.BasePath "/monitoring/grafana-dashboard-provider-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "myproperty.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: grafana
@@ -112,14 +119,13 @@ spec:
               mountPath: /etc/grafana/provisioning/datasources
             - name: dashboard-provider
               mountPath: /etc/grafana/provisioning/dashboards
-            - name: dashboard-api-metrics
-              mountPath: /var/lib/grafana/dashboards/myproperty-api-metrics.json
-              subPath: myproperty-api-metrics.json
-            - name: dashboard-api-logs
-              mountPath: /var/lib/grafana/dashboards/myproperty-api-logs.json
-              subPath: myproperty-api-logs.json
             - name: grafana-data
               mountPath: /var/lib/grafana
+            # All dashboards, mounted as a directory (overlays the dashboards subdir of the
+            # grafana-data PVC). Provisioner at /var/lib/grafana/dashboards reads them.
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
       volumes:
         - name: datasources
           configMap:
@@ -127,12 +133,9 @@ spec:
         - name: dashboard-provider
           configMap:
             name: {{ .Release.Name }}-grafana-dashboard-provider
-        - name: dashboard-api-metrics
+        - name: dashboards
           configMap:
-            name: {{ .Release.Name }}-grafana-dashboard-api-metrics
-        - name: dashboard-api-logs
-          configMap:
-            name: {{ .Release.Name }}-grafana-dashboard-api-logs
+            name: {{ .Release.Name }}-grafana-dashboards
         - name: grafana-data
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-grafana-data

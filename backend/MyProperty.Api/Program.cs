@@ -44,11 +44,12 @@ using MyProperty.Application.Properties.Commands.UpdateProperty;
 using MyProperty.Application.Properties.Queries.GetLandlordProperties;
 using MyProperty.Application.Properties.Queries.GetPropertyById;
 using MyProperty.Infrastructure;
+using MyProperty.Infrastructure.Identity;
+using MyProperty.Infrastructure.Jobs;
 using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
-using Serilog.Sinks.Grafana.Loki;
 
 // Bootstrap logger captures events during startup, before the full Serilog pipeline
 // is configured via UseSerilog below. CreateBootstrapLogger() ensures these early
@@ -69,10 +70,12 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // ── Serilog ───────────────────────────────────────────────────────────────────
-    // Config lives here in code only — no ReadFrom.Configuration() — so there is
-    // no Serilog section in appsettings.json. The Loki URL is the only value read
-    // from config (it's infrastructure plumbing, not logger behaviour).
-    builder.Host.UseSerilog((ctx, _, cfg) =>
+    // Config lives here in code only — no ReadFrom.Configuration() — so there is no
+    // Serilog section in appsettings.json. Logs are emitted as CLEF JSON on stdout;
+    // Promtail scrapes the container's stdout and ships it to Loki (see the monitoring
+    // Helm chart). The app deliberately does NOT push to Loki directly — one ingestion
+    // path, uniform across every service, and crash output is still captured.
+    builder.Host.UseSerilog((_, _, cfg) =>
     {
         cfg.MinimumLevel.Information()
            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -80,16 +83,6 @@ try
            .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
            .Enrich.FromLogContext()
            .WriteTo.Console(new CompactJsonFormatter());
-
-        var lokiUrl = ctx.Configuration["LokiUrl"];
-        if (!string.IsNullOrWhiteSpace(lokiUrl))
-        {
-            cfg.WriteTo.GrafanaLoki(
-                lokiUrl,
-                labels: [new LokiLabel { Key = "app", Value = "myproperty-api" }],
-                batchPostingLimit: builder.Environment.IsDevelopment() ? 1 : 100
-            );
-        }
     });
 
     // ── Keycloak options ──────────────────────────────────────────────────────────
@@ -169,6 +162,7 @@ try
     // ── Current-user abstraction ──────────────────────────────────────────────────
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+    builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
     builder.Services.AddInfrastructure(builder.Configuration);
 
     // Auth handlers
@@ -212,6 +206,15 @@ try
     // Invite options
     builder.Services.AddOptions<InviteOptions>()
         .Bind(builder.Configuration.GetSection("Invites"))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
+    // Anthropic receipt-OCR options. Bound here (not in Infrastructure's
+    // AddAiServices) so the app fails fast on a bad Model/TimeoutSeconds, in
+    // line with the other options classes. The type lives in
+    // Application/Common/Options because Infrastructure consumes it.
+    builder.Services.AddOptions<AnthropicOcrOptions>()
+        .Bind(builder.Configuration.GetSection(AnthropicOcrOptions.SectionName))
         .ValidateDataAnnotations()
         .ValidateOnStart();
 
@@ -507,6 +510,20 @@ try
         Authorization = [new AdminOnlyDashboardFilter()],
         DashboardTitle = "MyProperty — Background Jobs",
     });
+
+    // ── Recurring background jobs ───────────────────────────────────────────────
+    // Registered against the already-configured Hangfire (Postgres) storage.
+    // Cron expressions are interpreted in UTC (no TimeZone set). The
+    // CancellationToken.None below is a Hangfire placeholder in the job
+    // expression — at execution Hangfire substitutes a real shutdown-aware
+    // token, which each job threads through its repo/SaveChanges/ExecuteDelete
+    // calls. The Hangfire server is always enabled (see AddHangfireServer), so
+    // these schedules run wherever the API does.
+    var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
+    recurringJobs.AddOrUpdate<MarkExpiredInvitesJob>(
+        "mark-expired-invites", j => j.ExecuteAsync(CancellationToken.None), "0 * * * *");   // hourly
+    recurringJobs.AddOrUpdate<OrphanCleanupJob>(
+        "orphan-cleanup", j => j.ExecuteAsync(CancellationToken.None), "0 3 * * *");          // 03:00 UTC daily
 
     app.MapControllers();
     app.MapHub<NotificationsHub>(NotificationsHub.Path);

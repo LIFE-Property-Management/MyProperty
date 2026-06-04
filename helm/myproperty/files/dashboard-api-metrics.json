@@ -20,8 +20,17 @@
   "links": [],
   "panels": [
     {
+      "type": "text",
+      "id": 101,
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## API (Backend) Metrics — the RED method\nThese are **metrics** (numbers over time from Prometheus), not logs. They follow the **RED method**: **R**ate (how many requests/sec), **E**rrors (what fraction fail), **D**uration (how long they take). The top row is at-a-glance health — green is good, red means a threshold tied to an alert was crossed. Lower panels break those down over time and by route, plus .NET runtime health (GC, memory, CPU). For the log lines behind these numbers, open the **API (Backend) Logs** dashboard."
+      }
+    },
+    {
       "datasource": { "type": "alertmanager", "uid": "alertmanager" },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 3 },
       "id": 100,
       "options": {
         "alertInstanceLabelFilter": "",
@@ -31,17 +40,11 @@
         "groupMode": "default",
         "maxItems": 20,
         "sortOrder": 1,
-        "stateFilter": {
-          "firing": true,
-          "pending": true,
-          "noData": false,
-          "normal": false,
-          "error": true
-        },
+        "stateFilter": { "firing": true, "pending": true, "noData": false, "normal": false, "error": true },
         "viewMode": "list"
       },
       "title": "Active alerts (Alertmanager)",
-      "description": "Live alerts forwarded from Prometheus rule evaluation. Empty during normal operation. Use `docker compose stop backend` to trigger MyPropertyApiDown for the demo.",
+      "description": "Live alerts forwarded from Prometheus rule evaluation. Empty during normal operation. Each alert below corresponds to a threshold you'll see marked on the panels.",
       "type": "alertlist"
     },
     {
@@ -50,18 +53,12 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 0 }
-            ]
-          },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0 } ] },
           "unit": "reqps"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 6 },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 9 },
       "id": 1,
       "options": {
         "colorMode": "value",
@@ -73,15 +70,10 @@
       },
       "pluginVersion": "11.1.0",
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m]))",
-          "legendFormat": "req/s",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m]))", "legendFormat": "req/s", "refId": "A" }
       ],
       "title": "Request rate",
+      "description": "Requests per second the API is currently serving (averaged over 5m). Your overall traffic level — compare against latency and errors to judge load.",
       "type": "stat"
     },
     {
@@ -90,19 +82,12 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
-            ]
-          },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] },
           "unit": "percent"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 6 },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 9 },
       "id": 2,
       "options": {
         "colorMode": "value",
@@ -114,16 +99,10 @@
       },
       "pluginVersion": "11.1.0",
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "100 * (sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m])), 0.0001)",
-          "legendFormat": "5xx %",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "100 * (sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m])), 0.0001)", "legendFormat": "5xx %", "refId": "A" }
       ],
       "title": "Error rate (5xx)",
-      "description": "Threshold mirrors alerts/api.yml MyPropertyApiHighErrorRate (>5% for 5m).",
+      "description": "Percent of requests returning a 5xx (server error). Threshold mirrors alerts/api.yml MyPropertyApiHighErrorRate (>5% for 5m). 4xx is excluded — those are client errors, not server faults.",
       "type": "stat"
     },
     {
@@ -132,19 +111,12 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "red", "value": 1 }
-            ]
-          },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 1 } ] },
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 6 },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 9 },
       "id": 3,
       "options": {
         "colorMode": "value",
@@ -156,16 +128,10 @@
       },
       "pluginVersion": "11.1.0",
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))",
-          "legendFormat": "p95",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))", "legendFormat": "p95", "refId": "A" }
       ],
       "title": "p95 latency",
-      "description": "Threshold mirrors alerts/api.yml MyPropertyApiHighLatencyP95 (>1s for 10m).",
+      "description": "95th-percentile response time: 95% of requests finish faster than this. A better health signal than an average, which hides slow outliers. Threshold mirrors alerts/api.yml MyPropertyApiHighLatencyP95 (>1s for 10m).",
       "type": "stat"
     },
     {
@@ -174,19 +140,12 @@
         "defaults": {
           "color": { "mode": "thresholds" },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 100 }
-            ]
-          },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 100 } ] },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 6 },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 9 },
       "id": 4,
       "options": {
         "colorMode": "value",
@@ -198,16 +157,10 @@
       },
       "pluginVersion": "11.1.0",
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum(http_requests_in_progress{job=\"myproperty-api\"})",
-          "legendFormat": "in-flight",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(http_requests_in_progress{job=\"myproperty-api\"})", "legendFormat": "in-flight", "refId": "A" }
       ],
       "title": "In-flight requests",
-      "description": "Threshold mirrors alerts/api.yml MyPropertyApiHighInFlightRequests (>100 for 5m).",
+      "description": "Requests being processed right now (not yet responded). A steadily climbing number means requests are arriving faster than they complete — a backlog. Threshold mirrors alerts/api.yml MyPropertyApiHighInFlightRequests (>100 for 5m).",
       "type": "stat"
     },
     {
@@ -215,39 +168,20 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
           "mappings": [],
           "unit": "reqps"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
       "id": 5,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum by (controller, action) (rate(http_requests_received_total{job=\"myproperty-api\"}[5m]))",
-          "legendFormat": "{{controller}}.{{action}}",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum by (controller, action) (rate(http_requests_received_total{job=\"myproperty-api\"}[5m]))", "legendFormat": "{{controller}}.{{action}}", "refId": "A" }
       ],
       "title": "Request rate by route",
       "description": "Per-controller-action req/s. Top entries in the legend are your hot endpoints. Empty controller/action labels mean the request did not match a controller route (e.g. /metrics, /hangfire/*).",
@@ -258,53 +192,22 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "line+area" }
-          },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line+area" } },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "transparent", "value": null },
-              { "color": "red", "value": 0.05 }
-            ]
-          },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "transparent", "value": null }, { "color": "red", "value": 0.05 } ] },
           "unit": "percentunit"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
       "id": 6,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
         "tooltip": { "mode": "single", "sort": "none" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "(sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m])), 0.0001)",
-          "legendFormat": "5xx ratio",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "(sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"4..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m])), 0.0001)",
-          "legendFormat": "4xx ratio",
-          "refId": "B"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "(sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m])), 0.0001)", "legendFormat": "5xx ratio", "refId": "A" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "(sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"4..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_received_total{job=\"myproperty-api\"}[5m])), 0.0001)", "legendFormat": "4xx ratio", "refId": "B" }
       ],
       "title": "Error rate over time",
       "description": "Red threshold line at 5% — the MyPropertyApiHighErrorRate alert fires when the 5xx series stays above it for 5m.",
@@ -315,55 +218,25 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
           "mappings": [],
           "unit": "s"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
       "id": 7,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))",
-          "legendFormat": "p50",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))",
-          "legendFormat": "p95",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))",
-          "legendFormat": "p99",
-          "refId": "C"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))", "legendFormat": "p95", "refId": "B" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"myproperty-api\"}[5m])))", "legendFormat": "p99", "refId": "C" }
       ],
       "title": "Request latency p50 / p95 / p99",
+      "description": "Response time at the 50th, 95th, and 99th percentiles. p50 is the typical request; p99 is your worst 1% (often cold caches or heavy queries). A widening gap between p50 and p99 signals inconsistent performance.",
       "type": "timeseries"
     },
     {
@@ -371,41 +244,23 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 30,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 30, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
           "mappings": [],
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
       "id": 8,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true },
         "tooltip": { "mode": "single", "sort": "none" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum(http_requests_in_progress{job=\"myproperty-api\"})",
-          "legendFormat": "concurrent",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(http_requests_in_progress{job=\"myproperty-api\"})", "legendFormat": "concurrent", "refId": "A" }
       ],
       "title": "In-flight requests over time",
+      "description": "Concurrent in-progress requests over time. Brief spikes are normal under load; a line that climbs and never comes back down means requests are piling up faster than they finish.",
       "type": "timeseries"
     },
     {
@@ -413,22 +268,8 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 0,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "normal" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "unit": "reqps"
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "bars", "fillOpacity": 80, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 0, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "normal" }, "thresholdsStyle": { "mode": "off" } },
+          "mappings": []
         },
         "overrides": [
           { "matcher": { "id": "byName", "options": "2xx" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
@@ -437,43 +278,20 @@
           { "matcher": { "id": "byName", "options": "5xx" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
         ]
       },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 29 },
       "id": 9,
       "options": {
         "legend": { "calcs": ["mean"], "displayMode": "table", "placement": "right", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"2..\"}[5m]))",
-          "legendFormat": "2xx",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"3..\"}[5m]))",
-          "legendFormat": "3xx",
-          "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"4..\"}[5m]))",
-          "legendFormat": "4xx",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"5..\"}[5m]))",
-          "legendFormat": "5xx",
-          "refId": "D"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"2..\"}[5m]))", "legendFormat": "2xx", "refId": "A" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"3..\"}[5m]))", "legendFormat": "3xx", "refId": "B" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"4..\"}[5m]))", "legendFormat": "4xx", "refId": "C" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "sum(rate(http_requests_received_total{job=\"myproperty-api\", code=~\"5..\"}[5m]))", "legendFormat": "5xx", "refId": "D" }
       ],
       "title": "HTTP status codes (stacked)",
+      "description": "All responses by status class, stacked. Green/blue (2xx/3xx) is healthy traffic; yellow (4xx) is client errors (bad input, auth); red (5xx) is server faults. The shape shows how your traffic mix shifts over time.",
       "type": "timeseries"
     },
     {
@@ -481,41 +299,23 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
           "mappings": [],
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 34 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 37 },
       "id": 10,
       "options": {
         "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "rate(dotnet_collection_count_total{job=\"myproperty-api\"}[5m])",
-          "legendFormat": "Gen {{generation}}",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "rate(dotnet_collection_count_total{job=\"myproperty-api\"}[5m])", "legendFormat": "Gen {{generation}}", "refId": "A" }
       ],
       "title": ".NET GC collections / sec",
+      "description": ".NET garbage-collection frequency by generation. Frequent Gen 2 collections (the expensive ones) often correlate with memory pressure and latency spikes — cross-check the Process memory panel.",
       "type": "timeseries"
     },
     {
@@ -523,48 +323,24 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 20,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 20, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
           "mappings": [],
           "unit": "bytes"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 34 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 37 },
       "id": 11,
       "options": {
         "legend": { "calcs": ["max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "single", "sort": "none" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "process_working_set_bytes{job=\"myproperty-api\"}",
-          "legendFormat": "working set",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "dotnet_total_memory_bytes{job=\"myproperty-api\"}",
-          "legendFormat": ".NET heap",
-          "refId": "B"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "process_working_set_bytes{job=\"myproperty-api\"}", "legendFormat": "working set", "refId": "A" },
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "dotnet_total_memory_bytes{job=\"myproperty-api\"}", "legendFormat": ".NET heap", "refId": "B" }
       ],
       "title": "Process memory",
+      "description": "Working set = total OS memory the process holds; .NET heap = managed objects. A heap that only ever grows (never sawtooths down after GC) points at a leak. Compare against the pod's memory limit.",
       "type": "timeseries"
     },
     {
@@ -572,39 +348,20 @@
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
+          "custom": { "axisLabel": "", "axisPlacement": "auto", "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } },
           "mappings": [],
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 34 },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 37 },
       "id": 12,
       "options": {
         "legend": { "calcs": ["mean", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "single", "sort": "none" }
       },
       "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "editorMode": "code",
-          "expr": "rate(process_cpu_seconds_total{job=\"myproperty-api\"}[5m])",
-          "legendFormat": "cpu",
-          "refId": "A"
-        }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "editorMode": "code", "expr": "rate(process_cpu_seconds_total{job=\"myproperty-api\"}[5m])", "legendFormat": "cpu", "refId": "A" }
       ],
       "title": "Process CPU (cores)",
       "description": "Fractional core usage. 1.0 = one full CPU core busy. Container limit divided by core count is the practical ceiling.",
@@ -620,5 +377,5 @@
   "timezone": "browser",
   "title": "MyProperty API — RED metrics",
   "uid": "myproperty-api-red",
-  "version": 1
+  "version": 2
 }

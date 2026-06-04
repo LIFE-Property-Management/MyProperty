@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -15,11 +14,10 @@ namespace MyProperty.Application.Invites.Commands.CreateInvite;
 
 public sealed class CreateInviteHandler(
     IValidator<CreateInviteCommand> validator,
-    IUserRepository users,
     IPropertyRepository properties,
     IInviteRepository invites,
     IBackgroundJobQueue jobs,
-    ICurrentUser currentUser,
+    ICurrentUserContext currentUserContext,
     IOptions<InviteOptions> options,
     ILogger<CreateInviteHandler> logger)
 {
@@ -27,7 +25,7 @@ public sealed class CreateInviteHandler(
     {
         await validator.EnsureValidAsync(cmd, ct);
 
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
         var property = await properties.GetByIdAsync(cmd.PropertyId, ct)
             ?? throw new NotFoundException("Property", cmd.PropertyId);
@@ -36,7 +34,7 @@ public sealed class CreateInviteHandler(
             throw new ForbiddenException("Property does not belong to current landlord.");
 
         var plainToken = GeneratePlainToken();
-        var tokenHash = HashToken(plainToken);
+        var tokenHash = InviteTokenHasher.Hash(plainToken);
 
         var invite = new Invite
         {
@@ -79,10 +77,6 @@ public sealed class CreateInviteHandler(
             .Replace("/", "_")
             .TrimEnd('=');
     }
-
-    private static string HashToken(string plainToken)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainToken)))
-            .ToLowerInvariant();
 
     private static string BuildEmailBody(
         CreateInviteCommand cmd,

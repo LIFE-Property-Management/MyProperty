@@ -8,14 +8,13 @@ namespace MyProperty.Application.Landlord.Queries.GetTenantDetail;
 public sealed class GetTenantDetailHandler(
     IValidator<GetTenantDetailQuery> validator,
     ILeaseRepository leases,
-    IUserRepository users,
-    ICurrentUser currentUser)
+    ICurrentUserContext currentUserContext)
 {
     public async Task<TenantDetailDto> Handle(GetTenantDetailQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
 
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
 
         var lease = await leases.GetLeaseWithPaymentsByTenantAndLandlordAsync(

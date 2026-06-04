@@ -254,6 +254,9 @@ docs/ai-log/exports/
 # Uptime Kuma local data
 uptime-kuma-data/
 
+# Local-only monitoring port-forward helper (per-developer convenience)
+scripts/port-forward-monitoring.sh
+
 # Playwright browsers (downloaded on CI automatically)
 frontend/playwright/.cache/
 # ───────────────────────────────────────────────────────────

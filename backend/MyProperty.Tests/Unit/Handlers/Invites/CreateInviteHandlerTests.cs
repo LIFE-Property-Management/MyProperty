@@ -8,28 +8,25 @@ using MyProperty.Application.Common.Options;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
-using MyProperty.Tests.Unit.Handlers.TestUtils;
 
 namespace MyProperty.Tests.Unit.Handlers.Invites;
 
 public sealed class CreateInviteHandlerTests
 {
-    private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
     private readonly Mock<IPropertyRepository> _properties = new(MockBehavior.Strict);
     private readonly Mock<IInviteRepository> _invites = new(MockBehavior.Strict);
     private readonly Mock<IBackgroundJobQueue> _jobs = new(MockBehavior.Strict);
-    private readonly Mock<ICurrentUser> _currentUser = new();
+    private readonly Mock<ICurrentUserContext> _currentUserContext = new();
 
     private readonly InviteOptions _options = new() { PortalBaseUrl = "https://portal.test", ExpiryDays = 7 };
 
     private CreateInviteHandler BuildSut() =>
         new(
             new CreateInviteValidator(),
-            _users.Object,
             _properties.Object,
             _invites.Object,
             _jobs.Object,
-            _currentUser.Object,
+            _currentUserContext.Object,
             Options.Create(_options),
             NullLogger<CreateInviteHandler>.Instance);
 
@@ -50,6 +47,10 @@ public sealed class CreateInviteHandlerTests
         Address = "1 Sunset Blvd",
     };
 
+    private void SetupCurrentUser(User landlord) =>
+        _currentUserContext.Setup(c => c.GetOrSyncUserAsync(It.IsAny<CancellationToken>()))
+                           .ReturnsAsync(landlord);
+
     private static CreateInviteCommand ValidCommand(Guid propertyId) => new(
         PropertyId: propertyId,
         Email: "tenant@example.com",
@@ -66,9 +67,7 @@ public sealed class CreateInviteHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var property = SeedProperty(landlord.Id);
 
-        _currentUser.SetupGet(c => c.Principal).Returns(TestPrincipal.Authenticated(landlord.KeycloakSubId));
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _properties.Setup(p => p.GetByIdAsync(property.Id, It.IsAny<CancellationToken>()))
                    .ReturnsAsync(property);
 
@@ -116,9 +115,7 @@ public sealed class CreateInviteHandlerTests
         var landlord = SeedLandlord(Guid.NewGuid());
         var missingPropertyId = Guid.NewGuid();
 
-        _currentUser.SetupGet(c => c.Principal).Returns(TestPrincipal.Authenticated(landlord.KeycloakSubId));
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _properties.Setup(p => p.GetByIdAsync(missingPropertyId, It.IsAny<CancellationToken>()))
                    .ReturnsAsync((Property?)null);
 
@@ -139,9 +136,7 @@ public sealed class CreateInviteHandlerTests
         var otherLandlordId = Guid.NewGuid();
         var property = SeedProperty(otherLandlordId);
 
-        _currentUser.SetupGet(c => c.Principal).Returns(TestPrincipal.Authenticated(landlord.KeycloakSubId));
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync(landlord);
+        SetupCurrentUser(landlord);
         _properties.Setup(p => p.GetByIdAsync(property.Id, It.IsAny<CancellationToken>()))
                    .ReturnsAsync(property);
 
@@ -162,7 +157,7 @@ public sealed class CreateInviteHandlerTests
         await Assert.ThrowsAsync<ValidationException>(
             () => sut.Handle(ValidCommand(Guid.Empty), CancellationToken.None));
 
-        _users.VerifyNoOtherCalls();
+        _currentUserContext.Verify(c => c.GetOrSyncUserAsync(It.IsAny<CancellationToken>()), Times.Never);
         _properties.VerifyNoOtherCalls();
         _invites.VerifyNoOtherCalls();
         _jobs.VerifyNoOtherCalls();
