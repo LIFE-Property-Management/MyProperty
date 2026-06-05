@@ -108,11 +108,20 @@ export function initKeycloak(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     const kc = getInstance();
-    const authenticated = await kc.init({
-      onLoad: "check-sso",
-      checkLoginIframe: false,
-      silentCheckSsoRedirectUri: window.location.origin + "/silent-check-sso.html",
-    });
+    let authenticated = false;
+    try {
+      authenticated = await kc.init({
+        onLoad: "check-sso",
+        checkLoginIframe: false,
+        silentCheckSsoRedirectUri: window.location.origin + "/silent-check-sso.html",
+      });
+    } catch {
+      // Silent SSO check timed out or failed — treat as not authenticated.
+      // This is non-fatal: the user can still click "Continue to sign-in".
+      useAuthStore.getState().clearAuth();
+      clearAuthCookie();
+      return;
+    }
     if (authenticated && kc.token) {
       const payload = decodePayload(kc.token);
       useAuthStore.getState().setAuth(payload);
@@ -126,8 +135,6 @@ export function initKeycloak(): Promise<void> {
           });
       };
     } else {
-      // No active session — clear any stale gate cookie so the middleware
-      // stops waving the user through to protected routes.
       useAuthStore.getState().clearAuth();
       clearAuthCookie();
     }
