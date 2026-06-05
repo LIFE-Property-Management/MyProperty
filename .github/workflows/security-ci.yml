@@ -1,0 +1,166 @@
+name: Security CI
+
+# M5.5 — Security audit gates. Complements the M4.8 Trivy *image*-CVE gate
+# (backend-ci.yml / frontend-ci.yml) with the source-side / DAST / web-best-
+# practices layer:
+#   • secret-scan   — gitleaks (full history, honors .gitleaks.toml) + git-secrets
+#   • lighthouse-ci — Lighthouse assertions incl. the Best-Practices/security audits
+#   • zap-baseline  — OWASP ZAP passive DAST against the compose stack (scheduled)
+# Full rationale + triage workflow: docs/security/audit-m5.5.md.
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC — drift catch + weekly DAST
+  workflow_dispatch:
+
+concurrency:
+  group: security-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Detect which areas changed so the heavier jobs only run when relevant.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - "frontend/**"
+              - ".github/workflows/security-ci.yml"
+
+  # ── Secret scanning — runs on every PR/push (secrets can land anywhere) ──────
+  secret-scan:
+    name: Secret scan (gitleaks + git-secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to the Security tab
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # gitleaks `git` + git-secrets --scan-history need all commits
+
+      # gitleaks scans the working tree AND full history, honoring the triaged
+      # allowlist in .gitleaks.toml. Run via the pinned image so there is no
+      # org-license requirement (the gitleaks-action needs GITLEAKS_LICENSE for
+      # orgs) and so it matches the documented local command exactly.
+      - name: gitleaks (history + tree, blocking)
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest \
+            git /repo -c /repo/.gitleaks.toml --redact \
+            --report-format sarif --report-path /repo/gitleaks.sarif \
+            --exit-code 1
+
+      - name: Upload gitleaks SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+      # git-secrets with the AWS provider patterns — the M5.5 deliverable's
+      # named tool. Catches AWS access keys / secret keys in tree + history.
+      - name: git-secrets (AWS patterns, history)
+        run: |
+          git clone -q --depth 1 https://github.com/awslabs/git-secrets /tmp/git-secrets
+          sudo make -C /tmp/git-secrets install
+          git secrets --register-aws
+          git secrets --scan
+          git secrets --scan-history
+
+  # ── Lighthouse CI — security-relevant Best-Practices audits + perf budget ────
+  lighthouse-ci:
+    name: Lighthouse CI
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+
+      # Production build. NEXT_PUBLIC_* mirror frontend-ci.yml; DEV_AUTH_BYPASS
+      # stays false so the audited build is prod-like (no mock-auth shortcut).
+      - name: Build (production)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://api.myproperty.works
+          NEXT_PUBLIC_KEYCLOAK_URL: https://auth.myproperty.works
+          NEXT_PUBLIC_KEYCLOAK_REALM: MyProperty
+          NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: myproperty-frontend
+          NEXT_PUBLIC_DEV_AUTH_BYPASS: "false"
+
+      # Chrome is preinstalled on ubuntu-latest. lhci autorun starts `next start`,
+      # runs Lighthouse against lighthouserc.json's URLs, asserts, and uploads.
+      - name: Lighthouse CI (collect + assert)
+        run: npm run lhci
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: lighthouse-ci-reports
+          path: frontend/.lighthouseci
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ── OWASP ZAP baseline (DAST) — scheduled/manual only; it boots the stack ────
+  zap-baseline:
+    name: OWASP ZAP baseline
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      # Fresh CI volume → infrastructure/postgres/init.sql seeds the keycloak +
+      # unleash databases on first boot (no stale-volume gap as on long-lived
+      # dev machines). Build + start the app surface ZAP will crawl.
+      - name: Boot the app stack
+        run: docker compose up -d --build --wait frontend
+
+      - name: ZAP baseline (passive) against the frontend
+        run: |
+          mkdir -p zap-out && chmod 777 zap-out
+          docker run --rm --network host -v "$PWD/zap-out:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:3000 -j \
+            -r zap-baseline-report.html -J zap-baseline-report.json \
+            -w zap-baseline-report.md || true
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: zap-baseline-report
+          path: zap-out
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
