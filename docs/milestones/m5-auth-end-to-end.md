@@ -11,6 +11,11 @@
 > **M5.6 — Feature flags (Unleash):** a separate M5 deliverable, documented in
 > [../operations/feature-flags.md](../operations/feature-flags.md) (self-hosted
 > Unleash + a receipt-OCR kill-switch) — not part of the auth work recorded here.
+>
+> **M5.8 — n8n automation (FS-8):** a separate M5 deliverable, documented in
+> [../operations/n8n-automation.md](../operations/n8n-automation.md) (a webhook →
+> Claude → Discord tenant-inquiry triage pipeline) — not part of the auth work
+> recorded here.
 
 ## Goal
 

@@ -14,6 +14,7 @@ frontend, with Keycloak for auth, deployed to a shared Hetzner Kubernetes cluste
 | Async / cache | RabbitMQ (background jobs, domain events), Redis |
 | Storage | Local volume in dev; receipts/files keyed in Postgres |
 | Observability | Prometheus + Alertmanager + Grafana, Loki + Promtail, Uptime-Kuma, AIOps webhook (Claude triage → Discord) |
+| Automation | n8n — tenant-inquiry triage pipeline (webhook → Claude → Discord) |
 | Packaging | Docker images on GHCR (`ghcr.io/life-property-management/*`), Helm chart `helm/myproperty` |
 
 ## Repository layout
@@ -24,6 +25,7 @@ frontend/           Next.js 16 app
 helm/myproperty/    Helm chart (base values.yaml + values-gjirafa.yaml overlay for project-02)
 infrastructure/
   aiops-webhook/    FastAPI service: Alertmanager → Claude triage → Discord
+  n8n/              n8n automation: tenant inquiry → Claude triage → Discord (M5.8)
   uptime-kuma/      Uptime-Kuma seed sidecar (status page + monitors)
   gjirafa/          deploy.sh, secrets.sh — the project-02 deploy/secrets tooling
   keycloak/         realm export template + production notes (compose realm source)
@@ -111,6 +113,7 @@ deployed from the `helm/myproperty` chart with the `values-gjirafa.yaml` overlay
 | [docs/operations/migrations.md](docs/operations/migrations.md) | EF Core migration strategy |
 | [docs/operations/k8s-deployment.md](docs/operations/k8s-deployment.md) (§ monitoring) | Observability stack (Prometheus/Grafana/Loki/Uptime-Kuma/AIOps) |
 | [docs/operations/deployment-roadmap.md](docs/operations/deployment-roadmap.md) | Deferred / planned infra work |
+| [docs/operations/n8n-automation.md](docs/operations/n8n-automation.md) | n8n tenant-inquiry automation (M5.8) — design, degradation, verification |
 | [docs/portals.md](docs/portals.md) | Landlord / Tenant portal scope |
 
 Component-level guidance for contributors lives in `backend/CLAUDE.md` and `frontend/CLAUDE.md`.
