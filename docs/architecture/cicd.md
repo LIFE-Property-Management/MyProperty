@@ -1,79 +1,63 @@
 # CI/CD pipeline
 
-Four GitHub Actions workflows: three CI workflows (one per component) and one CD workflow (deploys to DOKS). Container images are pushed to **GHCR** (`ghcr.io/life-property-management/*`), tagged with both `{short-sha}` and `{branch}`. The CD workflow then upgrades the Helm release with the matching SHA tags.
+**Six GitHub Actions workflows**: five CI workflows (one per build target) and one CD workflow that deploys to the Hetzner `project-02` namespace. Container images push to **GHCR** (`ghcr.io/life-property-management/*`), each dual-tagged `{short-sha}` (immutable) + `{branch}` (moving). CD is **push-based** — it fires after the image-CI workflows finish, resolves which images exist at that SHA, bumps the matching tags in `values-gjirafa.yaml`, and runs `deploy.sh --atomic`.
 
 ![CI/CD pipeline overview](./diagrams/cicd.svg)
 
-> **Source:** [`diagrams/cicd.puml`](./diagrams/cicd.puml). Authoritative workflow YAML lives in [`.github/workflows/`](../../.github/workflows/).
+> **Sources:** [`diagrams/cicd.puml`](./diagrams/cicd.puml). Authoritative workflow YAML in [`.github/workflows/`](../../.github/workflows/); the full operational narrative (gating, rollback, guardrails) is [`docs/operations/ci-cd.md`](../operations/ci-cd.md). Prod topology is in [`deployment-prod.md`](./deployment-prod.md); the platform move off DOKS is [ADR-0009](./adr/0009-hetzner-project-02-over-doks.md).
 
 ## Workflows at a glance
 
 | Workflow | Trigger | What it does | Image produced |
 |---|---|---|---|
-| [`backend-ci.yml`](../../.github/workflows/backend-ci.yml) | push / PR on `backend/**`, `MyProperty.sln` | restore → format check → build (Release, `-warnaserror`) → xUnit + Testcontainers (101 tests, ~30 s) → docker build → Trivy → SBOM → push | `myproperty-api` + `myproperty-migrations` |
-| [`frontend-ci.yml`](../../.github/workflows/frontend-ci.yml) | push / PR on `frontend/**` | `npm ci` → ESLint → `tsc --noEmit` → Jest + jest-axe → Playwright e2e → bundle build + analyzer → docker build → Trivy → SBOM → push | `myproperty-frontend` |
+| [`backend-ci.yml`](../../.github/workflows/backend-ci.yml) | push / PR on `backend/**`, `MyProperty.sln` | restore → `format --verify` → build (Release, `-warnaserror`) → xUnit **unit** suite → docker build → Trivy (2-pass) → SBOM → push | `myproperty-api` + `myproperty-migrations` |
+| [`frontend-ci.yml`](../../.github/workflows/frontend-ci.yml) | push / PR on `frontend/**` | `npm ci` → ESLint → `tsc --noEmit` → Jest + jest-axe → Playwright e2e → standalone bundle build → docker build → Trivy → SBOM → push | `myproperty-frontend` |
 | [`aiops-webhook-ci.yml`](../../.github/workflows/aiops-webhook-ci.yml) | push / PR on `infrastructure/aiops-webhook/**` | pip install → ruff check + format → pytest → docker build → Trivy → SBOM → push | `myproperty-aiops-webhook` |
-| [`cd.yml`](../../.github/workflows/cd.yml) | push to `main` or `develop` | `doctl kubeconfig save` → `helm dep update` → `helm upgrade --install --atomic --wait --timeout 10m` → Discord notify | — |
+| [`uptime-kuma-init-ci.yml`](../../.github/workflows/uptime-kuma-init-ci.yml) | push / PR on `infrastructure/uptime-kuma/**` | **build + scan only** (no lint/test) — the seed sidecar is `seed.py` + `monitors.json` | `myproperty-uptime-kuma-init` |
+| [`realm-import-ci.yml`](../../.github/workflows/realm-import-ci.yml) | push / PR on `infrastructure/keycloak/**`, `docker-compose.yml` | Keycloak realm-export **smoke test** — boots Keycloak on Postgres, verifies the service account | **none** (no deployable image) |
+| [`cd.yml`](../../.github/workflows/cd.yml) | `workflow_run` of the four image-CI workflows on `develop`/`main`, + `workflow_dispatch` | resolve per-component tags → bump `values-gjirafa.yaml` → `deploy.sh --atomic` → health gate → Discord on failure | — |
+
+Integration tests (`MyProperty.Tests/Integration/`, Testcontainers-backed Postgres + Keycloak) run **locally pre-merge, not in CI** — cold image pulls add several minutes per run. See [`docs/operations/ci-cd.md`](../operations/ci-cd.md#integration-tests-in-ci).
 
 ## Image tag strategy
 
-Each CI workflow pushes two tags per build:
+Each image is pushed with two tags:
 
-- `:{short-sha}` — immutable, used by the CD workflow's `--set <component>.image.tag={SHA}`.
-- `:{branch}` — moving tag (`:main`, `:develop`, `:my-feature`) for human convenience.
+- `:{short-sha}` — immutable; this is what production references.
+- `:{branch}` — moving (`:develop`, `:main`, `:my-feature`) for human inspection.
 
-This is what makes the CD step a no-op when the SHA hasn't changed and a known-good rollforward when it has. `helm rollback` to the previous release retrieves the previous SHA tag automatically.
+The registry holds five images: `myproperty-api`, `myproperty-migrations` (built together with the API at one SHA), `myproperty-frontend`, `myproperty-aiops-webhook`, and `myproperty-uptime-kuma-init`.
 
 ## Security gates
 
-Every Dockerfile is scanned twice by Trivy:
+Every image-build job runs a **two-pass** Trivy scan (hardened in M4.8 from a single non-blocking pass):
 
-1. **SARIF upload** with severity `HIGH,CRITICAL` — non-blocking, results show up in the GitHub Security tab for triage.
-2. **Blocking gate** with severity `CRITICAL` only — a fresh CRITICAL CVE fails the build.
+1. **SARIF report (non-blocking):** severities `CRITICAL,HIGH`, `exit-code 0` — uploaded to the GitHub Security tab so both levels stay visible.
+2. **Quality gate (blocking):** `CRITICAL` only, `exit-code 1` — a fresh unsuppressed CRITICAL fails the build.
 
-Plus per-image:
+Both passes honour `.trivyignore` and `ignore-unfixed: true`. CRITICAL-only blocking keeps the pipeline green against the steady stream of non-applicable HIGH advisories in the .NET/npm trees while still catching the genuinely actionable ones. Plus per-image: **CycloneDX SBOM** (uploaded, 90-day retention) and **digest-pinned base images** (`@sha256:`).
 
-- **CycloneDX SBOM** generated and uploaded as a workflow artifact (90-day retention).
-- **Base image digests pinned** via `@sha256:...` in the `FROM` directives.
-- **Non-root user** enforced at runtime (UID 1654 backend, UID 65532 frontend, dedicated `aiops` user).
+## CD specifics — push-based, namespace-scoped
 
-## CD specifics
+The old DOKS `cd.yml` (`doctl` + one global `github.sha` tag for every component) was **removed**. Pull-based GitOps (ArgoCD/Flux) is impossible here — it needs cluster-scoped CRDs/controllers and our service account is **namespace-admin only** — so CD is a GitHub Actions job authenticating with the `project-02` kubeconfig stored as an Environment secret. The current flow:
 
-```bash
-helm upgrade --install myproperty ./helm/myproperty \
-  --namespace myproperty --create-namespace \
-  --atomic --wait --timeout 10m \
-  --set postgres.enabled=false \
-  --set backend.image.tag=$SHA \
-  --set frontend.image.tag=$SHA \
-  --set migration.image.tag=$SHA \
-  --set aiopsWebhook.image.tag=$SHA
-```
+1. **Trigger & gate.** Runs on `workflow_run` after any of the four image-CI workflows (`Backend CI`, `Frontend CI`, `AIOps Webhook CI`, `Uptime Kuma Init CI`) succeeds on a **push** to `develop`/`main`, or on manual `workflow_dispatch`. (`Realm Import Smoke` is excluded — it builds no image.) Behind the protected **`project-02` Environment** (manual approval) and **serialized** (`concurrency: deploy-project-02`, never cancelled) so the namespace sees one deploy at a time. Both branches deploy to the same namespace → last-deploy-wins.
+2. **Per-component tag resolution.** Because CI tags each image per-component, the job checks GHCR (`docker buildx imagetools inspect`) for `…/<image>:<short-sha>` and bumps only the keys whose image exists — `myproperty-api` bumps both `backend.image.tag` and `migration.image.tag`; the others bump their own key. Missing components keep their pinned tag.
+3. **Format-preserving bump.** `infrastructure/gjirafa/bump_image_tags.py` (ruamel.yaml) edits `values-gjirafa.yaml` as a **byte-perfect one-line diff** (not `yq`, which reserialises the file). A **GitHub App token** authors and pushes the bump commit (`Deploy(cd): bump […] image tag(s) to <sha>…`) — the App is on the branch-ruleset bypass list, which the default `GITHUB_TOKEN` cannot be.
+4. **Deploy.** Writes the kubeconfig from the `KUBECONFIG_PROJECT_02` secret, then runs `infrastructure/gjirafa/deploy.sh --atomic --cleanup-on-fail --timeout 10m` — the *same* script as a manual deploy (`--atomic` adds `--wait` → readiness gating + workload auto-rollback). Helm is pinned to **3.20.0** (setup-helm@v5 defaults to Helm 4, which changes `--atomic`/`--wait`), kubectl to **1.31.x** (cluster version).
+5. **Health gate.** `kubectl rollout status` on backend + frontend, `curl` of `https://api.myproperty.works/api/v1/health/ready` (expects 200), and an HTTP `<400` check on `app./auth./grafana./status.myproperty.works`.
+6. **Failure path.** On failure *or* cancellation the job posts to a dedicated Discord **#deployments** webhook (separate from the in-cluster `#alerts`/`#uptime` channels). `--atomic` has already rolled the **workloads** back — but ⚠️ **EF schema migrations are forward-only**, so a failed deploy may leave the DB partly migrated; verify manually.
 
-Three things worth flagging:
+> ⚠️ The operations doc notes this pipeline as *wired + statically validated*; the `Deploy(cd): bump …` commits on `develop` show the tag-bump half firing in practice. Treat [`docs/operations/ci-cd.md`](../operations/ci-cd.md#continuous-deployment-cdyml) as the live source of truth for its maturity.
 
-1. **`postgres.enabled=false`** — production uses **DO Managed PostgreSQL** (Terraform-provisioned, credentials from the `myproperty-postgres` Secret). The in-cluster `postgres-statefulset` template is *only* used in dev / Helm-local testing.
-2. **`--atomic`** — if any resource fails to roll, Helm rolls back to the previous release. Migration runs as a **pre-upgrade Helm Hook**, so a failed migration takes everything else with it (back to the previous SHA).
-3. **`--wait`** + **`--timeout 10m`** — the workflow blocks until all pods report Ready, or fails after 10 minutes.
+## Guardrails
 
-## Discord notification format
-
-```
-✅ deploy develop → cluster
-• release: myproperty
-• sha: a1b2c3d
-• actor: drinprekaj
-• run: github.com/.../actions/runs/...
-```
-
-On failure: `❌ deploy failed ...` with a hint that `--atomic` rolled back automatically.
-
-## Conventional Commits + changelog
-
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). Automated changelog generation runs from Conventional Commit prefixes (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, etc.). Dependabot PRs land with the `Bump` prefix.
+- **Deploy-only** — CD never wipes or auto-provisions data stores; the two-phase wipe stays a manual runbook.
+- **Secrets are manual** K8s Secrets (`infrastructure/gjirafa/secrets.sh`) — no ESO (cluster-scoped).
+- **Realm-only changes** (`helm/.../realm-export.template.json`) build no image, so they don't trigger CD; they ride a component deploy or a manual run.
 
 ## What this pipeline does *not* do (yet)
 
-- **No promotion gate** between `develop` and `main`. Both branches deploy to the same cluster via the same `cd.yml`. A multi-environment promotion path is post-M5.
-- **No canary / blue-green.** Releases are atomic rollouts; rollback is via `helm rollback`. K8s' default rolling update plus `helm --atomic` is enough at MVP scale.
-- **No release tags / GitHub Releases.** Image SHAs are the immutable identifier; changelog lives in the repo.
+- **No promotion gate** between `develop` and `main` — both deploy to `project-02`. Multi-environment promotion is post-M5 (tracked in [`deployment-roadmap.md`](../operations/deployment-roadmap.md)).
+- **No canary / blue-green** — rolling update + `--atomic`; rollback is `git revert` of the bump (CD redeploys the prior image) or `helm rollback`.
+- **No integration/e2e gate on the image build** — backend integration tests run locally; the `frontend-image` job omits Playwright from its `needs:`.

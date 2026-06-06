@@ -8,19 +8,19 @@ skinparam packageBorderColor #999
 skinparam packageBackgroundColor transparent
 
 actor "Operator (Admin)"    as op
-actor "Slack channel"       as slack
+actor "Discord channels"    as discord
 actor "Tenant / Landlord"   as user
 component "API process\n(prometheus-net + Serilog)" as api
 component "All other containers\n(Postgres, Redis, RabbitMQ,\nKeycloak, Frontend, AIOps,\nLoki, Prometheus, ...)" as others
 component "Public hosts\napp.X / api.X / auth.X / status.X" as public
 
 package "Metrics path" #E6F0FF {
-    component "Prometheus\n(15s scrape, 15d retention,\nServiceMonitor CRD-driven)" as prom
+    component "Prometheus\n(15s scrape, 15d retention,\nscrape wired in chart - no operator)" as prom
     database  "Prometheus TSDB\n(20Gi PVC)" as tsdb
 }
 
 package "Logs path" #E6FFE6 {
-    component "Promtail\n(DaemonSet in prod / Docker SD in dev)" as promtail
+    component "Promtail\n(DaemonSet + namespaced Role in prod /\nDocker SD in dev)" as promtail
     database  "Loki\n(10Gi PVC, label-indexed)" as loki
 }
 
@@ -35,12 +35,12 @@ package "External probes" #FFF0E0 {
     database  "Kuma SQLite\n(2Gi PVC)" as kumadb
 }
 
-component "Grafana\n(Helm dep, provisioned\ndashboards + datasources\nvia sidecar)" as grafana
+component "Grafana\n(chart-provisioned\ndashboards + datasources\nvia sidecar)" as grafana
 
 ' ====== Metrics path ======
 api      --> prom    : GET /metrics
 prom     --> tsdb    : write
-prom     --> am      : fire alerts (PrometheusRule CRDs)
+prom     --> am      : fire alerts (chart rule files)
 
 ' ====== Logs path ======
 api      --> loki    : Serilog -> Loki sink\n(structured, direct)
@@ -51,18 +51,18 @@ promtail --> loki    : HTTP push
 am     --> aiops  : webhook POST /alerts
 aiops  --> claude : triage prompt
 claude --> aiops  : triage text
-aiops  --> slack  : rich Block Kit message
+aiops  --> discord : rich embed (#alerts)
 note right of aiops
   Graceful degradation:
-  - ANTHROPIC_API_KEY empty -> raw labels posted to Slack
-  - SLACK_WEBHOOK_URL empty -> message bodies to stdout
+  - ANTHROPIC_API_KEY empty -> raw labels posted to Discord
+  - DISCORD_WEBHOOK_URL empty -> message bodies to stdout
     (-> Promtail -> Loki -> Grafana Explore)
 end note
 
 ' ====== External probes ======
 kuma --> public   : HTTPS probes\n(every 60s)
 kuma --> kumadb   : persist results
-kuma --> slack    : outage notify
+kuma --> discord  : outage notify (#uptime)
 kuma --> user     : public status page\n(status.X)
 
 ' ====== Grafana consumption ======

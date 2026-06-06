@@ -1,8 +1,10 @@
 # ADR-0004: DigitalOcean (DOKS) over GKE / EKS / AKS
 
-- **Status:** Accepted (M4.4, 2026-Q1)
+- **Status:** **Superseded** by [ADR-0009](./0009-hetzner-project-02-over-doks.md) (2026-06-01). Originally Accepted at M4.4 (2026-Q1).
 - **Deciders:** Full Team
-- **Reflected in:** [`deployment-prod.md`](../deployment-prod.md), [`cicd.md`](../cicd.md)
+- **Reflected in:** historical only — the current production target is documented in [`deployment-prod.md`](../deployment-prod.md) + [`cicd.md`](../cicd.md)
+
+> ⚠️ **Superseded.** This ADR records why we *originally* chose DigitalOcean DOKS. In the M5 "de-DOKS" pass (PR #128, 2026-06-01) the production target moved to a namespace (`project-02`) on a **shared Hetzner cluster**: Terraform, DO Managed PostgreSQL, and DO Spaces are gone, and every data store is now self-hosted in-cluster on Longhorn. The reasoning below is kept as history; see [ADR-0009](./0009-hetzner-project-02-over-doks.md) for what replaced it and why.
 
 ## Context
 

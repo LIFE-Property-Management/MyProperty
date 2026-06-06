@@ -10,8 +10,9 @@ This is the highest-level view of MyProperty Platform: who uses it, what externa
 
 - **Actors:** *Tenant* and *Landlord* are end users (different roles, different portals: `/tenant/dashboard` vs `/dashboard`). *Admin* is an internal operator with access to the Hangfire dashboard and the Keycloak realm console.
 - **System boundary:** Everything inside *MyProperty Platform* is the subject of this documentation set; it is broken open in the container view.
-- **External systems:** five — one is the identity provider (Keycloak), one is an AI API (Anthropic), one is durable storage (DO Spaces), one is a notification destination (Slack), and one is a certificate authority (Let's Encrypt).
+- **External systems:** four — the identity provider (Keycloak), an AI API (Anthropic), a notification destination (Discord), and a certificate authority (Let's Encrypt). *(Earlier revisions listed DigitalOcean Spaces for receipt storage; it went away with the move off DOKS — receipts now live on a local/PVC volume. See [ADR-0009](./adr/0009-hetzner-project-02-over-doks.md).)*
 - **Transport:** every cross-boundary edge runs over **HTTPS / TLS 1.2+**; authentication-bearing edges additionally carry **OIDC** (login) or **JWT** (subsequent API calls validated against Keycloak's JWKS).
+- **Frontend surface (recap):** the landlord portal (`/dashboard`) now spans properties, tenants, leases, payments, and invites (list + detail/CRUD); the tenant portal (`/tenant/dashboard`) covers rent + receipt submission; auth is an end-to-end Keycloak flow — hosted login, landlord self-signup, and anonymous invite acceptance. Frontend internals stay out of scope here (see L2/L3).
 
 ## Technology labels & justification
 
@@ -25,8 +26,7 @@ Every box visible in the L1 diagram appears in this table. Internal-only technol
 | Admin | Person | Internal-operator role | Operates Hangfire + Keycloak realm | — |
 | **Keycloak** | External Software System | 26.2 (Quarkus distribution) | Self-hosted OIDC/OAuth2 Identity Provider | OIDC + SSO + RBAC are M3.2 hard requirements. Self-host avoids the per-MAU pricing of Auth0/Okta. See [ADR-0001](./adr/0001-keycloak-over-custom-auth.md). |
 | **Anthropic API** | External SaaS | `claude-sonnet-4-x` (receipt OCR) + `claude-haiku-4-5-20251001` (AIOps triage) | LLM provider — receipt OCR (M3.10) and Alertmanager triage (DO-12) | Best vision quality at the receipt price point + cheapest triage tier from the same vendor. See [ADR-0005](./adr/0005-anthropic-over-openai.md). |
-| **DigitalOcean Spaces** | External managed storage | S3-compatible (`fra1` region) | Object storage for uploaded payment receipts (production only) | Same vendor as DOKS — single bill, same VPC. S3 compatibility means we keep using the AWS SDK abstractions. See [ADR-0004](./adr/0004-doks-over-gke-eks.md). |
-| **Slack** | External SaaS | Incoming Webhook v1 | Destination channel for AIOps-triaged alert notifications | Universal team-chat tool; webhook integration is one HTTP POST. |
+| **Discord** | External SaaS | Incoming Webhooks | Destination for AIOps-triaged alerts (`#alerts`), Uptime-Kuma alerts (`#uptime`), and CD deploy notices (`#deployments`) | Already the team's chat tool; webhook integration is one HTTP POST. Replaced Slack during M5. |
 | **Let's Encrypt** | External Certificate Authority | ACME v2, HTTP-01 challenge | Free, automatable TLS certificate issuance | Free, automatable, supported by Certbot (dev profile) and cert-manager (prod). |
 
 ## Edges & protocols
@@ -38,8 +38,7 @@ Every box visible in the L1 diagram appears in this table. Internal-only technol
 | Admin → Keycloak | HTTPS | Keycloak admin console | User / role / realm administration |
 | MyProperty → Keycloak | HTTPS | OIDC discovery + JWKS fetch | Validates JWTs signed by the IdP |
 | MyProperty → Anthropic | HTTPS | Vision + chat completions | Receipt OCR + AIOps triage |
-| MyProperty → DO Spaces | HTTPS | S3 PUT / GET | Receipt upload / download |
-| MyProperty → Slack | HTTPS | Webhook POST | Alert delivery |
+| MyProperty → Discord | HTTPS | Webhook POST | Alert / uptime / deploy delivery |
 | MyProperty → Let's Encrypt | HTTPS (ACME) | HTTP-01 challenge + cert issuance | TLS renewal (Certbot / cert-manager) |
 
 ## What is intentionally **not** at L1
