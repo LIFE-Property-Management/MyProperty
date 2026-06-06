@@ -332,6 +332,11 @@ services:
         NEXT_PUBLIC_KEYCLOAK_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
         NEXT_PUBLIC_KEYCLOAK_REALM: ${NEXT_PUBLIC_KEYCLOAK_REALM:-MyProperty}
         NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID:-myproperty-frontend}
+        # PostHog analytics (M6.1) — optional. Empty key by default, so local
+        # compose runs with analytics OFF (the facade no-ops). Set
+        # NEXT_PUBLIC_POSTHOG_KEY in .env to send events from local builds.
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+        NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://eu.i.posthog.com}
         # Local-only mock-auth toggle. Read by proxy.ts (middleware) and the two
         # KeycloakInit components. Never set this in CI or deployed environments.
         NEXT_PUBLIC_DEV_AUTH_BYPASS: "true"
