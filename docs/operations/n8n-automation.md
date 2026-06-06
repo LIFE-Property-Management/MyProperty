@@ -135,6 +135,13 @@ backend OCR + aiops-webhook), `DISCORD_WEBHOOK_URL` (shared with aiops-webhook),
   postgresdb`), and the import/activate as a Helm `Job` + `ANTHROPIC`/`DISCORD`
   `Secret`s. Shipping an untested manifest against a chart that itself needs
   rework would be liability, not progress — tracked for the cluster session.
+  - **Auth hardening must not carry over from the dev compose.** The local
+    service runs `N8N_USER_MANAGEMENT_DISABLED=true` and binds the editor on
+    `5678` for a login-free dev UX. n8n Code nodes execute arbitrary JS, so an
+    open, unauthenticated editor is effectively local RCE. The cluster deploy
+    **must** drop that flag (enable owner/user management), keep the editor off
+    any public ingress (webhook path only), and source `N8N_ENCRYPTION_KEY` from
+    a Secret rather than the dev default. These are dev-compose-only settings.
 - **Backend wiring.** The pipeline is self-contained (curl-triggered). Having the
   .NET API POST to `http://n8n:5678/webhook/tenant-inquiry` on a real inquiry
   event is a clean follow-up that touches no n8n-side code — the webhook contract

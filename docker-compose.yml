@@ -689,6 +689,13 @@ services:
   # Idempotent: import upserts by workflow id (no duplicates on re-up); import
   # also deactivates, which is why `update:workflow --active true` follows. Same
   # one-shot pattern as keycloak-realm-init / unleash-flag-init / uptime-kuma-init.
+  #
+  # Activation is scoped to --id (not --all): import upserts by workflow id, so
+  # the activate step targets the same id rather than re-activating every
+  # workflow in the store. Without --id, a workflow hand-created (and
+  # deliberately deactivated) in the UI would be silently force-reactivated on
+  # the next `docker compose up`. Keeping both steps id-scoped also matches the
+  # idempotent-by-id story the import already tells.
   n8n-init:
     image: n8nio/n8n:1.76.1
     container_name: myproperty-n8n-init
@@ -697,7 +704,7 @@ services:
       - >-
         n8n import:workflow --input=/import/tenant-inquiry.json
         || echo 'n8n-init: import failed (continuing)';
-        n8n update:workflow --all --active true
+        n8n update:workflow --id=MyPropertyM58Inq --active true
         || echo 'n8n-init: activate failed (continuing)'
     environment:
       # MUST match the main n8n service so the SQLite store it writes is readable.
