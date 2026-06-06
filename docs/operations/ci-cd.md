@@ -14,7 +14,7 @@ manual approval gate (see [§ Continuous deployment](#continuous-deployment-cdym
 
 ## Overview
 
-Five CI workflows cover the services + Keycloak in the repo, plus one CD workflow:
+Five service/Keycloak CI workflows, plus a cross-cutting security workflow, plus one CD workflow:
 
 | Workflow | Covers | Triggers |
 |---|---|---|
@@ -23,6 +23,7 @@ Five CI workflows cover the services + Keycloak in the repo, plus one CD workflo
 | `.github/workflows/aiops-webhook-ci.yml` | `Python` FastAPI service | `infrastructure/aiops-webhook/**` |
 | `.github/workflows/uptime-kuma-init-ci.yml` | `Python` Uptime-Kuma seed sidecar image | `infrastructure/uptime-kuma/**` |
 | `.github/workflows/realm-import-ci.yml` | Keycloak realm export smoke test (boots Keycloak on Postgres, verifies the service account) | `infrastructure/keycloak/**`, `docker-compose.yml` |
+| `.github/workflows/security-ci.yml` | **Security gates (M5.5)** — gitleaks + git-secrets secret scan, Lighthouse CI, OWASP ZAP baseline ([`../security/audit-m5.5.md`](../security/audit-m5.5.md)) | PR/push + weekly `schedule` + `workflow_dispatch` |
 | `.github/workflows/cd.yml` | **Deploy** to `project-02` (Hetzner) | `workflow_run` of the four image-CI workflows on `develop`/`main`, + `workflow_dispatch` |
 
 The three application workflows (backend, frontend, aiops-webhook) follow the same pattern:
