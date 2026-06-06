@@ -8,13 +8,13 @@ title MyProperty Platform - Components inside the API process (C4 Level 3)
 ' ====== Peer containers (drawn but not decomposed) ======
 Container(fe, "Frontend", "Next.js 16", "Browser-side caller")
 Container(kc, "Keycloak 26.2", "OIDC IdP", "JWT issuer + JWKS")
-ContainerDb(pg, "PostgreSQL 16", "Database", "App + Hangfire + Keycloak schemas")
+ContainerDb(pg, "PostgreSQL 16", "Database", "App + Hangfire + Keycloak + Unleash schemas")
 ContainerDb(redis, "Redis 7", "Cache + backplane", "Cache-aside + SignalR")
 ContainerQueue(mq, "RabbitMQ 3", "Event bus", "'myproperty.events' topic exchange")
+Container(unleash, "Unleash OSS", "Feature flags", "Backend SDK polls a cached snapshot")
 
 Container_Ext(anthropic, "Anthropic API", "LLM SaaS", "Vision + chat completions")
 Container_Ext(smtp, "SMTP server", "External", "MailHog (dev) / TBD (prod)")
-Container_Ext(spaces, "DO Spaces", "External", "S3-compatible (prod only)")
 
 ' ====== The API process - decomposed by Clean Architecture project ======
 Container_Boundary(apiproc, "API process (.NET 10, single OS process)") {
@@ -38,14 +38,16 @@ Container_Boundary(apiproc, "API process (.NET 10, single OS process)") {
         Component(absEmail,    "IEmailSender",     "Interface",       "")
         Component(absOcr,      "IReceiptOcrService","Interface",       "")
         Component(absFile,     "IFileStorage",      "Interface",       "")
-        Component(absJobs,     "IBackgroundJobQueue","Interface",      "EnqueueEmail(EmailMessage)")
+        Component(absJobs,     "IBackgroundJobQueue","Interface",      "EnqueueEmail / EnqueueReceiptOcr")
+        Component(absCurrentUser, "ICurrentUserContext", "Interface",  "Keycloak sub -> User (resolve / sync)")
+        Component(absFlags,    "IFeatureFlags",     "Interface",       "IsEnabledAsync(flag, default, ct); safe-by-default")
     }
 
     ' ---- Domain project ----
     Container_Boundary(domainProj, "MyProperty.Domain") {
         Component(baseEntity, "BaseEntity",         "Abstract", "Id, CreatedAt, UpdatedAt, DeletedAt, CreatedBy, UpdatedBy")
         Component(aggregates, "Aggregate roots",    "Pure C#",  "Tenant, Landlord, Property, Lease, Invite, Payment, FailedEmail")
-        Component(events,     "Integration events", "Pure C#",  "PaymentSubmitted, PaymentConfirmed, PaymentRejected, InviteAccepted, InviteRejected, LeaseExpiringSoon")
+        Component(events,     "Integration events", "Pure C#",  "PaymentSubmitted, PaymentConfirmed, PaymentRejected, PaymentCreated\n(Invite + Lease events planned, not yet emitted)")
     }
 
     ' ---- Infrastructure project ----
@@ -54,12 +56,14 @@ Container_Boundary(apiproc, "API process (.NET 10, single OS process)") {
         Component(repos,     "Repository implementations",         "EF Core",      "Per-aggregate, materialised results (no IQueryable leak)")
         Component(rmqProd,   "RabbitMqEventPublisher",             "RabbitMQ.Client 7", "Publishes events; routing key derived from event type name")
         Component(rmqCons,   "5 RabbitMQ consumers",               "Hosted services","PaymentSubmitted, PaymentSubmittedOcr, PaymentConfirmed, PaymentRejected, PaymentCreated")
-        Component(hfJobs,    "Hangfire ad-hoc jobs",               "Scoped",       "SendEmailJob (retry x5 + DLQ to FailedEmails table), ReceiptOcrJob.\nRecurring scans (mark expired invites, orphan cleanup, overdue, lease-expiring) are\nM3 follow-ups - not yet scheduled.")
+        Component(hfJobs,    "Hangfire jobs",               "Scoped",       "Ad-hoc: SendEmailJob (retry x5 + DLQ), ReceiptOcrJob.\nRecurring (scheduled): MarkExpiredInvitesJob (hourly),\nOrphanCleanupJob (daily 03:00 UTC). Overdue + lease-expiring still follow-ups.")
         Component(anthropicSvc,"AnthropicReceiptOcrService",       "anthropic SDK","Vision -> {amount, date, merchant}")
         Component(emailSvc,  "MailKitEmailSender",                "MailKit 4",    "SMTP send")
-        Component(fileSvc,   "LocalFileStorage",                   "Filesystem",   "{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}; Spaces impl pending (M5)")
+        Component(fileSvc,   "LocalFileStorage",                   "Filesystem",   "{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext} on a PVC; Spaces/S3 impl a follow-up")
         Component(redisCache,"RedisLandlordDashboardCache",        "IDistributedCache","60s TTL; cache-aside; invalidated on writes")
         Component(kcAuth,    "Keycloak JWKS + RolesTransformer",   "JwtBearer + IClaimsTransformation", "Validates JWT; realm_access.roles -> ASP.NET role claims")
+        Component(curUserSvc,"CurrentUserContext",                 "Identity",     "Wraps ICurrentUser + IUserRepository")
+        Component(flagsSvc,  "UnleashFeatureFlags / NullFeatureFlags", "Unleash.Client", "Cached snapshot; Null fallback when no token")
     }
 }
 
@@ -80,6 +84,7 @@ Rel(aggregates, baseEntity,  "Inherit")
 Rel(handlers, absRepos,  "Persist / query")
 Rel(handlers, absJobs,   "Enqueue email work")
 Rel(handlers, absFile,   "Upload / download receipts")
+Rel(handlers, absCurrentUser, "Resolve caller (sub -> User)")
 
 ' ====== Handler -> RabbitMQ producer ======
 Rel(handlers, rmqProd, "Publish IIntegrationEvent")
@@ -93,6 +98,8 @@ Rel(absOcr,   anthropicSvc, "Implemented by")
 Rel(absFile,  fileSvc,   "Implemented by")
 Rel(absDisp,  notifDispatcher, "Implemented in Api")
 Rel(absJobs,  hfJobs,    "Backed by Hangfire")
+Rel(absCurrentUser, curUserSvc, "Implemented by")
+Rel(absFlags, flagsSvc,  "Implemented by")
 
 ' ====== Repos / cache / migrations -> Postgres ======
 Rel(repos, dbContext,    "Query / SaveChanges")
@@ -103,6 +110,7 @@ Rel(redisCache, redis,   "GET / SET")
 Rel(rmqCons, mq,          "Consume (AMQP)")
 Rel(rmqCons, absJobs,     "Enqueue Hangfire job (email / OCR)")
 Rel(rmqCons, absDisp,     "Push SignalR notification")
+Rel(rmqCons, absFlags,    "Check ocr-autoextract flag")
 Rel(notifDispatcher, hub, "Hub group push")
 
 ' ====== Hangfire jobs -> external systems ======
@@ -110,8 +118,8 @@ Rel(hfJobs, anthropicSvc, "OCR call")
 Rel(hfJobs, emailSvc,     "Send email")
 Rel(anthropicSvc, anthropic, "HTTPS")
 Rel(emailSvc, smtp,        "SMTP via MailKit")
-Rel(fileSvc, spaces,       "S3 PUT/GET (prod swap)")
+Rel(flagsSvc, unleash,     "Poll flags (cached)", "HTTP")
 
-' (Recurring scan -> repos edge removed: scans not yet scheduled.)
+' Recurring scans now scheduled (MarkExpiredInvites hourly, OrphanCleanup daily 03:00 UTC).
 
 @enduml

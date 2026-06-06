@@ -1,6 +1,6 @@
 # Deployment — Dev (Docker Compose)
 
-The local development stack. One `docker compose up` brings up 17 services on a single bridge network (`myproperty-net`); two more come up when you opt into the `--profile proxy` flag for the Nginx + Certbot edge.
+The local development stack. One `docker compose up` brings up 19 services on a single bridge network (`myproperty-net`); two more come up when you opt into the `--profile proxy` flag for the Nginx + Certbot edge.
 
 ![Dev deployment topology (docker compose)](./diagrams/deployment-dev.svg)
 
@@ -8,17 +8,17 @@ The local development stack. One `docker compose up` brings up 17 services on a 
 
 ## What you get from `docker compose up`
 
-A complete, production-shaped stack on the local machine — every external dependency the API talks to in production is either the same image (Postgres, Redis, RabbitMQ, Keycloak, Loki/Promtail/Prometheus/Grafana/Alertmanager) or a drop-in dev substitute (MailHog for SMTP, local-volume backend storage in place of DigitalOcean Spaces).
+A complete, production-shaped stack on the local machine — every dependency the API talks to in production runs here as the same image (Postgres, Redis, RabbitMQ, Keycloak, Unleash, Loki/Promtail/Prometheus/Grafana/Alertmanager) or a drop-in dev substitute (MailHog for SMTP). Receipt storage uses the local-volume `LocalFileStorage` in dev *and* prod.
 
 ## Service inventory
 
-19 services total, 17 default + 2 behind the `proxy` profile. Init containers are one-shots that exit after they've prepared a volume or seeded a peer.
+21 services total, 19 default + 2 behind the `proxy` profile. Init containers are one-shots that exit after they've prepared a volume or seeded a peer.
 
-### Default profile (17 services)
+### Default profile (19 services)
 
 | # | Service | Image | Host port(s) | Volume(s) | Role |
 |---|---|---|---|---|---|
-| 1 | `postgres` | `postgres:16-alpine` | 5432 | `postgres_data`, `init.sql` (RO bind) | App + Keycloak + Hangfire schemas |
+| 1 | `postgres` | `postgres:16-alpine` | 5432 | `postgres_data`, `init.sql` (RO bind) | App + Keycloak + Hangfire + Unleash databases |
 | 2 | `keycloak-realm-init` | `alpine:3.20` (one-shot) | — | `keycloak_import` (RW) | `envsubst` realm template → import volume |
 | 3 | `keycloak` | `quay.io/keycloak/keycloak:26.2` | 8080 | `keycloak_import` (RO) | OIDC IdP + admin console |
 | 4 | `backend-storage-init` | `alpine:3.20` (one-shot, UID 0) | — | `backend_storage` (RW) | `chown` to UID 1654 for non-root backend |
@@ -31,17 +31,19 @@ A complete, production-shaped stack on the local machine — every external depe
 | 11 | `promtail` | `grafana/promtail:3.2.0` | — | `promtail_positions` + Docker socket + `/var/lib/docker/containers` (RO) | Tails **every** container's stdout via Docker SD |
 | 12 | `prometheus` | `prom/prometheus:v2.55.0` | 9090 | `prometheus_data`, `prometheus.yml` + `alerts/` (RO) | Metrics + alert rules; `--web.enable-lifecycle` for hot reload |
 | 13 | `alertmanager` | `prom/alertmanager:v0.27.0` | 9093 | `alertmanager_data`, `alertmanager.yml` (RO) | Alert routing |
-| 14 | `aiops-webhook` | `myproperty-aiops-webhook:dev` (python:3.14-slim, non-root) | 5001 | — | Alertmanager → Claude Haiku → Slack |
+| 14 | `aiops-webhook` | `myproperty-aiops-webhook:dev` (python:3.14-slim, non-root) | 5001 | — | Alertmanager → Claude Haiku → Discord (`#alerts`) |
 | 15 | `grafana` | `grafana/grafana:11.1.0` | 3001 → 3000 | `grafana_data`, provisioning dir (RO) | Dashboards (anonymous Admin — **dev only**) |
 | 16 | `uptime-kuma` | `louislam/uptime-kuma:1.23.16-alpine` | 3002 → 3001 | `uptime_kuma_data` | External HTTPS probes + status page |
 | 17 | `uptime-kuma-init` | `myproperty-uptime-kuma-init:dev` (custom) | — | — | One-shot socket.io seed of monitors + notify channels |
+| 18 | `unleash` | `unleashorg/unleash-server:7.6.4` | 4242 | — (uses Postgres `unleash` DB) | **Feature flags (M5.6)** — UI + API at `:4242`; seeds a fixed client token |
+| 19 | `unleash-flag-init` | `alpine:3.20` (one-shot) | — | `seed-flags.sh` (RO bind) | Seeds + enables `payments.ocr-autoextract` via the Unleash Admin API |
 
 ### `proxy` profile (2 extras — opt-in via `docker compose --profile proxy up`)
 
 | # | Service | Image | Host port(s) | Volume(s) | Role |
 |---|---|---|---|---|---|
-| 18 | `nginx` | `nginx:1.27-alpine` | 80, 443 | `certbot_certs` (RO), `certbot_www` (RO), templated config (RO) | Routes 4 subdomains, reloads every 6 h |
-| 19 | `certbot` | `certbot/certbot:v2.11.0` | — | `certbot_certs` (RW), `certbot_www` (RW) | `certbot renew` every 12 h |
+| 20 | `nginx` | `nginx:1.27-alpine` | 80, 443 | `certbot_certs` (RO), `certbot_www` (RO), templated config (RO) | Routes 4 subdomains, reloads every 6 h |
+| 21 | `certbot` | `certbot/certbot:v2.11.0` | — | `certbot_certs` (RW), `certbot_www` (RW) | `certbot renew` every 12 h |
 
 ## Volumes (12 named volumes)
 
@@ -62,13 +64,14 @@ A complete, production-shaped stack on the local machine — every external depe
 
 ## Init-container pattern
 
-Three services use the *one-shot init container* pattern — a sidecar that prepares a named volume, then exits. The dependent service uses `depends_on: condition: service_completed_successfully`. This pattern maps 1:1 to a Kubernetes `initContainer` (see [`deployment-prod.md`](./deployment-prod.md)):
+Four services use the *one-shot init container* pattern — a sidecar that prepares a named volume or seeds a peer, then exits. Volume-prep ones gate the dependent service via `depends_on: condition: service_completed_successfully`; seed ones just run once the peer is healthy. This pattern maps 1:1 to a Kubernetes `initContainer` / post-install hook (see [`deployment-prod.md`](./deployment-prod.md)):
 
-| Init | Prepares | Gates |
+| Init | Prepares / seeds | Gates |
 |---|---|---|
 | `keycloak-realm-init` | `keycloak_import` (renders realm template via `envsubst`) | `keycloak` startup |
 | `backend-storage-init` | `backend_storage` (chowns to UID 1654 for chiseled backend) | `backend` startup |
 | `uptime-kuma-init` | Seeds monitors + notification channels via Kuma's socket.io API | (No gate; runs after `uptime-kuma` is healthy) |
+| `unleash-flag-init` | Seeds + enables `payments.ocr-autoextract` via the Unleash Admin API | (No gate; runs after `unleash` is healthy) |
 
 ## Healthcheck conventions
 
@@ -84,9 +87,9 @@ These deltas are intentional — they're justified in [`deployment-prod.md`](./d
 | Concern | Dev | Prod |
 |---|---|---|
 | SMTP | `mailhog` (catcher; emails visible at `:8025`) | TBD external provider |
-| Object storage | `backend_storage` volume (LocalFileStorage) | DigitalOcean Spaces (SpacesFileStorage — M5 swap) |
-| Edge / TLS | Nginx + Certbot in `proxy` profile (opt-in) | K8s Ingress + cert-manager + Let's Encrypt (always-on) |
-| Postgres | Local container | DO Managed PostgreSQL 16 |
+| Object storage | `backend_storage` volume (`LocalFileStorage`) | **Same** — `LocalFileStorage` on a Longhorn PVC (a Spaces/S3 adapter is a follow-up) |
+| Edge / TLS | Nginx + Certbot in `proxy` profile (opt-in) | ingress-nginx + namespaced cert-manager `Issuer` + Let's Encrypt (always-on) |
+| Postgres | Local container | Self-hosted StatefulSet on Longhorn (same `postgres:16` image) |
 | Grafana auth | Anonymous Admin | OIDC-backed |
 | Service-discovery | `myproperty-net` Docker bridge (one network) | K8s ClusterIP services + NetworkPolicies |
 | Image tagging | `:dev` | `:{short-sha}` + `:{branch}` (CI-pushed) |
@@ -94,10 +97,10 @@ These deltas are intentional — they're justified in [`deployment-prod.md`](./d
 ## How to run
 
 ```bash
-# Default stack (17 services)
+# Default stack (19 services)
 docker compose up -d
 
-# Add Nginx + Certbot edge (19 services)
+# Add Nginx + Certbot edge (21 services)
 docker compose --profile proxy up -d
 
 # Tail everything via Loki
@@ -117,3 +120,4 @@ External UIs at a glance:
 | Alertmanager | http://localhost:9093 |
 | Grafana | http://localhost:3001 |
 | Uptime Kuma + status page | http://localhost:3002 |
+| Unleash (feature flags) | http://localhost:4242 |

@@ -43,7 +43,9 @@ The full lifecycle of a receipt: synchronous upload + multipart parse + storage,
 
 **Two-step asynchrony, single multipart request:** the tenant's submit POST is single-step (the multipart endpoint takes file + fields together) — but the OCR is decoupled via RabbitMQ → Hangfire so the upload response isn't blocked on a 30-second Claude call. This means the OCR result lands a few seconds *after* the synchronous response.
 
-**File storage abstraction earns its keep:** `IFileStorage` lets the dev `LocalFileStorage` (writes to a Docker named volume) and the planned prod `SpacesFileStorage` (writes to DigitalOcean Spaces via S3 PUT) be swapped without changing handler or job code. Same `UploadAsync` / `DownloadAsync` surface, different adapter. See [L3 → `IFileStorage`](./components.md#mypropertyapplication--use-cases--ports).
+**The OCR step is behind a feature flag (M5.6):** `PaymentSubmittedOcrConsumer` checks `payments.ocr-autoextract` (self-hosted Unleash) before enqueuing the Hangfire job. The default is **on** and **fail-open** — if Unleash is unreachable, OCR still runs. When an operator flips the flag off, submitted receipts simply stay manual-entry and no Anthropic call is made — the kill-switch decouples AI-cost/vendor control from the deploy cycle. See [ADR-0010](./adr/0010-unleash-for-feature-flags.md).
+
+**File storage abstraction earns its keep:** `IFileStorage` means storage backends swap without touching handler or job code. Today `LocalFileStorage` is used in **both** dev (a Docker named volume) and prod (a Longhorn PVC); a cloud `SpacesFileStorage`/S3 adapter is a follow-up — it was originally tied to the now-retired DO Spaces ([ADR-0009](./adr/0009-hetzner-project-02-over-doks.md)). Same `UploadAsync` / `DownloadAsync` surface, different adapter. See [L3 → `IFileStorage`](./components.md#mypropertyapplication--use-cases--ports).
 
 **Failure modes that *are* handled in code (not the diagram):**
 

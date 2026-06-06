@@ -25,7 +25,7 @@ Concretely:
 - **Infrastructure** depends on **Application** (for the interfaces it implements) + **Domain** (for entities).
 - **Api** depends on **Application** + **Infrastructure**.
 
-Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `IEmailSender`, `IReceiptOcrService`, `IFileStorage`, `IBackgroundJobQueue` — are the **ports**; Infrastructure's `PaymentRepository`, `SignalRNotificationDispatcher`, `MailKitEmailSender`, `AnthropicReceiptOcrService`, `LocalFileStorage`, and Hangfire backing are the **adapters**. Handlers in Application never know which adapter is wired in.
+Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `IEmailSender`, `IReceiptOcrService`, `IFileStorage`, `IBackgroundJobQueue`, `ICurrentUserContext`, `IFeatureFlags` — are the **ports**; Infrastructure's `PaymentRepository`, `SignalRNotificationDispatcher`, `MailKitEmailSender`, `AnthropicReceiptOcrService`, `LocalFileStorage`, `CurrentUserContext`, `UnleashFeatureFlags`, and Hangfire backing are the **adapters**. Handlers in Application never know which adapter is wired in.
 
 ## Components per project
 
@@ -51,7 +51,9 @@ Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `I
 | `IEmailSender` | Abstraction | Send email. |
 | `IReceiptOcrService` | Abstraction | OCR a receipt image → {amount, date, merchant}. |
 | `IFileStorage` | Abstraction | Upload / download / delete. **No** `GetSignedUrlAsync` until a cloud impl appears. |
-| `IBackgroundJobQueue` | Abstraction | `EnqueueEmail(EmailMessage)` — handlers enqueue via this; tests record without hitting Hangfire. |
+| `IBackgroundJobQueue` | Abstraction | `EnqueueEmail(EmailMessage)` / `EnqueueReceiptOcr(paymentId)` — handlers + consumers enqueue via this; tests record without hitting Hangfire. |
+| `ICurrentUserContext` | Abstraction | Resolves the authenticated caller (Keycloak `sub` → `User`) centrally. `GetUserAsync` throws `ForbiddenException` if unauthenticated/unknown; `GetOrSyncUserAsync` provisions from the `ClaimsPrincipal`. Replaced the sub→`User` lookup copy-pasted across the payment handlers (M5 cleanup, PR #151). |
+| `IFeatureFlags` | Abstraction | `IsEnabledAsync(flag, defaultValue, ct)`. Safe-by-default — returns the supplied default if the flag is unknown or the provider is unreachable. Keeps `Application` free of the Unleash SDK (same rule as `IBackgroundJobQueue`). |
 
 ### `MyProperty.Domain` — pure C#
 
@@ -68,13 +70,15 @@ Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `I
 | `AppDbContext` + `AuditingInterceptor` | EF Core 10, Npgsql | The only DbContext. Configurations live in `Configurations/<Entity>Configuration.cs` using `IEntityTypeConfiguration<T>`. Interceptor reads `IHttpContextAccessor` to set audit fields. |
 | Repositories | EF Core 10 | One per aggregate. `PaymentRepository`, `LeaseRepository`, `TenantRepository`, `InviteRepository`, `LandlordRepository`, `UserRepository`. **No** generic `IRepository<T>` base. |
 | `RabbitMqEventPublisher` | RabbitMQ.Client 7 | Publishes any `IIntegrationEvent` to the `myproperty.events` topic exchange. Routing key derived from event type name (`PaymentConfirmedEvent` → `payment.confirmed`). |
-| 5 RabbitMQ consumers | Hosted services | `PaymentSubmittedConsumer`, `PaymentSubmittedOcrConsumer`, `PaymentConfirmedConsumer`, `PaymentRejectedConsumer`, `PaymentCreatedConsumer`. Translate events into side effects (Hangfire enqueue + SignalR push). No business logic. |
-| Hangfire jobs | Scoped services | Two ad-hoc jobs are wired today: `SendEmailJob` (5 retries, exponential backoff, DLQ to `FailedEmails` table on exhaustion) and `ReceiptOcrJob`. *Four recurring scans (mark expired invites, orphan cleanup, mark overdue payments, lease-expiring scan) are documented in `backend/CLAUDE.md` as M3 follow-ups; not yet scheduled via `RecurringJob.AddOrUpdate`.* |
+| 5 RabbitMQ consumers | Hosted services | `PaymentSubmittedConsumer`, `PaymentSubmittedOcrConsumer`, `PaymentConfirmedConsumer`, `PaymentRejectedConsumer`, `PaymentCreatedConsumer`. Translate events into side effects (Hangfire enqueue + SignalR push). No business logic. The OCR consumer checks the `payments.ocr-autoextract` feature flag before enqueueing `ReceiptOcrJob`. |
+| Hangfire jobs | Scoped services | Two ad-hoc jobs (`SendEmailJob` — 5 retries, exponential backoff, DLQ to `FailedEmails` on exhaustion — and `ReceiptOcrJob`) plus **two recurring scans now scheduled** in `Program.cs` via `RecurringJob.AddOrUpdate`: `MarkExpiredInvitesJob` (hourly, `0 * * * *`) and `OrphanCleanupJob` (daily 03:00 UTC, `0 3 * * *`, hard-deletes Expired invites older than 30 days). Two further scans (mark overdue payments, lease-expiring) remain `backend/CLAUDE.md` follow-ups. |
 | `AnthropicReceiptOcrService` | anthropic SDK | Sends receipt image to Claude vision → parses JSON response → writes back to `Payment.OcrResults`. |
 | `MailKitEmailSender` | MailKit 4 | SMTP send. |
-| `LocalFileStorage` | Filesystem | Stores at `{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}`. Path-traversal rejected at resolve time. Cloud impl (`SpacesFileStorage`) planned for M5; same interface. |
+| `LocalFileStorage` | Filesystem | Stores at `{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}` on a PVC (dev + prod). Path-traversal rejected at resolve time. A cloud impl (`SpacesFileStorage`) remains a follow-up — it was tied to the now-retired DO Spaces ([ADR-0009](./adr/0009-hetzner-project-02-over-doks.md)); same interface when it lands. |
 | `RedisLandlordDashboardCache` | `IDistributedCache` over StackExchange.Redis | Cache-aside on `GetLandlordDashboardQuery`. 60s TTL. Invalidated on writes (payment submitted / confirmed / rejected). |
 | Keycloak JWKS + `KeycloakRolesTransformer` | `JwtBearer` + `IClaimsTransformation` | Validates JWTs against Keycloak's JWKS endpoint. Maps `realm_access.roles` → ASP.NET role claims so `[Authorize(Roles = "...")]` works. |
+| `CurrentUserContext` | Implements `ICurrentUserContext` (in `Identity/`) | Wraps `ICurrentUser` (the `ClaimsPrincipal`) + `IUserRepository` to resolve or sync the caller's `User` from the Keycloak `sub`. |
+| `UnleashFeatureFlags` / `NullFeatureFlags` | Implements `IFeatureFlags` (`Unleash.Client` SDK) | `UnleashFeatureFlags` evaluates against a background-polled in-memory snapshot (no per-call I/O); `NullFeatureFlags` is the no-op fallback that `AddFeatureFlags` registers when no Unleash token is configured. See [ADR-0010](./adr/0010-unleash-for-feature-flags.md). |
 
 ## Notable choices (cross-referenced)
 
@@ -87,6 +91,8 @@ Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `I
 | **No generic `IRepository<T>`** | [`backend/CLAUDE.md`](../../backend/CLAUDE.md) → Repositories section |
 | **`SignalRNotificationDispatcher` lives in `Api`** | Keeps Infrastructure's RabbitMQ consumers free of an Api reference; see [`backend/CLAUDE.md`](../../backend/CLAUDE.md) → Push mechanics |
 | **No `GetSignedUrlAsync` on `IFileStorage`** | [`backend/CLAUDE.md`](../../backend/CLAUDE.md) → File Storage |
+| **Self-hosted Unleash feature flags** (receipt-OCR kill-switch) | [ADR-0010](./adr/0010-unleash-for-feature-flags.md) |
+| **`ICurrentUserContext`** centralises the Keycloak `sub` → `User` lookup | M5 backend cleanup (PR #151) |
 
 ## Out of scope at this level
 

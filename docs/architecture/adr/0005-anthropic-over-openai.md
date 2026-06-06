@@ -4,6 +4,8 @@
 - **Deciders:** Full Team
 - **Reflected in:** [`context.md`](../context.md), [`containers.md`](../containers.md), [`components.md`](../components.md), [`data-flow.md`](../data-flow.md), [`observability.md`](../observability.md)
 
+> **Note (M5):** the AIOps notification target later moved from **Slack to Discord** — the webhook now posts native Discord embeds via `httpx` (no `slack-sdk`), and a feature-flag kill-switch ([ADR-0010](./0010-unleash-for-feature-flags.md)) now gates the receipt-OCR path. The "Slack" references below are the original M3.10 / M4.11 context; the decision recorded here (Anthropic over OpenAI/Vertex, OCR over RAG) is unchanged. Current behaviour: [`observability.md`](../observability.md).
+
 ## Context
 
 M3.10 mandates **at least one AI-powered feature using OpenAI / Anthropic API**. M4.11 mandates **AIOps pipeline (Webhook → LLM → Slack auto-triage)**. The original BE-17 / M3.10 requirement listed **RAG + pgvector + semantic search**.

@@ -10,7 +10,7 @@ Deployment_Node(host, "Developer workstation", "Docker Engine 29", "docker compo
     Deployment_Node(net, "myproperty-net", "Docker bridge network") {
 
         Deployment_Node(data, "Data tier", "long-lived") {
-            ContainerDb(pg,    "postgres",  "postgres:16-alpine | host :5432 | vol postgres_data", "App + Keycloak + Hangfire schemas")
+            ContainerDb(pg,    "postgres",  "postgres:16-alpine | host :5432 | vol postgres_data", "App + Keycloak + Hangfire + Unleash databases")
             ContainerDb(redis, "redis",     "redis:7-alpine | host :6379 | --save '' --appendonly no", "No persistence by design")
             ContainerQueue(mq, "rabbitmq",  "rabbitmq:3-management | :5672 AMQP + :15672 UI | vol rabbitmq_data", "guest/guest")
         }
@@ -44,7 +44,12 @@ Deployment_Node(host, "Developer workstation", "Docker Engine 29", "docker compo
         }
 
         Deployment_Node(aiops, "AIOps", "Alert triage") {
-            Container(aw, "aiops-webhook", "myproperty-aiops-webhook:dev (python:3.14-slim, non-root) | host :5001 | env: ANTHROPIC_API_KEY + SLACK_WEBHOOK_URL", "FastAPI; graceful degradation if keys empty")
+            Container(aw, "aiops-webhook", "myproperty-aiops-webhook:dev (python:3.14-slim, non-root) | host :5001 | env: ANTHROPIC_API_KEY + DISCORD_WEBHOOK_URL", "FastAPI; Discord embeds; graceful degradation if keys empty")
+        }
+
+        Deployment_Node(ff, "Feature flags (M5.6)", "Unleash + seed") {
+            Container(unl,     "unleash",           "unleashorg/unleash-server:7.6.4 | host :4242 | uses Postgres 'unleash' DB", "Seeded client token; UI + API")
+            Container(unlInit, "unleash-flag-init", "alpine:3.20 (one-shot, restart: no)", "Seeds payments.ocr-autoextract via Admin API")
         }
 
         Deployment_Node(edge, "Edge (compose profile: proxy)", "opt-in via --profile proxy") {
@@ -58,6 +63,7 @@ Deployment_Node(host, "Developer workstation", "Docker Engine 29", "docker compo
 Rel(kcInit, kc,  "Volume hand-off (keycloak_import)", "service_completed_successfully")
 Rel(beInit, be,  "Ownership hand-off (backend_storage)", "service_completed_successfully")
 Rel(ukInit, uk,  "Seeds via socket.io API", "after uptime-kuma is healthy")
+Rel(unlInit, unl, "Seeds flag via Admin API", "after unleash is healthy")
 
 ' === Data dependencies ===
 Rel(be, pg,    "Npgsql", "TCP :5432")
@@ -65,7 +71,9 @@ Rel(be, redis, "Cache-aside + SignalR backplane", "TCP :6379")
 Rel(be, mq,    "Publish + consume", "AMQP :5672")
 Rel(be, kc,    "JWKS validate", "HTTP :8080")
 Rel(be, mh,    "SMTP", "TCP :1025")
+Rel(be, unl,   "Feature-flag SDK poll", "HTTP :4242")
 Rel(kc, pg,    "Realm + user DB", "TCP :5432")
+Rel(unl, pg,   "Unleash DB", "TCP :5432")
 Rel(fe, be,    "REST + WSS planned", "HTTP :8080")
 Rel(fe, kc,    "OIDC login", "HTTP :8080")
 
