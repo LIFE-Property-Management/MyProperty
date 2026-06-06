@@ -38,7 +38,9 @@ paths = [
   # ── Unit-test fixture: a fake invite-token literal used by the validator test.
   '''backend/MyProperty\.Tests/Unit/Validators/AcceptInviteValidatorTests\.cs''',
   # ── This audit's own raw scan artifacts (match strings already redacted).
-  '''docs/security/''',
+  #    Scoped to the specific report files — NOT the whole folder — so any
+  #    secret later committed under docs/security/ is still flagged.
+  '''docs/security/(git-secrets-scan\.txt|gitleaks-report\.json|gitleaks-pre-allowlist-history\.json|trufflehog-report\.jsonl|zap-frontend-report\.(html|json|md)|lighthouse-security-home\.report\.(html|json))$''',
 ]
 
 regexes = [

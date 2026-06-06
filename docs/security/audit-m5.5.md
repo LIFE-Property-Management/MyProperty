@@ -49,9 +49,11 @@ gitleaks **v8.30.1**, default ruleset, no allowlist on the first pass. Raw resul
 | `docs/performance/m3-sql-optimization/README.md:261,271` | `generic-api-key` | `EXPLAIN ANALYZE` query-plan output — `Index Cond: Token = '<hex>'` from the M3.4 invite-by-token benchmark | False positive |
 | `frontend/.next/dev/*` (×5: `prerender-manifest.json`, `server-reference-manifest.json`, `.rscinfo`, a chunk) | `generic-api-key` | Next.js-generated `previewModeSigningKey` / `previewModeEncryptionKey` / RSC `encryptionKey` — randomized per build, **gitignored, never committed** | False positive |
 
-The 5 working-tree-only matches are all under `frontend/.next/` — the `dir` scan walks gitignored files, whereas the CI gate runs `git` on a clean checkout where `.next/` does not exist.
+On the audit checkout the 5 working-tree-only matches were all under `frontend/.next/` — the `dir` scan walks gitignored files, whereas the CI gate runs `git` on a clean checkout where `.next/` does not exist.
 
-**Triage.** A [`.gitleaks.toml`](../../.gitleaks.toml) allowlist (repo root) records each false positive with a rationale — the same triage discipline as `.trivyignore` for CVEs (a *real* secret is never allowlisted; it is rotated and purged from history). **Post-allowlist re-scan = 0 findings** in both `git` and `dir` modes, so the CI gate is green. Artifacts: [`gitleaks-pre-allowlist-history.json`](./gitleaks-pre-allowlist-history.json) (the triaged findings) and [`gitleaks-report.json`](./gitleaks-report.json) (clean, post-allowlist).
+> **`dir`-mode caveat (environment-dependent).** Because `dir` reads gitignored files, its result depends on what untracked files happen to exist locally. On a developer machine that holds real local-only credentials — e.g. `infrastructure/gjirafa/.secrets.env` or a `*.kubeconfig` — the `dir` scan **will additionally flag those as genuine secrets**. That is expected and is **not** a leak: those files are gitignored and never committed, so the blocking CI gate (`git` mode, history only) never sees them. They are deliberately **not** allowlisted, so that a real secret force-committed into one of those paths would still be caught.
+
+**Triage.** A [`.gitleaks.toml`](../../.gitleaks.toml) allowlist (repo root) records each false positive with a rationale — the same triage discipline as `.trivyignore` for CVEs (a *real* secret is never allowlisted; it is rotated and purged from history). **Post-allowlist re-scan = 0 findings** in `git` mode — the blocking CI gate — and 0 in `dir` mode on a clean checkout free of local secret-bearing files (see the `dir`-mode caveat above). Artifacts: [`gitleaks-pre-allowlist-history.json`](./gitleaks-pre-allowlist-history.json) (the triaged findings) and [`gitleaks-report.json`](./gitleaks-report.json) (clean, post-allowlist).
 
 ### 2.2 trufflehog — verified-credential sweep
 
@@ -207,6 +209,10 @@ docker run --rm --entrypoint sh -v "$PWD:/repo" -w /repo alpine/git -c '
   git secrets --scan; git secrets --scan-history'
 
 # 2a. gitleaks — history + working tree (honors .gitleaks.toml)
+# NOTE: `dir` reads gitignored files, so on a machine holding real local-only
+# secrets (e.g. infrastructure/gjirafa/.secrets.env, *.kubeconfig) it will flag
+# those genuine credentials. That is expected — they are untracked/never
+# committed, so the `git`-mode gate below (what CI runs) does not see them.
 docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest git /repo -c /repo/.gitleaks.toml --redact
 docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest dir /repo -c /repo/.gitleaks.toml --redact
 
