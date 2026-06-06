@@ -10,6 +10,7 @@ import Spinner from "@/components/ui/Spinner";
 import DataTable from "@/components/ui/DataTable";
 import { useLandlordPropertyDetail } from "@/lib/hooks/useLandlordPropertyDetail";
 import { useDeleteProperty } from "@/lib/hooks/useDeleteProperty";
+import { ANALYTICS_EVENTS, capture } from "@/lib/analytics";
 import { formatDate } from "@/lib/utils/formatDate";
 import type { PropertyTenant } from "@/lib/types/landlord/property";
 
@@ -221,6 +222,12 @@ export default function PropertyDetailView({ propertyId }: { propertyId: string 
                         as a primary CTA without revisiting this. */}
                     <Link
                         href="/dashboard/invites"
+                        // Landlord activation funnel — step 4 (intent to invite). This is
+                        // the last measurable step until the invite-creation flow ships and
+                        // can fire ANALYTICS_EVENTS.tenantInvited. See events.ts.
+                        onClick={() =>
+                            capture(ANALYTICS_EVENTS.tenantInviteStarted, { propertyId })
+                        }
                         className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150"
                     >
                         Invite Tenant

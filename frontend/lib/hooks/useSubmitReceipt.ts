@@ -7,6 +7,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import apiClient from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
+import { ANALYTICS_EVENTS, capture } from "@/lib/analytics";
 import { queryKeys } from "./queryKeys";
 
 export function useSubmitReceipt() {
@@ -17,6 +18,8 @@ export function useSubmitReceipt() {
             await apiClient.post(ENDPOINTS.submitReceipt, formData);
         },
         onSuccess: () => {
+            // Payment-collection funnel — receipt-upload completion.
+            capture(ANALYTICS_EVENTS.paymentReceiptSubmitted);
             queryClient.invalidateQueries({
                 queryKey: queryKeys.tenant.payment.current(),
             });
