@@ -609,6 +609,115 @@ services:
       - myproperty-net
     restart: "no"   # One-shot — exits 0 after seeding (or no-op on re-run).
 
+  # ── n8n automation (M5.8 / FS-8) ────────────────────────────────────────────
+  # Low-code automation pipeline: an HTTP Webhook trigger receives a tenant
+  # inquiry, Anthropic Claude triages it (category + urgency + sentiment + a
+  # drafted reply), and the result is posted to Discord — i.e. the required
+  # webhook → LLM → notification flow, built visually rather than in code.
+  #
+  # Distinct from the M4.11 aiops-webhook, which triages *ops* alerts in Python:
+  # n8n owns a *product* event (a tenant reaching out). The workflow definition
+  # lives in infrastructure/n8n/workflows/tenant-inquiry.json and is imported +
+  # activated on first boot by the n8n-init sidecar below.
+  #
+  # Graceful degradation (so `docker compose up` works on a fresh clone with no
+  # external accounts):
+  #   - ANTHROPIC_API_KEY empty → the workflow's "Anthropic configured?" branch
+  #     skips the LLM and returns a manual-review fallback.
+  #   - DISCORD_WEBHOOK_URL empty → the "Discord configured?" branch skips the
+  #     POST; every run still logs a structured line to stdout (CODE_ENABLE_STDOUT)
+  #     which Promtail ships to Loki — visible in Grafana → Explore → Loki.
+  #
+  # Demo:  curl -X POST http://localhost:5678/webhook/tenant-inquiry \
+  #          -H 'Content-Type: application/json' \
+  #          -d @infrastructure/n8n/samples/tenant-inquiry.json
+  # Editor UI (dev, no login): http://localhost:5678
+  n8n:
+    image: n8nio/n8n:1.76.1
+    container_name: myproperty-n8n
+    environment:
+      # Stable key so the SQLite store on the named volume stays readable across
+      # restarts (and matches the n8n-init sidecar). Dev default only — inject a
+      # real 32+ char secret in any deployed environment.
+      N8N_ENCRYPTION_KEY: "${N8N_ENCRYPTION_KEY:-myproperty-n8n-dev-encryption-key-change-me}"
+      # Base URL n8n uses to compute the public webhook URL it advertises.
+      WEBHOOK_URL: "${N8N_WEBHOOK_URL:-http://localhost:5678/}"
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: "http"
+      GENERIC_TIMEZONE: "${GENERIC_TIMEZONE:-UTC}"
+      # Allow $env.* lookups inside Code / HTTP nodes — the workflow reads
+      # ANTHROPIC_API_KEY and DISCORD_WEBHOOK_URL this way, so there is no
+      # encrypted n8n credential to manage and the import seed stays plain JSON.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Surface Code-node console.log() to process stdout → Promtail → Loki.
+      CODE_ENABLE_STDOUT: "true"
+      # Dev-only: skip the owner-setup wizard so the editor opens without a login.
+      # Never set this in a deployed environment.
+      N8N_USER_MANAGEMENT_DISABLED: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      # Secrets the workflow consumes. Both optional — empty values trigger the
+      # graceful-degradation branches above. ANTHROPIC_API_KEY is the same key
+      # the backend OCR + aiops-webhook use; DISCORD_WEBHOOK_URL is shared with
+      # the aiops-webhook (post to a separate channel in prod if you prefer).
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      # Claude model used for inquiry triage. Haiku by default (fast + cheap).
+      N8N_TENANT_INQUIRY_MODEL: "${N8N_TENANT_INQUIRY_MODEL:-claude-haiku-4-5-20251001}"
+    ports:
+      - "5678:5678"   # n8n editor + webhook →  http://localhost:5678
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      n8n-init:
+        condition: service_completed_successfully
+    networks:
+      - myproperty-net
+    healthcheck:
+      # Node is always on PATH; the alpine base ships no curl. /healthz is n8n's
+      # own liveness endpoint.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5678/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── n8n workflow seed (one-shot) ────────────────────────────────────────────
+  # Imports + activates the tenant-inquiry workflow into the shared n8n_data
+  # volume, then exits. Runs BEFORE the main n8n service (which gates on
+  # service_completed_successfully) so there is never concurrent SQLite access.
+  # Idempotent: import upserts by workflow id (no duplicates on re-up); import
+  # also deactivates, which is why `update:workflow --active true` follows. Same
+  # one-shot pattern as keycloak-realm-init / unleash-flag-init / uptime-kuma-init.
+  #
+  # Activation is scoped to --id (not --all): import upserts by workflow id, so
+  # the activate step targets the same id rather than re-activating every
+  # workflow in the store. Without --id, a workflow hand-created (and
+  # deliberately deactivated) in the UI would be silently force-reactivated on
+  # the next `docker compose up`. Keeping both steps id-scoped also matches the
+  # idempotent-by-id story the import already tells.
+  n8n-init:
+    image: n8nio/n8n:1.76.1
+    container_name: myproperty-n8n-init
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        n8n import:workflow --input=/import/tenant-inquiry.json
+        || echo 'n8n-init: import failed (continuing)';
+        n8n update:workflow --id=MyPropertyM58Inq --active true
+        || echo 'n8n-init: activate failed (continuing)'
+    environment:
+      # MUST match the main n8n service so the SQLite store it writes is readable.
+      N8N_ENCRYPTION_KEY: "${N8N_ENCRYPTION_KEY:-myproperty-n8n-dev-encryption-key-change-me}"
+      N8N_USER_MANAGEMENT_DISABLED: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./infrastructure/n8n/workflows/tenant-inquiry.json:/import/tenant-inquiry.json:ro
+    networks:
+      - myproperty-net
+    restart: "no"   # One-shot — exits 0 after import+activate (or no-op on re-run).
+
   # ── Nginx reverse proxy (M4.9) ──────────────────────────────────────────────
   # Opt-in via `docker compose --profile proxy up`. Without the profile, the
   # default stack still binds 3000/5042/8080/etc. to the host as before —
@@ -713,6 +822,7 @@ volumes:
   certbot_certs:
   certbot_www:
   uptime_kuma_data:
+  n8n_data:
 
 networks:
   myproperty-net:
