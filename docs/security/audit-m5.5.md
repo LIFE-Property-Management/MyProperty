@@ -213,8 +213,8 @@ docker run --rm --entrypoint sh -v "$PWD:/repo" -w /repo alpine/git -c '
 # secrets (e.g. infrastructure/gjirafa/.secrets.env, *.kubeconfig) it will flag
 # those genuine credentials. That is expected — they are untracked/never
 # committed, so the `git`-mode gate below (what CI runs) does not see them.
-docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest git /repo -c /repo/.gitleaks.toml --redact
-docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest dir /repo -c /repo/.gitleaks.toml --redact
+docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 git /repo -c /repo/.gitleaks.toml --redact
+docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 dir /repo -c /repo/.gitleaks.toml --redact
 
 # 2b. trufflehog — verified + unknown over history
 docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest git file:///repo --results=verified,unknown --json
