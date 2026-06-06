@@ -408,6 +408,9 @@ try
         });
     });
 
+    // North Star Metric — background worker updates the gauge every 60 s.
+    builder.Services.AddHostedService<MyProperty.Api.Metrics.NorthStarMetricWorker>();
+
     var app = builder.Build();
 
     // Ensure the configured file-storage root exists. Resolved here (after Build)

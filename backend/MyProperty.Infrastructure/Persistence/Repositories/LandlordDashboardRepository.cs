@@ -24,6 +24,7 @@ internal sealed class LandlordDashboardRepository(AppDbContext db) : ILandlordDa
         var activeLeases = await db.Leases
             .CountAsync(l => l.LandlordId == landlordId && l.Status == LeaseStatus.Active, ct);
 
+
         var activeTenants = await db.Leases
             .Where(l => l.LandlordId == landlordId && l.Status == LeaseStatus.Active)
             .Select(l => l.TenantId)
