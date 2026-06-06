@@ -30,32 +30,34 @@ The C4 hierarchy + 6 supplemental diagrams. All sources live in [`diagrams/`](./
 
 | # | Diagram | View | Companion doc |
 |---|---|---|---|
-| 4 | [`deployment-dev.svg`](./diagrams/deployment-dev.svg) | Dev deployment — 19 docker-compose services + 12 named volumes | [`deployment-dev.md`](./deployment-dev.md) |
-| 5 | [`deployment-prod.svg`](./diagrams/deployment-prod.svg) | Prod deployment — DOKS + Helm + Terraform + cert-manager + External Secrets | [`deployment-prod.md`](./deployment-prod.md) |
+| 4 | [`deployment-dev.svg`](./diagrams/deployment-dev.svg) | Dev deployment — 21 docker-compose services + 12 named volumes | [`deployment-dev.md`](./deployment-dev.md) |
+| 5 | [`deployment-prod.svg`](./diagrams/deployment-prod.svg) | Prod deployment — shared Hetzner cluster (namespace `project-02`) + Helm + Longhorn + Calico + cert-manager | [`deployment-prod.md`](./deployment-prod.md) |
 
 ### Specialized supplements
 
 | # | Diagram | View | Companion doc |
 |---|---|---|---|
 | 6 | [`data-flow-rest.svg`](./diagrams/data-flow-rest.svg) + [`data-flow-signalr.svg`](./diagrams/data-flow-signalr.svg) + [`data-flow-ocr.svg`](./diagrams/data-flow-ocr.svg) | Three runtime sequences — REST request, SignalR push, receipt OCR pipeline | [`data-flow.md`](./data-flow.md) |
-| 7 | [`cicd.svg`](./diagrams/cicd.svg) | CI/CD pipeline — 4 GitHub Actions workflows → GHCR → DOKS | [`cicd.md`](./cicd.md) |
+| 7 | [`cicd.svg`](./diagrams/cicd.svg) | CI/CD pipeline — 6 GitHub Actions workflows → GHCR → Hetzner `project-02` | [`cicd.md`](./cicd.md) |
 | 8 | [`observability.svg`](./diagrams/observability.svg) | Observability stack — metrics, logs, alerts, external probes | [`observability.md`](./observability.md) |
 | 9 | [`events.svg`](./diagrams/events.svg) | RabbitMQ event topology — exchange + 5 queues + 5 consumers | [`events.md`](./events.md) |
 
 ## Architectural Decision Records (ADRs)
 
-The eight load-bearing decisions, each with context, decision, consequences, and the alternatives we considered. Numbered roughly in the order they were made.
+The ten load-bearing decisions, each with context, decision, consequences, and the alternatives we considered. Numbered roughly in the order they were made.
 
 | ADR | Decision | Alternative rejected |
 |---|---|---|
 | [0001](./adr/0001-keycloak-over-custom-auth.md) | **Keycloak** (self-hosted) | Auth0 / custom JWT + ASP.NET Identity |
 | [0002](./adr/0002-rabbitmq-over-kafka.md) | **RabbitMQ** (topic exchange) | Apache Kafka / MassTransit / in-process events |
 | [0003](./adr/0003-hangfire-over-temporal.md) | **Hangfire** (Postgres-backed) | Temporal / Quartz / IHostedService-only |
-| [0004](./adr/0004-doks-over-gke-eks.md) | **DigitalOcean (DOKS)** + Terraform | GKE / EKS / AKS / self-hosted K8s |
+| [0004](./adr/0004-doks-over-gke-eks.md) | ~~**DigitalOcean (DOKS)** + Terraform~~ — **superseded by [0009](./adr/0009-hetzner-project-02-over-doks.md)** | GKE / EKS / AKS / self-hosted K8s |
 | [0005](./adr/0005-anthropic-over-openai.md) | **Anthropic Claude** (Sonnet + Haiku); **receipt OCR** instead of RAG | OpenAI / Vertex / pgvector RAG |
 | [0006](./adr/0006-nextjs-app-router-over-remix.md) | **Next.js App Router** | Remix / SvelteKit / plain React+Vite |
 | [0007](./adr/0007-loki-over-elk.md) | **Loki + Promtail** | ELK Stack / OpenSearch / FluentBit + ClickHouse |
 | [0008](./adr/0008-tanstack-query-over-swr.md) | **TanStack Query v5** + **Zustand** | SWR / RTK Query / Apollo / plain fetch |
+| [0009](./adr/0009-hetzner-project-02-over-doks.md) | **Shared Hetzner cluster** (namespace `project-02`); self-hosted data tier; push-based CD | DOKS (superseded) / GKE / EKS / self-managed cluster |
+| [0010](./adr/0010-unleash-for-feature-flags.md) | **Self-hosted Unleash** feature flags (receipt-OCR kill-switch) | LaunchDarkly / Flagsmith / config-file flags |
 
 ## Conventions
 
@@ -63,7 +65,7 @@ The eight load-bearing decisions, each with context, decision, consequences, and
 
 - **C4 conventions** apply throughout. Persons are stick figures; software systems are rounded blue boxes; external systems are gray; containers (deployable runtimes) carry a `[Technology]` label; components are the layer below that. ADR-0004 covers the C4 model in more depth.
 - **Edge labels carry the protocol** (HTTPS / OIDC / AMQP / SMTP / WSS / ACME) — the *direction* of the arrow is from caller to callee.
-- **Dashed edges** are optional / conditional (e.g., cert renewal, External Secrets sync).
+- **Dashed edges** are optional / conditional (e.g., cert renewal).
 - The diagram source (`.puml`) is the truth; the `.svg` is regenerated from it. **Never edit the SVG by hand.**
 
 ### How to add a new technology to the diagrams
@@ -98,7 +100,7 @@ java -jar tools/plantuml.jar -tsvg docs/architecture/diagrams/<name>.puml
 ## Out of scope for this document
 
 - **Tutorials** for how to use the system — see [`docs/portals.md`](../portals.md) for the domain features and lease/tenant flows.
-- **Operations runbooks** — see [`docs/operations/`](../operations/) for migrations, Nginx SSL, security hardening, Terraform.
+- **Operations runbooks** — see [`docs/operations/`](../operations/) for migrations, CI/CD, auth flow, feature flags, Nginx SSL, security hardening.
 - **Performance tuning** — see [`docs/performance/`](../performance/) for the M3 SQL optimization deliverables and Lighthouse reports.
 - **Frontend-specific patterns** — see [`frontend/CLAUDE.md`](../../frontend/CLAUDE.md).
 - **Backend-specific patterns** — see [`backend/CLAUDE.md`](../../backend/CLAUDE.md).
