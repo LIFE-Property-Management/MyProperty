@@ -1,6 +1,35 @@
 # Default values for the myproperty Helm chart.
 # Single environment — no value layering. Override at deploy time with --set or --values.
 
+# Public hostnames. Defaults match the original hardcoded values, so a plain
+# `helm install` is unchanged. Override per environment (e.g. values-gjirafa.yaml).
+hosts:
+  app: app.myproperty.works
+  api: api.myproperty.works
+  auth: auth.myproperty.works
+  status: status.myproperty.works   # only emitted when uptimeKuma.enabled
+  grafana: grafana.myproperty.works  # only emitted when monitoring.enabled
+
+# Ingress + TLS. Defaults are namespace-scoped (Hetzner project-02 reality):
+# a namespaced Issuer, since the SA has no cluster-scoped permissions and
+# cannot reference a ClusterIssuer. The overlay sets createIssuers + acmeEmail.
+ingress:
+  enabled: true
+  tls:
+    secretName: myproperty-tls
+    issuerKind: Issuer               # "Issuer" (namespaced) | "ClusterIssuer"
+    issuerName: letsencrypt-prod     # annotation value the ingresses reference
+    createIssuers: false             # when true, render the Issuers listed below
+    acmeEmail: ""                    # required when createIssuers=true
+    issuers: []                      # list of {name, server}; see overlay
+
+# Master switch for the self-contained monitoring sub-stack: Prometheus,
+# Alertmanager, Grafana (dashboards/datasource), Loki, Promtail, and the
+# aiops-webhook. All namespace-scoped manifests rendered by this chart — no
+# operator / CRDs (replaced the kube-prometheus-stack dependency).
+monitoring:
+  enabled: true
+
 postgres:
   # When true (default), the chart renders an in-cluster Postgres StatefulSet,
   # Service, and init-configmap. When false, those templates are skipped and
@@ -9,12 +38,15 @@ postgres:
   # backend's connection string template is unchanged; only the Secret content
   # differs between modes.
   enabled: true
+  # SSL mode for the Npgsql connection string. "Require" for managed Postgres
+  # (DO managed PG requires TLS); "Disable" for in-cluster Postgres (no TLS).
+  sslMode: Disable
   image:
     repository: postgres
     tag: 16-alpine
   storage:
     size: 10Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -34,6 +66,7 @@ externalPostgres:
   enabled: false
 
 redis:
+  enabled: true
   image:
     repository: redis
     tag: 7-alpine
@@ -44,13 +77,26 @@ redis:
     limits:
       memory: 128Mi
 
+unleash:
+  enabled: true
+  image:
+    repository: unleashorg/unleash-server
+    tag: "7.6.4"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
 rabbitmq:
+  enabled: true
   image:
     repository: rabbitmq
     tag: 3-management
   storage:
     size: 5Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -59,6 +105,7 @@ rabbitmq:
       memory: 512Mi
 
 keycloak:
+  enabled: true
   image:
     repository: quay.io/keycloak/keycloak
     tag: "26.2"
@@ -74,6 +121,7 @@ keycloak:
       memory: 1Gi
 
 backend:
+  enabled: true
   image:
     repository: ghcr.io/life-property-management/myproperty-api
     # Set at deploy time via --set backend.image.tag=<SHA>
@@ -83,7 +131,7 @@ backend:
   replicas: 1
   storage:
     size: 5Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 200m
@@ -99,6 +147,7 @@ migration:
     tag: latest
 
 frontend:
+  enabled: true
   image:
     repository: ghcr.io/life-property-management/myproperty-frontend
     # Set at deploy time via --set frontend.image.tag=<SHA>
@@ -127,6 +176,7 @@ aiopsWebhook:
       memory: 256Mi
 
 uptimeKuma:
+  enabled: true
   image:
     repository: louislam/uptime-kuma
     tag: 1.23.16-alpine
@@ -143,7 +193,7 @@ uptimeKuma:
   publicUrl: https://status.myproperty.works
   storage:
     size: 2Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -165,7 +215,7 @@ loki:
     tag: "3.2.0"
   storage:
     size: 10Gi
-    storageClassName: do-block-storage
+    storageClassName: longhorn
   resources:
     requests:
       cpu: 100m
@@ -184,81 +234,50 @@ promtail:
     limits:
       memory: 128Mi
 
-kube-prometheus-stack:
-  prometheus:
-    prometheusSpec:
-      retention: 15d
-      storageSpec:
-        volumeClaimTemplate:
-          spec:
-            storageClassName: do-block-storage
-            accessModes: [ReadWriteOnce]
-            resources:
-              requests:
-                storage: 20Gi
-      serviceMonitorSelectorNilUsesHelmValues: false
-      ruleSelectorNilUsesHelmValues: false
-      resources:
-        requests:
-          cpu: 200m
-          memory: 512Mi
-        limits:
-          memory: 1Gi
+prometheus:
+  image:
+    repository: prom/prometheus
+    tag: v2.54.1
+  retention: 15d
+  storage:
+    size: 20Gi
+    storageClassName: longhorn
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
 
-  alertmanager:
-    config:
-      route:
-        receiver: 'aiops-webhook'
-        group_by: ['alertname', 'severity']
-        group_wait: 30s
-        group_interval: 5m
-        repeat_interval: 12h
-        routes:
-          - matchers:
-              - severity = critical
-            receiver: 'aiops-webhook'
-      receivers:
-        - name: 'aiops-webhook'
-          webhook_configs:
-            - url: 'http://aiops-webhook.myproperty.svc.cluster.local:5001/alerts'
-              send_resolved: true
-      inhibit_rules:
-        - source_matchers:
-            - severity = critical
-          target_matchers:
-            - severity = warning
-          equal: ['alertname', 'service']
-    alertmanagerSpec:
-      storage:
-        volumeClaimTemplate:
-          spec:
-            storageClassName: do-block-storage
-            accessModes: [ReadWriteOnce]
-            resources:
-              requests:
-                storage: 1Gi
+alertmanager:
+  image:
+    repository: prom/alertmanager
+    tag: v0.27.0
+  webhookUrl: http://aiops-webhook:5001/alerts
+  storage:
+    size: 1Gi
+    storageClassName: longhorn
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
 
-  grafana:
-    admin:
-      existingSecret: myproperty-grafana
-      userKey: admin-user
-      passwordKey: admin-password
-    persistence:
-      enabled: true
-      storageClassName: do-block-storage
-      size: 2Gi
-    sidecar:
-      datasources:
-        enabled: true
-        label: grafana_datasource
-      dashboards:
-        enabled: true
-        label: grafana_dashboard
-
-  defaultRules:
-    create: true
-    rules:
-      node: false
+grafana:
+  image:
+    repository: grafana/grafana
+    tag: "11.2.0"
+  ingressAllowlist: ""
+  storage:
+    size: 2Gi
+    storageClassName: longhorn
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
 
 # ─────────────────────────────────────────────────────────────────────────
 # External Secrets Operator (M4.8 — Key Vault / Secret Manager).
@@ -325,8 +344,10 @@ externalSecrets:
     googleOauthClientSecret: myproperty-google-oauth-client-secret
     anthropicApiKey: myproperty-anthropic-api-key
     discordWebhookUrl: myproperty-discord-webhook-url
+    discordUptimeWebhookUrl: myproperty-discord-uptime-webhook-url
     grafanaAdminUser: myproperty-grafana-admin-user
     grafanaAdminPassword: myproperty-grafana-admin-password
+    unleashClientApiToken: myproperty-unleash-client-api-token
 
 # ─────────────────────────────────────────────────────────────────────────
 # NetworkPolicies (M4.8 — security hardening).
@@ -343,7 +364,24 @@ networkPolicies:
   # permitted to reach the public-facing workloads (frontend, backend,
   # keycloak). Override if running a different controller / namespace.
   ingressNamespace: ingress-nginx
-  # kube-prometheus-stack lives in the same release namespace by default
-  # because it ships as a chart dependency. If the chart is split out,
-  # override with the controller's namespace.
-  monitoringNamespace: myproperty
+  # Node IPs (as CIDRs, e.g. "10.0.0.5/32") to allow as an ingress *source* on
+  # the public-facing workloads (frontend, backend, keycloak, grafana,
+  # uptime-kuma), IN ADDITION to ingressNamespace.
+  #
+  # Needed when the ingress controller runs with hostNetwork (common on
+  # bare-metal / no cloud LB): it then proxies to pods from the *node's* IP, and
+  # a namespaceSelector/podSelector can never match a host-sourced packet. On a
+  # multi-node cluster a request can land on any node, so list every node that
+  # runs the controller (and, to be safe, all nodes). Calico already failsafes
+  # *local* host→pod traffic (kubelet probes), so this only covers the
+  # cross-node controller hops.
+  #
+  # CAVEAT for encapsulated CNIs (Calico IPIP/VXLAN, etc.): cross-node host→pod
+  # traffic is sourced from the node's *tunnel* IP, which is in the pod CIDR, not
+  # the node's "real" IP. There, set this to the pod CIDR (e.g. 192.168.0.0/16) —
+  # see values-gjirafa.yaml.
+  #
+  # Leave empty on clusters where the controller runs as a normal pod (a cloud
+  # LoadBalancer Service preserves the pod source) — the namespaceSelector
+  # alone is correct there.
+  nodeCIDRs: []

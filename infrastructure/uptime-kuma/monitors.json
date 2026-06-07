@@ -3,15 +3,13 @@
 
   "notifications": [
     {
-      "name": "Slack (#alerts)",
-      "type": "slack",
+      "name": "Discord (#uptime)",
+      "type": "discord",
       "isDefault": true,
       "applyExisting": true,
-      "comment": "Reuses SLACK_WEBHOOK_URL — same incoming webhook the M4.11 aiops-webhook posts to. When the env var is empty, seed.py skips creation entirely (the demo still works without a Slack workspace).",
+      "comment": "Native Discord webhook (Kuma renders Discord-native embeds — posting Slack format to a Discord URL fails as an empty message). Uses its own DISCORD_WEBHOOK_URL, separate from the aiops-webhook's #alerts channel. When the env var is empty, seed.py skips creation entirely (the demo still works without a Discord server).",
       "config": {
-        "slackchannelnotify": false,
-        "slackusername": "Uptime Kuma",
-        "slackiconemo": ":robot_face:"
+        "discordUsername": "Uptime Kuma"
       }
     },
     {
@@ -89,9 +87,9 @@
       "interval": 60,
       "maxretries": 2,
       "retryInterval": 30,
-      "databaseConnectionString": "postgres://postgres:postgres@postgres:5432/myproperty",
+      "databaseConnectionString": "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-myproperty}",
       "databaseQuery": "SELECT 1",
-      "comment": "Connects via the same connection string the backend uses; runs SELECT 1 every minute. Kuma will reuse the connection across probes."
+      "comment": "Connects via the same connection string the backend uses; runs SELECT 1 every minute. Credentials come from env (${POSTGRES_*}, injected from the myproperty-postgres Secret in K8s); falls back to the compose dev defaults when unset."
     },
     {
       "name": "Redis",
@@ -99,8 +97,8 @@
       "interval": 60,
       "maxretries": 2,
       "retryInterval": 30,
-      "databaseConnectionString": "redis://redis:6379",
-      "comment": "Redis PING probe. The API tolerates brief Redis outages by design (cache + SignalR backplane fall back gracefully) — this monitor exists for visibility, not for paging."
+      "databaseConnectionString": "redis://:${REDIS_PASSWORD:-}@redis:6379",
+      "comment": "Redis PING probe. Password comes from ${REDIS_PASSWORD} (myproperty-redis Secret in K8s); empty in compose dev, where Redis runs auth-less and the empty userinfo sends no AUTH. The API tolerates brief Redis outages by design (cache + SignalR backplane fall back gracefully) — this monitor exists for visibility, not for paging."
     },
     {
       "name": "RabbitMQ — management",
@@ -112,9 +110,9 @@
       "retryInterval": 30,
       "accepted_statuscodes": ["200-299"],
       "authMethod": "basic",
-      "basic_auth_user": "guest",
-      "basic_auth_pass": "guest",
-      "comment": "Rabbit's built-in health/checks/alarms endpoint — green when there are no memory or disk alarms firing on any node. Basic auth uses the default guest creds (only reachable from inside the docker network)."
+      "basic_auth_user": "${RABBITMQ_USER:-guest}",
+      "basic_auth_pass": "${RABBITMQ_PASSWORD:-guest}",
+      "comment": "Rabbit's built-in health/checks/alarms endpoint — green when there are no memory or disk alarms firing on any node. Basic auth creds come from env (${RABBITMQ_USER}/${RABBITMQ_PASSWORD}, injected from the myproperty-rabbitmq Secret in K8s); falls back to the compose dev guest/guest when unset."
     },
     {
       "name": "Loki",
@@ -155,7 +153,7 @@
       "maxretries": 2,
       "retryInterval": 30,
       "accepted_statuscodes": ["200-299"],
-      "comment": "Closes the loop: if the AIOps triage service goes dark, this monitor alerts via Slack/email even though the AIOps webhook itself can't."
+      "comment": "Closes the loop: if the AIOps triage service goes dark, this monitor alerts via Discord/email even though the AIOps webhook itself can't."
     },
     {
       "name": "Grafana",
@@ -166,6 +164,17 @@
       "maxretries": 2,
       "retryInterval": 30,
       "accepted_statuscodes": ["200-299"]
+    },
+    {
+      "name": "Unleash (feature flags)",
+      "type": "http",
+      "url": "http://unleash:4242/health",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "Unleash built-in /health endpoint (returns {\"health\":\"GOOD\"}). Non-critical: the backend defaults flags ON when Unleash is unreachable, so an outage is otherwise silent — this monitor surfaces it (e.g. the missing-`unleash`-database crashloop) before a flag flip mysteriously has no effect. Kuma reaches it via the allow-uptime-kuma-probe catch-all NetworkPolicy."
     }
   ],
 
@@ -194,7 +203,8 @@
       "Prometheus",
       "Alertmanager",
       "AIOps webhook",
-      "Grafana"
+      "Grafana",
+      "Unleash (feature flags)"
     ]
   }
 }

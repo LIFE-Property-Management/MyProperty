@@ -1,7 +1,6 @@
 using System.Threading.RateLimiting;
 using Asp.Versioning;
 using MyProperty.Api.HealthChecks;
-using RabbitMQ.Client;
 using Asp.Versioning.ApiExplorer;
 using FluentValidation;
 using Hangfire;
@@ -18,6 +17,7 @@ using MyProperty.Api.Logging;
 using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
 using MyProperty.Api.Swagger;
+using MyProperty.Application.Auth.Commands.RegisterLandlord;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Notifications;
 using MyProperty.Application.Common.Options;
@@ -28,6 +28,7 @@ using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Application.Landlord.Queries.GetLandlordTenants;
 using MyProperty.Application.Landlord.Queries.GetTenantDetail;
+using MyProperty.Application.Landlord.Queries.GetUpcomingPayments;
 using MyProperty.Application.Leases.Commands.TerminateLease;
 using MyProperty.Application.Leases.Queries.GetLandlordLeases;
 using MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
@@ -38,13 +39,17 @@ using MyProperty.Application.Payments.Commands.RejectPayment;
 using MyProperty.Application.Payments.Commands.SubmitPayment;
 using MyProperty.Application.Payments.Queries.DownloadReceipt;
 using MyProperty.Application.Properties.Commands.CreateProperty;
+using MyProperty.Application.Properties.Commands.DeleteProperty;
+using MyProperty.Application.Properties.Commands.UpdateProperty;
 using MyProperty.Application.Properties.Queries.GetLandlordProperties;
+using MyProperty.Application.Properties.Queries.GetPropertyById;
 using MyProperty.Infrastructure;
+using MyProperty.Infrastructure.Identity;
+using MyProperty.Infrastructure.Jobs;
 using Prometheus;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
-using Serilog.Sinks.Grafana.Loki;
 
 // Bootstrap logger captures events during startup, before the full Serilog pipeline
 // is configured via UseSerilog below. CreateBootstrapLogger() ensures these early
@@ -65,10 +70,12 @@ try
     var builder = WebApplication.CreateBuilder(args);
 
     // ── Serilog ───────────────────────────────────────────────────────────────────
-    // Config lives here in code only — no ReadFrom.Configuration() — so there is
-    // no Serilog section in appsettings.json. The Loki URL is the only value read
-    // from config (it's infrastructure plumbing, not logger behaviour).
-    builder.Host.UseSerilog((ctx, _, cfg) =>
+    // Config lives here in code only — no ReadFrom.Configuration() — so there is no
+    // Serilog section in appsettings.json. Logs are emitted as CLEF JSON on stdout;
+    // Promtail scrapes the container's stdout and ships it to Loki (see the monitoring
+    // Helm chart). The app deliberately does NOT push to Loki directly — one ingestion
+    // path, uniform across every service, and crash output is still captured.
+    builder.Host.UseSerilog((_, _, cfg) =>
     {
         cfg.MinimumLevel.Information()
            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
@@ -76,21 +83,18 @@ try
            .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", LogEventLevel.Warning)
            .Enrich.FromLogContext()
            .WriteTo.Console(new CompactJsonFormatter());
-
-        var lokiUrl = ctx.Configuration["LokiUrl"];
-        if (!string.IsNullOrWhiteSpace(lokiUrl))
-        {
-            cfg.WriteTo.GrafanaLoki(
-                lokiUrl,
-                labels: [new LokiLabel { Key = "app", Value = "myproperty-api" }],
-                batchPostingLimit: builder.Environment.IsDevelopment() ? 1 : 100
-            );
-        }
     });
 
     // ── Keycloak options ──────────────────────────────────────────────────────────
     builder.Services.AddOptions<KeycloakOptions>()
         .Bind(builder.Configuration.GetSection(KeycloakOptions.SectionName))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
+    // Application-layer view of public Keycloak settings (authority URL for
+    // building login URLs in response DTOs). Same section as KeycloakOptions.
+    builder.Services.AddOptions<KeycloakPublicOptions>()
+        .Bind(builder.Configuration.GetSection(KeycloakPublicOptions.SectionName))
         .ValidateDataAnnotations()
         .ValidateOnStart();
 
@@ -112,9 +116,17 @@ try
             {
                 options.MetadataAddress = keycloakMetadataAddress;
             }
-            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+            options.RequireHttpsMetadata = builder.Configuration.GetValue(
+                "Keycloak:RequireHttpsMetadata", !builder.Environment.IsDevelopment());
             options.TokenValidationParameters = new()
             {
+                // Issuer validation: tokens are minted against the browser-facing
+                // Authority (e.g. http://localhost:8080/realms/MyProperty), so the
+                // `iss` claim is that URL. Pin it explicitly — otherwise, because
+                // MetadataAddress points at the cluster-internal Keycloak, the
+                // handler would validate against the discovery doc's issuer
+                // (keycloak:8080) and reject every real browser token.
+                ValidIssuer = keycloakAuthority,
                 // Audience validation: tokens must carry "myproperty-api" in the
                 // `aud` claim. The mapper that writes this claim lives on the
                 // `myproperty-frontend` client in realm-export.json, and the
@@ -150,7 +162,11 @@ try
     // ── Current-user abstraction ──────────────────────────────────────────────────
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+    builder.Services.AddScoped<ICurrentUserContext, CurrentUserContext>();
     builder.Services.AddInfrastructure(builder.Configuration);
+
+    // Auth handlers
+    builder.Services.AddScoped<RegisterLandlordHandler>();
 
     // Invite handlers
     builder.Services.AddScoped<CreateInviteHandler>();
@@ -162,10 +178,14 @@ try
     builder.Services.AddScoped<GetLandlordDashboardHandler>();
     builder.Services.AddScoped<GetLandlordTenantsHandler>();
     builder.Services.AddScoped<GetTenantDetailHandler>();
+    builder.Services.AddScoped<GetUpcomingPaymentsHandler>();
 
     // Property handlers
     builder.Services.AddScoped<CreatePropertyHandler>();
     builder.Services.AddScoped<GetLandlordPropertiesHandler>();
+    builder.Services.AddScoped<GetPropertyByIdHandler>();
+    builder.Services.AddScoped<UpdatePropertyHandler>();
+    builder.Services.AddScoped<DeletePropertyHandler>();
 
     // Lease handlers
     builder.Services.AddScoped<GetLandlordLeasesHandler>();
@@ -186,6 +206,15 @@ try
     // Invite options
     builder.Services.AddOptions<InviteOptions>()
         .Bind(builder.Configuration.GetSection("Invites"))
+        .ValidateDataAnnotations()
+        .ValidateOnStart();
+
+    // Anthropic receipt-OCR options. Bound here (not in Infrastructure's
+    // AddAiServices) so the app fails fast on a bad Model/TimeoutSeconds, in
+    // line with the other options classes. The type lives in
+    // Application/Common/Options because Infrastructure consumes it.
+    builder.Services.AddOptions<AnthropicOcrOptions>()
+        .Bind(builder.Configuration.GetSection(AnthropicOcrOptions.SectionName))
         .ValidateDataAnnotations()
         .ValidateOnStart();
 
@@ -276,20 +305,7 @@ try
             connectionStringFactory: sp => sp.GetRequiredService<IConfiguration>()["Cache:RedisConnection"]!,
             name: "redis",
             tags: ["diagnostic"])
-        .AddRabbitMQ(
-            factory: sp =>
-            {
-                var cfg = sp.GetRequiredService<IConfiguration>();
-                return new ConnectionFactory
-                {
-                    HostName = cfg["RabbitMq:HostName"] ?? "localhost",
-                    Port = cfg.GetValue("RabbitMq:Port", 5672),
-                    UserName = cfg["RabbitMq:UserName"] ?? "guest",
-                    Password = cfg["RabbitMq:Password"] ?? "guest",
-                    VirtualHost = cfg["RabbitMq:VirtualHost"] ?? "/",
-                    AutomaticRecoveryEnabled = false,
-                }.CreateConnectionAsync(CancellationToken.None);
-            },
+        .AddCheck<RabbitMqHealthCheck>(
             name: "rabbitmq",
             tags: ["diagnostic"])
         .AddCheck<KeycloakJwksHealthCheck>(
@@ -360,7 +376,12 @@ try
     }
 
     // ── API + Swagger ─────────────────────────────────────────────────────────────
-    builder.Services.AddControllers();
+    builder.Services.AddControllers()
+        .AddJsonOptions(o =>
+        {
+            o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+            o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        });
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
     builder.Services.AddSwaggerGen(c =>
@@ -489,6 +510,20 @@ try
         Authorization = [new AdminOnlyDashboardFilter()],
         DashboardTitle = "MyProperty — Background Jobs",
     });
+
+    // ── Recurring background jobs ───────────────────────────────────────────────
+    // Registered against the already-configured Hangfire (Postgres) storage.
+    // Cron expressions are interpreted in UTC (no TimeZone set). The
+    // CancellationToken.None below is a Hangfire placeholder in the job
+    // expression — at execution Hangfire substitutes a real shutdown-aware
+    // token, which each job threads through its repo/SaveChanges/ExecuteDelete
+    // calls. The Hangfire server is always enabled (see AddHangfireServer), so
+    // these schedules run wherever the API does.
+    var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
+    recurringJobs.AddOrUpdate<MarkExpiredInvitesJob>(
+        "mark-expired-invites", j => j.ExecuteAsync(CancellationToken.None), "0 * * * *");   // hourly
+    recurringJobs.AddOrUpdate<OrphanCleanupJob>(
+        "orphan-cleanup", j => j.ExecuteAsync(CancellationToken.None), "0 3 * * *");          // 03:00 UTC daily
 
     app.MapControllers();
     app.MapHub<NotificationsHub>(NotificationsHub.Path);

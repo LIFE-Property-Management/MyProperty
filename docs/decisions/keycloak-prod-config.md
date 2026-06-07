@@ -1,5 +1,9 @@
 # Decision: Keycloak production configuration
 
+> **Note (post-M5):** the config rationale here still holds, but the deployment context is
+> DOKS-era. Current Keycloak deploy: [../operations/k8s-deployment.md](../operations/k8s-deployment.md);
+> current frontend auth flow: [../operations/auth-flow.md](../operations/auth-flow.md).
+
 **Author:** Erdi
 **Date:** 2026-05-12
 **Status:** Accepted; awaiting confirmation of items in "Open questions"

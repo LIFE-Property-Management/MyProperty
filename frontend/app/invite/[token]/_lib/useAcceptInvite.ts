@@ -1,20 +1,31 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import apiClient from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
 
 export interface AcceptInviteInput {
   token: string;
-  formData: FormData;
+  firstName: string;
+  lastName: string;
+  phone?: string | null;
+  password: string;
 }
 
 export function useAcceptInvite() {
+  const router = useRouter();
   return useMutation<void, Error, AcceptInviteInput>({
-    mutationFn: async ({ token, formData }) => {
-      await apiClient.post(ENDPOINTS.acceptInvite(token), formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+    mutationFn: async ({ token, firstName, lastName, phone, password }) => {
+      await apiClient.post(ENDPOINTS.acceptInvite(token), {
+        firstName,
+        lastName,
+        phone: phone || null,
+        password,
       });
+    },
+    onSuccess: () => {
+      router.push("/login");
     },
   });
 }

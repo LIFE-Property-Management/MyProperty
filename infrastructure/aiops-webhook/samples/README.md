@@ -16,5 +16,5 @@ Then the resolved variant:
         -H "Content-Type: application/json" \
         -d @samples/resolved-alert.json
 
-Both return HTTP 202 with `{"received": 1, "queued": true}`. The Slack /
+Both return HTTP 202 with `{"received": 1, "queued": true}`. The Discord /
 stdout message arrives asynchronously (background task).

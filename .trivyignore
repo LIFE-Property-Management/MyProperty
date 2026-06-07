@@ -35,3 +35,15 @@
 # Initial baseline (M4.8 close): empty allowlist. Anything that surfaces in
 # the first post-merge scan goes here with a triage decision attached, or
 # gets fixed at the source.
+
+# libssl3 OpenSSL bundle (CVE-2026-31789 CRITICAL + 4 HIGH siblings).
+# Fix 3.0.19-1~deb12u2 is in Debian 12 stable but not yet baked into the
+# gcr.io/distroless/nodejs20-debian12:nonroot tag rebuild. Tracked: re-scan
+# weekly; remove this block as soon as a rebuilt distroless image ships the
+# patched libssl3. Verified on 2026-05-26 against both nodejs20 and nodejs22
+# distroless digests — both still affected.
+CVE-2026-31789 exp:2026-07-01  # libssl3 OpenSSL heap overflow, CRITICAL gate blocker
+CVE-2026-28387 exp:2026-07-01  # libssl3 OpenSSL DANE UAF, HIGH (SARIF inbox cleanup)
+CVE-2026-28388 exp:2026-07-01  # libssl3 OpenSSL NULL deref in delta, HIGH
+CVE-2026-28389 exp:2026-07-01  # libssl3 OpenSSL CMS DoS, HIGH
+CVE-2026-28390 exp:2026-07-01  # libssl3 OpenSSL NULL deref in CMS, HIGH

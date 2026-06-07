@@ -94,4 +94,24 @@ describe("proxy", () => {
       restore.restore();
     }
   });
+
+  it("in production with NEXT_PUBLIC_DEV_AUTH_BYPASS=true, stamps a mock token cookie", async () => {
+    const restoreEnv = jest.replaceProperty(process.env, "NODE_ENV", "production");
+    const prevBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS;
+    process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS = "true";
+    try {
+      await jest.isolateModulesAsync(async () => {
+        const { default: middleware } = await import("../proxy");
+        middleware(makeRequest("/tenant/dashboard"));
+      });
+      expect(nextCalls).toHaveLength(1);
+      expect(nextCalls[0].type).toBe("next");
+      expect(nextCalls[0].cookie).toBeDefined();
+      expect(nextCalls[0].cookie?.name).toBe("kc_token");
+    } finally {
+      if (prevBypass === undefined) delete process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS;
+      else process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS = prevBypass;
+      restoreEnv.restore();
+    }
+  });
 });

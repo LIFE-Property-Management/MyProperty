@@ -19,13 +19,22 @@ export function AccountStep() {
         </p>
       </header>
 
-      <Input
-        label="Full name"
-        placeholder="Jane Doe"
-        autoComplete="name"
-        error={errors.fullName?.message}
-        {...register("fullName")}
-      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Input
+          label="First name"
+          placeholder="Jane"
+          autoComplete="given-name"
+          error={errors.firstName?.message}
+          {...register("firstName")}
+        />
+        <Input
+          label="Last name"
+          placeholder="Doe"
+          autoComplete="family-name"
+          error={errors.lastName?.message}
+          {...register("lastName")}
+        />
+      </div>
 
       <Input
         label="Password"

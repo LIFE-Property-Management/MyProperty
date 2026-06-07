@@ -1,0 +1,53 @@
+@startuml
+title REST request lifecycle - landlord confirms a payment
+
+skinparam BackgroundColor #FAFAFA
+skinparam sequenceMessageAlign center
+
+actor       "Landlord"                          as user
+participant "Browser SPA"                       as spa
+participant "Edge\n(Nginx / Ingress)"           as edge
+participant "Middleware\npipeline"              as mw
+participant "Keycloak\n(JWKS)"                  as kc
+participant "PaymentsController"                as ctrl
+participant "ConfirmPaymentHandler"             as handler
+participant "PaymentRepository\n+ AuditingInterceptor" as repo
+database    "PostgreSQL"                        as pg
+participant "RabbitMqEventPublisher"            as mqpub
+queue       "RabbitMQ\n'myproperty.events'"     as mq
+
+autonumber
+
+user -> spa: Click "Confirm payment"
+spa -> edge: POST api.X/api/v1/payments/{id}/confirm\nAuthorization: Bearer <jwt>
+edge -> mw: route to backend
+mw -> kc: GET /.well-known/jwks.json (cached)
+kc --> mw: JWKS
+mw -> mw: Validate JWT signature + claims\nRateLimiter (per-user 120/min)\nAuthz policy: RequireLandlord
+mw -> ctrl: action: Confirm(id, ct)
+ctrl -> handler: Handle(ConfirmPaymentCommand, ct)
+handler -> handler: FluentValidation (pipeline filter)
+handler -> repo: GetByIdAsync(id)
+repo -> pg: SELECT ... WHERE Id=@id AND DeletedAt IS NULL
+pg --> repo: row
+repo --> handler: Payment entity
+handler -> handler: Payment.Confirm()\n(state: Pending -> Confirmed)
+handler -> repo: SaveChangesAsync(ct)
+repo -> repo: Interceptor stamps UpdatedAt + UpdatedBy from JWT sub
+repo -> pg: UPDATE Payment SET Status='Confirmed', ...
+pg --> repo: ok
+handler -> mqpub: Publish(PaymentConfirmedEvent)
+mqpub -> mq: AMQP basic.publish\nrouting key: payment.confirmed
+handler -> handler: Map(entity) -> PaymentDto (hand-rolled; Mapperly retrofit pending)
+handler --> ctrl: PaymentDto
+ctrl --> mw: 200 OK + DTO
+mw --> edge: response (CorrelationId header)
+edge --> spa: 200 + body
+spa -> spa: TanStack mutation onSuccess\n-> invalidateQueries(['payments', leaseId])
+
+note over spa, mq #LightYellow
+Side effects (email + SignalR push to tenant) run asynchronously
+on the RabbitMQ side - see **data-flow-signalr** for that thread.
+end note
+
+@enduml

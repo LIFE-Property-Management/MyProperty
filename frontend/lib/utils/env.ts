@@ -31,7 +31,7 @@ export type PublicEnvName = keyof typeof PUBLIC_ENV_READERS;
 
 export function requirePublicEnv(name: PublicEnvName): string {
   const value = PUBLIC_ENV_READERS[name]();
-  if (!value) {
+  if (value === undefined) {
     if (process.env.NODE_ENV === "production") {
       throw new Error(
         `${name} must be set at build time for production builds. ` +

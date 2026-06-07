@@ -1,0 +1,116 @@
+@startuml
+title CI/CD pipeline - GitHub Actions -> GHCR -> Hetzner (namespace project-02)
+
+skinparam BackgroundColor #FAFAFA
+skinparam ActivityBackgroundColor #EFF6FF
+skinparam ActivityBorderColor #1168bd
+skinparam ActivityArrowColor #555
+skinparam PartitionBorderColor #999
+skinparam PartitionBackgroundColor #FFFFFF
+skinparam NoteBackgroundColor #FFF8DC
+
+start
+:Developer pushes commit or PR;
+note right
+  Each CI workflow runs when its path filter
+  matches the changed files. cd.yml does NOT
+  run on push - it runs on **workflow_run**
+  after the image-CI workflows finish on
+  develop/main (or via workflow_dispatch).
+end note
+
+fork
+  partition "**backend-ci.yml**\n(backend/**, MyProperty.sln)" {
+    :setup-dotnet; restore;
+    :format --verify-no-changes;
+    :build -c Release -warnaserror;
+    :xUnit **unit** suite\n(Testcontainers integration tests run\nlocally, not in CI);
+    :buildx + login (GHCR);
+    :build myproperty-api:{sha}+:{branch}\n(chiseled .NET 10);
+    :build myproperty-migrations:{sha}\n(EF Core migration bundle);
+    :Trivy 2-pass + CycloneDX SBOM;
+    if (CRITICAL CVE?) then (yes)
+      #FF6961:fail build;
+      kill
+    else (no)
+    endif
+    :docker push (GHCR);
+  }
+fork again
+  partition "**frontend-ci.yml**\n(frontend/**)" {
+    :setup-node; npm ci;
+    :ESLint; tsc --noEmit;
+    :Jest + jest-axe a11y;
+    :Playwright e2e (chromium, MSW,\ndev-auth bypass) - not on image needs;
+    :standalone bundle build;
+    :build myproperty-frontend:{sha}+:{branch}\n(distroless Node 20);
+    :Trivy 2-pass + CycloneDX SBOM;
+    if (CRITICAL CVE?) then (yes)
+      #FF6961:fail build;
+      kill
+    else (no)
+    endif
+    :docker push (GHCR);
+  }
+fork again
+  partition "**aiops-webhook-ci.yml**\n(infrastructure/aiops-webhook/**)" {
+    :setup-python (3.14); pip install reqs;
+    :ruff check + format --check;
+    :pytest;
+    :build myproperty-aiops-webhook:{sha}+:{branch};
+    :Trivy 2-pass + CycloneDX SBOM;
+    if (CRITICAL CVE?) then (yes)
+      #FF6961:fail build;
+      kill
+    else (no)
+    endif
+    :docker push (GHCR);
+  }
+fork again
+  partition "**uptime-kuma-init-ci.yml**\n(infrastructure/uptime-kuma/**)" {
+    :build + scan ONLY (no lint/test);
+    :build myproperty-uptime-kuma-init:{sha};
+    :Trivy 2-pass + SBOM; docker push;
+  }
+fork again
+  partition "**realm-import-ci.yml**\n(infrastructure/keycloak/**, compose)" {
+    :boot Keycloak on Postgres;
+    :verify realm export + service account;
+    :no image (does NOT trigger CD);
+  }
+end fork
+
+:Images in **ghcr.io/life-property-management/***\ntagged {short-sha} + {branch};
+
+if (image-CI succeeded on push to develop/main?) then (yes)
+  partition "**cd.yml**\n(workflow_run; namespace project-02)" {
+    #FFF3CD:project-02 Environment approval\n(manual gate; serialized);
+    :Mint GitHub App token\n(on the branch-ruleset bypass list);
+    :Checkout deploy branch; resolve target SHA;
+    :Per-component GHCR existence check\n(buildx imagetools inspect);
+    :Bump matching tags in values-gjirafa.yaml\n(bump_image_tags.py, ruamel - byte-perfect);
+    :App-token commit + push the bump\n(retry pull --rebase on contention);
+    :Write kubeconfig from\nKUBECONFIG_PROJECT_02 secret;
+    :deploy.sh --atomic --cleanup-on-fail --timeout 10m\n(helm 3.20.0, kubectl 1.31.x);
+    note right
+      Same script as a manual deploy.
+      --atomic -> --wait + auto-rollback of
+      WORKLOADS. EF migrations run as a
+      pre-upgrade Hook and are FORWARD-ONLY:
+      a failed deploy may leave the DB partly
+      migrated - verify manually.
+    end note
+    if (deploy + health gate OK?) then (yes)
+      :Health gate: rollout status be/fe +\ncurl api /health/ready + HTTP<400\non app/auth/grafana/status.myproperty.works;
+      stop
+    else (no / cancelled)
+      #FF6961:Discord **#deployments** notice\n(--atomic rolled workloads back);
+      stop
+    endif
+  }
+else (no)
+  :Stop after CI;
+  stop
+endif
+
+@enduml

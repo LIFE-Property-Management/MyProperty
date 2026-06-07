@@ -18,98 +18,99 @@ import { AccountStep } from "./AccountStep";
 import { SuccessStep } from "./SuccessStep";
 
 interface InviteWizardProps {
-  invite: InvitePreview;
+    invite: InvitePreview;
 }
 
 export function InviteWizard({ invite }: InviteWizardProps) {
-  const [step, setStep] = useState<StepIndex>(0);
-  const [done, setDone] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+    const [step, setStep] = useState<StepIndex>(0);
+    const [done, setDone] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const methods = useForm<WizardValues>({
-    mode: "onBlur",
-    resolver: zodResolver(wizardSchema),
-    defaultValues: {
-      signatureName: "",
-      fullName: "",
-      password: "",
-      confirmPassword: "",
-    },
-  });
+    const methods = useForm<WizardValues>({
+        mode: "onBlur",
+        resolver: zodResolver(wizardSchema),
+        defaultValues: {
+            signatureName: "",
+            firstName: "",
+            lastName: "",
+            password: "",
+            confirmPassword: "",
+        },
+    });
 
-  const { handleSubmit, trigger } = methods;
-  const { mutateAsync, isPending } = useAcceptInvite();
+    const { handleSubmit, trigger } = methods;
+    const { mutateAsync, isPending } = useAcceptInvite();
 
-  async function handleNext(): Promise<void> {
-    const fields = STEP_FIELDS[step];
-    const valid = await trigger(fields, { shouldFocus: true });
-    if (!valid) return;
-    setStep((s) => (Math.min(s + 1, 2) as StepIndex));
-  }
-
-  function handleBack(): void {
-    setStep((s) => (Math.max(s - 1, 0) as StepIndex));
-  }
-
-  const onValid = handleSubmit(async (values) => {
-    setSubmitError(null);
-    const formData = new FormData();
-    formData.append("signatureName", values.signatureName);
-    formData.append("fullName", values.fullName);
-    formData.append("password", values.password);
-    formData.append("idDocument", values.idDocument);
-    try {
-      await mutateAsync({ token: invite.token, formData });
-      setDone(true);
-    } catch {
-      setSubmitError("We couldn't submit your acceptance. Please try again.");
+    async function handleNext(): Promise<void> {
+        const fields = STEP_FIELDS[step];
+        const valid = await trigger(fields, { shouldFocus: true });
+        if (!valid) return;
+        setStep((s) => (Math.min(s + 1, 2) as StepIndex));
     }
-  });
 
-  if (done) {
+    function handleBack(): void {
+        setStep((s) => (Math.max(s - 1, 0) as StepIndex));
+    }
+
+    const onValid = handleSubmit(async (values) => {
+        setSubmitError(null);
+        try {
+            await mutateAsync({
+                token: invite.token,
+                firstName: values.firstName,
+                lastName: values.lastName,
+                password: values.password,
+            });
+            setDone(true);
+        } catch {
+            setSubmitError("We couldn't submit your acceptance. Please try again.");
+        }
+    });
+
+    if (done) {
+        return (
+            <Card className="max-w-xl mx-auto">
+                <SuccessStep email={invite.tenantEmail} />
+            </Card>
+        );
+    }
+
     return (
-      <Card className="max-w-xl mx-auto">
-        <SuccessStep email={invite.tenantEmail} />
-      </Card>
+        <Card className="max-w-2xl mx-auto">
+            <StepIndicator current={step} />
+            <form onSubmit={onValid} className="mt-6 space-y-6" noValidate>
+                <FormProvider {...methods}>
+                    {step === 0 && <ReviewStep invite={invite} />}
+                    {step === 1 && <AcceptStep />}
+                    {step === 2 && <AccountStep />}
+                </FormProvider>
+
+                {submitError && (
+                    <p className="text-sm text-danger" role="alert">
+                        {submitError}
+                    </p>
+                )}
+
+                <div className="flex items-center justify-between gap-3 pt-2">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={handleBack}
+                        disabled={step === 0 || isPending}
+                    >
+                        Back
+                    </Button>
+                    {step < 2 ? (
+                        <Button type="button" variant="primary" onClick={handleNext}>
+                            Continue
+                        </Button>
+                    ) : (
+                        <Button type="submit" variant="primary" disabled={isPending}>
+                            {isPending ? "Submitting…" : "Accept & create account"}
+                        </Button>
+                    )}
+                </div>
+            </form>
+        </Card>
     );
-  }
-
-  return (
-    <Card className="max-w-2xl mx-auto">
-      <StepIndicator current={step} />
-      <form onSubmit={onValid} className="mt-6 space-y-6" noValidate>
-        <FormProvider {...methods}>
-          {step === 0 && <ReviewStep invite={invite} />}
-          {step === 1 && <AcceptStep />}
-          {step === 2 && <AccountStep />}
-        </FormProvider>
-
-        {submitError && (
-          <p className="text-sm text-danger" role="alert">
-            {submitError}
-          </p>
-        )}
-
-        <div className="flex items-center justify-between gap-3 pt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleBack}
-            disabled={step === 0 || isPending}
-          >
-            Back
-          </Button>
-          {step < 2 ? (
-            <Button type="button" variant="primary" onClick={handleNext}>
-              Continue
-            </Button>
-          ) : (
-            <Button type="submit" variant="primary" disabled={isPending}>
-              {isPending ? "Submitting…" : "Accept & create account"}
-            </Button>
-          )}
-        </div>
-      </form>
-    </Card>
-  );
 }

@@ -1,0 +1,54 @@
+name: Realm Import Smoke
+
+# Boots Keycloak with the production realm export against Postgres (NOT H2 —
+# faithfulness matters: the realm template has hit Postgres-specific limits like
+# varchar(255) that an H2 boot would not reproduce) and verifies the backend's
+# service account is actually usable. Catches realm-export / render regressions
+# that the .NET integration suite cannot — it builds its own hermetic test realm
+# and never loads realm-export.template.json.
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'docker-compose.yml'
+      - 'infrastructure/keycloak/**'
+      - '.github/workflows/realm-import-ci.yml'
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'docker-compose.yml'
+      - 'infrastructure/keycloak/**'
+      - '.github/workflows/realm-import-ci.yml'
+
+jobs:
+  realm-import-smoke:
+    name: Keycloak imports realm & service account is usable
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Boot Keycloak with the production realm export
+        # --wait fails this step if the container never reaches "healthy".
+        # The healthcheck probes /realms/MyProperty/.well-known/... which only
+        # returns 200 after the realm import completes — so a broken import
+        # (e.g. a field exceeding Keycloak's varchar(255)) turns the job red.
+        run: docker compose up -d keycloak --wait --wait-timeout 180
+
+      - name: Service account can obtain a token with realm-management roles
+        # A clean import is necessary but not sufficient: an unrendered secret,
+        # a missing client scope mapping, or envsubst clobbering ${client_id}
+        # all import fine yet leave the service account unable to call the
+        # Admin API. This mints a real token and asserts the roles.
+        run: bash infrastructure/keycloak/verify-realm-import.sh
+
+      - name: Keycloak logs on failure
+        if: failure()
+        run: docker compose logs keycloak keycloak-realm-init
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v

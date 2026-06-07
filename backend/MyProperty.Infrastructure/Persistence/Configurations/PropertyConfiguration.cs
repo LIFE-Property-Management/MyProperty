@@ -15,6 +15,7 @@ internal sealed class PropertyConfiguration : IEntityTypeConfiguration<Property>
         builder.Property(p => p.Name).HasMaxLength(256).IsRequired();
         builder.Property(p => p.Address).HasMaxLength(512).IsRequired();
         builder.Property(p => p.UnitNumber).HasMaxLength(32);
+        builder.Property(p => p.PropertyType).HasConversion<string>().HasMaxLength(16).IsRequired();
 
         builder.HasOne(p => p.Landlord)
             .WithMany(u => u.OwnedProperties)

@@ -1,0 +1,292 @@
+[
+  {
+    "name": "MyProperty - Tenant inquiry triage (M5.8)",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "tenant-inquiry",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "node-webhook",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          300
+        ],
+        "webhookId": "myproperty-tenant-inquiry"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Normalise the inbound webhook body and build the Anthropic request.\n// The Webhook node nests the POSTed JSON under `body`; fall back to the root\n// item so a hand-crafted test payload without that envelope still works.\nconst body = ($json.body && typeof $json.body === 'object') ? $json.body : $json;\n\nconst str = (v, n) => (v === undefined || v === null ? '' : String(v)).slice(0, n);\n\nconst tenantName  = str(body.tenantName || body.name, 200) || 'Unknown tenant';\nconst tenantEmail = str(body.tenantEmail || body.email, 200);\nconst propertyRef = str(body.propertyRef || body.property || body.propertyId, 200);\nconst message     = str(body.message || body.inquiry || body.text, 4000);\nconst receivedAt  = str(body.receivedAt, 40) || new Date().toISOString();\n\nconst model = ($env.N8N_TENANT_INQUIRY_MODEL || 'claude-haiku-4-5-20251001').trim();\nconst anthropicConfigured = !!($env.ANTHROPIC_API_KEY && $env.ANTHROPIC_API_KEY.trim());\n\nconst system = [\n  'You are the front-desk assistant for MyProperty, a property-management',\n  'platform. You triage inbound tenant inquiries for the landlord. Be concise,',\n  'practical, and professional.',\n  '',\n  'Respond with ONLY a JSON object (no markdown, no prose, no code fences) with',\n  'exactly these keys:',\n  '  \"category\": one of \"maintenance\", \"billing\", \"lease\", \"complaint\", \"general\"',\n  '  \"urgency\": one of \"low\", \"medium\", \"high\", \"urgent\"',\n  '  \"sentiment\": one of \"positive\", \"neutral\", \"negative\", \"frustrated\"',\n  '  \"summary\": one sentence summarising the inquiry for the landlord',\n  '  \"suggestedReply\": a short professional draft reply (2-4 sentences) the',\n  '      landlord can send back to the tenant',\n  '  \"recommendedAction\": one short imperative sentence telling the landlord',\n  '      what to do next',\n].join('\\n');\n\nconst userPrompt = [\n  'New tenant inquiry received ' + receivedAt + '.',\n  'Tenant: ' + tenantName + (tenantEmail ? ' <' + tenantEmail + '>' : ''),\n  'Property: ' + (propertyRef || '(not specified)'),\n  '',\n  'Message:',\n  (message || '(empty)'),\n].join('\\n');\n\nconst anthropicBody = {\n  model: model,\n  max_tokens: 1024,\n  system: system,\n  messages: [{ role: 'user', content: userPrompt }],\n};\n\nreturn [{ json: {\n  tenantName, tenantEmail, propertyRef, message, receivedAt,\n  model, anthropicConfigured, anthropicBody,\n} }];"
+        },
+        "id": "node-prepare",
+        "name": "Prepare triage request",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "node-if-anthropic-c1",
+                "leftValue": "={{ $json.anthropicConfigured }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-if-anthropic",
+        "name": "Anthropic configured?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          440,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.anthropic.com/v1/messages",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-api-key",
+                "value": "={{ $env.ANTHROPIC_API_KEY }}"
+              },
+              {
+                "name": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.anthropicBody) }}",
+          "options": {
+            "timeout": 20000
+          }
+        },
+        "id": "node-claude",
+        "name": "Claude triage",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          660,
+          200
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Read the prepared fields (preserved across the HTTP node) and Claude's reply.\nconst prep = $('Prepare triage request').first().json;\nconst resp = $json;\n\nfunction fallback(reason) {\n  return {\n    category: 'general',\n    urgency: 'unknown',\n    sentiment: 'unknown',\n    summary: (prep.message || 'Tenant inquiry received.').slice(0, 280),\n    suggestedReply: 'Thank you for reaching out. We have received your message '\n      + 'and a member of our team will get back to you shortly.',\n    recommendedAction: 'Review this inquiry manually — automated triage was '\n      + 'unavailable (' + reason + ').',\n    aiTriaged: false,\n  };\n}\n\nlet triage;\ntry {\n  if (!prep.anthropicConfigured) {\n    triage = fallback('ANTHROPIC_API_KEY not set');\n  } else if (resp && Array.isArray(resp.content)) {\n    const text = resp.content\n      .filter(b => b && b.type === 'text')\n      .map(b => b.text)\n      .join('')\n      .trim();\n    const parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));\n    triage = {\n      category: parsed.category || 'general',\n      urgency: parsed.urgency || 'medium',\n      sentiment: parsed.sentiment || 'neutral',\n      summary: parsed.summary || (prep.message || '').slice(0, 280),\n      suggestedReply: parsed.suggestedReply || '',\n      recommendedAction: parsed.recommendedAction || '',\n      aiTriaged: true,\n    };\n  } else {\n    triage = fallback('Claude API call failed');\n  }\n} catch (e) {\n  triage = fallback('could not parse Claude response');\n}\n\n// Discord embed — colour/emoji conventions mirror the M4.11 aiops-webhook.\nconst COLOR = { urgent: 0xE01E5A, high: 0xE01E5A, medium: 0xECB22E, low: 0x36C5F0, unknown: 0x95A5A6 };\nconst EMOJI = { urgent: '\\u{1F6A8}', high: '\\u{1F6A8}', medium: '⚠️', low: 'ℹ️', unknown: '\\u{1F514}' };\nconst emoji = EMOJI[triage.urgency] || '\\u{1F514}';\nconst color = COLOR[triage.urgency] || COLOR.unknown;\n\nconst fields = [\n  { name: 'Tenant', value: (prep.tenantName || 'Unknown') + (prep.tenantEmail ? ' <' + prep.tenantEmail + '>' : ''), inline: true },\n  { name: 'Property', value: prep.propertyRef || '(not specified)', inline: true },\n  { name: 'Urgency', value: String(triage.urgency), inline: true },\n  { name: 'Category', value: String(triage.category), inline: true },\n  { name: 'Sentiment', value: String(triage.sentiment), inline: true },\n];\n\nconst descParts = [];\nif (triage.summary) descParts.push('**Summary**\\n' + triage.summary);\ndescParts.push('**Original message**\\n' + (prep.message || '(empty)').slice(0, 1500));\nif (triage.suggestedReply) descParts.push('**Suggested reply**\\n' + triage.suggestedReply);\nif (triage.recommendedAction) descParts.push('**Recommended action**\\n' + triage.recommendedAction);\n\nconst discordPayload = {\n  content: (emoji + ' [' + String(triage.urgency).toUpperCase() + '] New tenant inquiry from '\n    + (prep.tenantName || 'Unknown')).slice(0, 2000),\n  embeds: [{\n    title: (emoji + ' New tenant inquiry').slice(0, 256),\n    color: color,\n    description: descParts.join('\\n\\n').slice(0, 4096),\n    fields: fields,\n  }],\n};\n\nconst discordConfigured = !!($env.DISCORD_WEBHOOK_URL && $env.DISCORD_WEBHOOK_URL.trim());\n\nconst responseBody = {\n  received: true,\n  aiTriaged: triage.aiTriaged,\n  category: triage.category,\n  urgency: triage.urgency,\n  sentiment: triage.sentiment,\n  summary: triage.summary,\n  suggestedReply: triage.suggestedReply,\n  recommendedAction: triage.recommendedAction,\n  deliveredTo: discordConfigured ? 'discord' : 'log',\n};\n\n// Always log a structured line. Promtail ships n8n's stdout to Loki, so the\n// triage is visible in Grafana even when DISCORD_WEBHOOK_URL is unset.\nconsole.log('[n8n][tenant-inquiry] ' + JSON.stringify({ tenant: prep.tenantName, ...responseBody }));\n\nreturn [{ json: { discordPayload, discordConfigured, responseBody, triage } }];"
+        },
+        "id": "node-parse",
+        "name": "Parse triage",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "conditions": [
+              {
+                "id": "node-if-discord-c1",
+                "leftValue": "={{ $json.discordConfigured }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-if-discord",
+        "name": "Discord configured?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1100,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.DISCORD_WEBHOOK_URL }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.discordPayload) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "id": "node-discord",
+        "name": "Post to Discord",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1320,
+          200
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($('Parse triage').first().json.responseBody) }}",
+          "options": {}
+        },
+        "id": "node-respond",
+        "name": "Respond to caller",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          400
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Prepare triage request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare triage request": {
+        "main": [
+          [
+            {
+              "node": "Anthropic configured?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Anthropic configured?": {
+        "main": [
+          [
+            {
+              "node": "Claude triage",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Parse triage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude triage": {
+        "main": [
+          [
+            {
+              "node": "Parse triage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse triage": {
+        "main": [
+          [
+            {
+              "node": "Discord configured?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Discord configured?": {
+        "main": [
+          [
+            {
+              "node": "Post to Discord",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond to caller",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Post to Discord": {
+        "main": [
+          [
+            {
+              "node": "Respond to caller",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "active": true,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "pinData": {},
+    "meta": {},
+    "id": "MyPropertyM58Inq"
+  }
+]

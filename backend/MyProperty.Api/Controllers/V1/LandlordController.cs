@@ -7,6 +7,7 @@ using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Application.Landlord.Queries.GetLandlordTenants;
 using MyProperty.Application.Landlord.Queries.GetTenantDetail;
+using MyProperty.Application.Landlord.Queries.GetUpcomingPayments;
 using Swashbuckle.AspNetCore.Annotations;
 
 namespace MyProperty.Api.Controllers.V1;
@@ -21,8 +22,8 @@ public sealed class LandlordController(
     GetLandlordDashboardHandler getDashboard,
     GetLandlordTenantsHandler getLandlordTenants,
     GetTenantDetailHandler getTenantDetail,
-    IUserRepository users,
-    ICurrentUser currentUser) : ControllerBase
+    GetUpcomingPaymentsHandler getUpcomingPayments,
+    ICurrentUserContext currentUserContext) : ControllerBase
 {
     /// <summary>
     /// Aggregate counters for the authenticated landlord — total properties,
@@ -39,8 +40,24 @@ public sealed class LandlordController(
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<LandlordDashboardDto>> Dashboard(CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
         var result = await getDashboard.Handle(new GetLandlordDashboardQuery(landlord.Id), ct);
+        return Ok(result);
+    }
+
+    /// <summary>Returns Outstanding payments due within the next 30 days for the authenticated landlord.</summary>
+    [HttpGet("payments/upcoming")]
+    [ProducesResponseType(typeof(PagedResult<UpcomingPaymentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResult<UpcomingPaymentDto>>> UpcomingPayments(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
+    {
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
+        var result = await getUpcomingPayments.Handle(
+            new GetUpcomingPaymentsQuery(landlord.Id, page, pageSize), ct);
         return Ok(result);
     }
 
@@ -55,7 +72,6 @@ public sealed class LandlordController(
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLandlordTenants.Handle(
             new GetLandlordTenantsQuery(page, pageSize), ct);
         return Ok(result);
@@ -73,7 +89,6 @@ public sealed class LandlordController(
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<TenantDetailDto>> TenantDetail(Guid id, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getTenantDetail.Handle(new GetTenantDetailQuery(id), ct);
         return Ok(result);
     }

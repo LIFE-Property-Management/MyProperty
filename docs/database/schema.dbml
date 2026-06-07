@@ -1,0 +1,198 @@
+// =====================================================================
+//  MyProperty — Database schema (crow's-foot ERD source)
+//  Deliverable: M5.3 — Database schema review
+//
+//  SOURCE OF TRUTH: the backend EF Core model snapshot
+//    backend/MyProperty.Infrastructure/Persistence/Migrations/AppDbContextModelSnapshot.cs
+//  This DBML is hand-derived from that snapshot + the IEntityTypeConfiguration<T>
+//  classes under backend/.../Persistence/Configurations/. If the two ever
+//  disagree, the snapshot wins — regenerate this file.
+//
+//  RENDER (crow's foot):
+//    • Online — https://dbdiagram.io → New → Import → paste this file.
+//    • Local  — npx -y @softwaretechnik/dbml-renderer -i schema.dbml -o schema.svg
+//  VALIDATE / emit Postgres DDL:
+//    • npx -y @dbml/cli dbml2sql schema.dbml --postgres
+// =====================================================================
+
+Project myproperty {
+  database_type: 'PostgreSQL 16'
+  Note: '''
+  MyProperty rent-management schema. EF Core 10, code-first.
+
+  Conventions that apply to EVERY table below:
+   - Surrogate PK `Id uuid` (app-generated `Guid.NewGuid()`), never a natural key.
+   - Audit + soft-delete columns from `BaseEntity`: CreatedAt, UpdatedAt,
+     DeletedAt, CreatedBy, UpdatedBy. A global EF query filter excludes rows
+     where `DeletedAt IS NOT NULL`, so a "delete" is almost always soft.
+   - .NET enums persist as `varchar(16)` via `HasConversion<string>()` — NOT
+     native PG enum types, and (currently) without a DB CHECK constraint.
+   - Money = `numeric(12,2)`; Currency = `char(3)` (ISO-4217, fixed length).
+   - Every FK is ON DELETE RESTRICT (no cascades).
+  '''
+}
+
+// ── Core identity ─────────────────────────────────────────────────────
+Table users {
+  Id            uuid         [pk, note: 'app-generated GUID']
+  KeycloakSubId varchar(64)  [not null, unique, note: 'Keycloak subject (sub) claim — links the row to the IdP identity']
+  Email         varchar(256) [not null, unique]
+  FirstName     varchar(128) [not null]
+  LastName      varchar(128) [not null]
+  Phone         varchar(32)
+  AccountStatus varchar(16)  [note: 'TenantAccountStatus {Active|ReadOnly}. NULL for landlords — tenant-only subtype attribute.']
+  // --- audit (BaseEntity) ---
+  CreatedAt timestamptz [not null]
+  UpdatedAt timestamptz [not null]
+  DeletedAt timestamptz
+  CreatedBy text
+  UpdatedBy text
+
+  Note: 'One row per human. Role (Tenant/Landlord/Admin) is NOT stored here — it lives in Keycloak. The same user can be a landlord (properties.LandlordId, leases.LandlordId) AND a tenant (leases.TenantId).'
+}
+
+Table properties {
+  Id         uuid         [pk]
+  LandlordId uuid         [not null, note: 'owning landlord (users.Id)']
+  Name       varchar(256) [not null]
+  Address    varchar(512) [not null]
+  UnitNumber varchar(32)
+  // --- audit (BaseEntity) ---
+  CreatedAt timestamptz [not null]
+  UpdatedAt timestamptz [not null]
+  DeletedAt timestamptz
+  CreatedBy text
+  UpdatedBy text
+
+  indexes {
+    LandlordId [note: 'FK lookup / landlord property list']
+  }
+}
+
+Table leases {
+  Id          uuid            [pk]
+  LandlordId  uuid            [not null, note: 'denormalised owner (users.Id) — lets landlord dashboards filter leases without a properties join']
+  PropertyId  uuid            [not null]
+  TenantId    uuid            [not null, note: 'the renting user (users.Id)']
+  StartDate   date            [not null]
+  EndDate     date            [not null]
+  MonthlyRent "numeric(12,2)" [not null]
+  Currency    char(3)         [not null, note: 'ISO-4217']
+  Status      varchar(16)     [not null, note: 'LeaseStatus {Active|Expired|Terminated}; domain-controlled (private setter, Terminate())']
+  // --- audit (BaseEntity) ---
+  CreatedAt timestamptz [not null]
+  UpdatedAt timestamptz [not null]
+  DeletedAt timestamptz
+  CreatedBy text
+  UpdatedBy text
+
+  indexes {
+    (LandlordId, Status) [note: 'landlord dashboard']
+    (TenantId, Status)   [note: 'tenant dashboard / active-lease lookup']
+    (PropertyId, Status) [note: 'per-property lease list']
+    EndDate              [note: 'expiring-soon recurring scan']
+  }
+  Note: 'Created at invite ACCEPTANCE, not at invite creation. Multiple active leases per tenant are currently permitted; a single-active-lease invariant + partial unique index is a documented follow-up.'
+}
+
+Table payments {
+  Id          uuid            [pk]
+  LeaseId     uuid            [not null]
+  Amount      "numeric(12,2)" [not null]
+  Currency    char(3)         [not null, note: 'ISO-4217; point-in-time snapshot of the lease currency at payment time']
+  DueDate     date            [not null]
+  Status      varchar(16)     [not null, note: 'PaymentStatus {Outstanding|Pending|Confirmed|Rejected}; server-enforced state machine']
+  Method      varchar(16)     [note: 'PaymentMethod {ReceiptUpload|ManualRequest}; NULL until the tenant submits']
+  SubmittedAt timestamptz
+  ConfirmedAt timestamptz
+  RejectedAt  timestamptz
+  RejectionReason varchar(500)
+  // receipt file metadata — optional 1:1 cluster ───────
+  ReceiptFileKey     varchar(512) [note: 'storage key beneath FileStorage:LocalRoot']
+  ReceiptFileName    varchar(256)
+  ReceiptContentType varchar(128)
+  ReceiptSizeBytes   bigint
+  Notes              varchar(500)
+  // OCR extraction result — optional 1:1 cluster ───────
+  OcrAmount      numeric      [note: 'unbounded numeric — INCONSISTENT with Amount numeric(12,2); see review §7']
+  OcrDate        date
+  OcrMerchant    varchar(200)
+  OcrProcessedAt timestamptz
+  OcrRawResponse text
+  // --- audit (BaseEntity) ---
+  CreatedAt timestamptz [not null]
+  UpdatedAt timestamptz [not null]
+  DeletedAt timestamptz
+  CreatedBy text
+  UpdatedBy text
+
+  indexes {
+    (LeaseId, Status)
+    DueDate [name: 'IX_payments_DueDate_Outstanding', note: "PARTIAL: WHERE Status='Outstanding' AND DeletedAt IS NULL — sized to the overdue-scan job (M3.4)"]
+  }
+  Note: 'The 4 Receipt* and 5 Ocr* columns are two OPTIONAL 1:1 sub-entities embedded inline. 3NF-compliant (single-valued, functionally dependent on Id) but a candidate for extraction to a payment_receipts table — see review §5.'
+}
+
+Table invites {
+  Id          uuid            [pk]
+  LandlordId  uuid            [not null]
+  PropertyId  uuid            [not null]
+  Email       varchar(256)    [not null, note: 'PROPOSED tenant address — no users row exists yet at invite time']
+  FirstName   varchar(128)    [not null]
+  LastName    varchar(128)    [not null]
+  TokenHash   varchar(64)     [not null, unique, note: 'SHA-256 hex of the single-use invite token; plaintext token is never persisted']
+  Status      varchar(16)     [not null, note: 'InviteStatus {Pending|Accepted|Rejected|Expired}']
+  ExpiresAt   timestamptz     [not null]
+  AcceptedAt  timestamptz
+  RejectedAt  timestamptz
+  ProposedStartDate   date            [not null]
+  ProposedEndDate     date            [not null]
+  ProposedMonthlyRent "numeric(12,2)" [not null]
+  Currency            char(3)         [not null]
+  // --- audit (BaseEntity) ---
+  CreatedAt timestamptz [not null]
+  UpdatedAt timestamptz [not null]
+  DeletedAt timestamptz
+  CreatedBy text
+  UpdatedBy text
+
+  indexes {
+    ExpiresAt            [note: 'expiry / orphan cleanup job']
+    (LandlordId, Status) [note: 'landlord invite list']
+    PropertyId           [note: 'FK index (EF auto-created)']
+  }
+  Note: 'Carries PROPOSED lease terms + invitee identity. These mirror leases/users columns but are NOT redundant: an invite precedes both the User account and the Lease (both created on accept). See review §5.'
+}
+
+Table failed_emails {
+  Id            uuid         [pk]
+  ToAddress     varchar(256) [not null]
+  Subject       varchar(512) [not null]
+  Body          text         [not null]
+  IsHtml        boolean      [not null]
+  HangfireJobId varchar(64)  [not null]
+  AttemptCount  integer      [not null]
+  LastError     text         [not null]
+  FailedAt      timestamptz  [not null]
+  // --- audit (BaseEntity) ---
+  CreatedAt timestamptz [not null]
+  UpdatedAt timestamptz [not null]
+  DeletedAt timestamptz
+  CreatedBy text
+  UpdatedBy text
+
+  indexes {
+    FailedAt
+    HangfireJobId
+  }
+  Note: 'Dead-letter table: one row per email that exhausted Hangfire retries. Standalone — no FK (the recipient may not be a registered user).'
+}
+
+// ── Relationships — all many-to-one (crow's foot), ON DELETE RESTRICT ──
+Ref: properties.LandlordId > users.Id      [delete: restrict]
+Ref: leases.LandlordId     > users.Id      [delete: restrict]
+Ref: leases.PropertyId     > properties.Id [delete: restrict]
+Ref: leases.TenantId       > users.Id      [delete: restrict]
+Ref: payments.LeaseId      > leases.Id     [delete: restrict]
+Ref: invites.LandlordId    > users.Id      [delete: restrict]
+Ref: invites.PropertyId    > properties.Id [delete: restrict]

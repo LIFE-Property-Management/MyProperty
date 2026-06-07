@@ -84,6 +84,11 @@ backend/obj/
 **/bin/
 **/obj/
 backend/artifacts/
+# Literal-backslash dirs Rider/MSBuild on Linux writes as a single component
+# named "bin\Debug" (not bin/Debug); **/bin/ above does NOT match these, and
+# they break the backend Docker build (bogus MSB3552 **/*.resx). Escape the \.
+**/bin\\Debug/
+**/obj\\Debug/
 
 # User-specific VS / Rider files
 *.user
@@ -140,6 +145,18 @@ docker-volumes/
 # Docker override files (local dev tweaks — not for CI)
 docker-compose.override.yml
 docker-compose.local.yml
+
+
+# ───────────────────────────────────────────────────────────
+#  PYTHON — infrastructure scripts (aiops-webhook, uptime-kuma, gjirafa)
+# ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 
 # ───────────────────────────────────────────────────────────
@@ -242,6 +259,9 @@ docs/ai-log/exports/
 # Uptime Kuma local data
 uptime-kuma-data/
 
+# Local-only monitoring port-forward helper (per-developer convenience)
+scripts/port-forward-monitoring.sh
+
 # Playwright browsers (downloaded on CI automatically)
 frontend/playwright/.cache/
 # ───────────────────────────────────────────────────────────
@@ -252,6 +272,22 @@ frontend/playwright-report/
 frontend/test-results/
 
 # ───────────────────────────────────────────────────────────
+#  WORKING PLANNING DOCS / RUNBOOKS — kept local, never committed
+# ───────────────────────────────────────────────────────────
+docs/operations/*-plan.md
+
+
+# ───────────────────────────────────────────────────────────
 #  CLAUDE CODE — per-developer local settings
 # ───────────────────────────────────────────────────────────
 **/.claude/settings.local.json
+
+
+# ───────────────────────────────────────────────────────────
+#  ARCHITECTURE DIAGRAMS — tooling (PlantUML)
+# ───────────────────────────────────────────────────────────
+# plantuml.jar is ~28 MB and is downloaded on demand by
+# scripts/render-architecture-diagrams.ps1. The rendered .svg
+# outputs IN docs/architecture/diagrams/ ARE committed.
+tools/plantuml.jar
+tools/*.jar

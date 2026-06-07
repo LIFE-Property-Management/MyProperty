@@ -22,5 +22,17 @@ export const queryKeys = {
       upcoming: (page: number, pageSize: number) =>
         [...queryKeys.landlord.payment.all(), "upcoming", { page, pageSize }] as const,
     },
+    property: {
+      all: () => [...queryKeys.landlord.all, "property"] as const,
+      list: (page: number, pageSize: number) =>
+        [...queryKeys.landlord.property.all(), "list", { page, pageSize }] as const,
+      detail: (id: string) => [...queryKeys.landlord.property.all(), "detail", id] as const,
+    },
+    tenant: {
+      all: () => [...queryKeys.landlord.all, "tenant"] as const,
+      list: (page: number, pageSize: number) =>
+        [...queryKeys.landlord.tenant.all(), "list", { page, pageSize }] as const,
+      detail: (id: string) => [...queryKeys.landlord.tenant.all(), "detail", id] as const,
+    },
   },
 } as const;

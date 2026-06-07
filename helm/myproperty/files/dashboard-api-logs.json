@@ -1,190 +1,76 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_LOKI",
-      "label": "Loki",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "loki",
-      "pluginName": "Loki"
-    }
-  ],
-  "__elements": {},
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "11.1.0"
-    },
-    {
-      "type": "datasource",
-      "id": "loki",
-      "name": "Loki",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "logs",
-      "name": "Logs",
-      "version": ""
-    }
-  ],
-  "annotations": {
-    "list": [
-      {
-        "builtIn": 1,
-        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "type": "dashboard"
-      }
-    ]
-  },
-  "description": "MyProperty API — structured logs with correlation ID tracing",
+  "annotations": { "list": [ { "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard" } ] },
+  "description": "Structured logs from the MyProperty API (.NET backend), with level breakdown and HTTP request tracing.",
   "editable": true,
-  "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "panels": [
     {
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": { "type": "linear" },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": { "group": "A", "mode": "none" },
-            "thresholdsStyle": { "mode": "off" }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 80 }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "type": "text",
       "id": 1,
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": { "mode": "multi", "sort": "none" }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
-          "editorMode": "code",
-          "expr": "sum by (level) (count_over_time({app=\"myproperty-api\"} [$__auto]))",
-          "instant": false,
-          "legendFormat": "{{level}}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Logs by level",
-      "type": "timeseries"
+        "mode": "markdown",
+        "content": "## API (Backend) Logs\nLogs from the **.NET API** (`component=backend`). The API logs as structured JSON, so Promtail extracts a real `level` label (`Information` / `Warning` / `Error` / `Fatal`) — that's what powers the breakdown below. Each request the API serves produces one line with method, path, status code, and how long it took; the request panels parse those fields out for you. Every log line carries a `CorrelationId` — copy one and search `{component=\"backend\"} | json | CorrelationId=\"…\"` in Explore to follow a single request end-to-end."
+      }
     },
     {
-      "datasource": {
-        "type": "loki",
-        "uid": "${DS_LOKI}"
-      },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 8 },
+      "type": "timeseries",
       "id": 2,
-      "options": {
-        "dedupStrategy": "none",
-        "enableLogDetails": true,
-        "prettifyLogMessage": false,
-        "showCommonLabels": false,
-        "showLabels": false,
-        "showTime": true,
-        "sortOrder": "Descending",
-        "wrapLogMessage": false
+      "title": "Logs by level",
+      "description": "Count of log lines per severity over time. `Information` is normal traffic; watch for `Warning` climbing or any `Error`/`Fatal` appearing. Levels come from the CLEF `@l` field, parsed into a label by Promtail.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 3 },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1, "showPoints": "never", "stacking": { "group": "A", "mode": "normal" } }, "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Error" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ] },
+          { "matcher": { "id": "byName", "options": "Fatal" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "dark-red" } } ] },
+          { "matcher": { "id": "byName", "options": "Warning" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } } ] },
+          { "matcher": { "id": "byName", "options": "Information" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } } ] }
+        ]
       },
-      "targets": [
-        {
-          "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
-          "editorMode": "code",
-          "expr": "{app=\"myproperty-api\", level=~\"Error|Fatal\"}",
-          "instant": false,
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "timeFrom": "1h",
-      "title": "Recent errors",
-      "type": "logs"
+      "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum by (level) (count_over_time({namespace=\"project-02\", component=\"backend\"} [$__auto]))", "legendFormat": "{{level}}", "refId": "A" } ]
+    },
+    {
+      "type": "logs",
+      "id": 3,
+      "title": "Recent errors & fatals",
+      "description": "The actual Error/Fatal log lines, newest first. Click to expand — exception details (the CLEF `@x` field) show in the expanded view. Empty here is good.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "{namespace=\"project-02\", component=\"backend\", level=~\"Error|Fatal\"}", "queryType": "range", "refId": "A" } ]
+    },
+    {
+      "type": "logs",
+      "id": 4,
+      "title": "HTTP request log",
+      "description": "One line per HTTP request the API served, parsed into `METHOD path → status  elapsed`. Generated by Serilog's request-logging middleware. Health and /metrics probes are filtered out so they don't drown real traffic.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 20 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": false },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "{namespace=\"project-02\", component=\"backend\"} | json | SourceContext=\"Serilog.AspNetCore.RequestLoggingMiddleware\" | line_format \"{{.RequestMethod}} {{.RequestPath}} → {{.StatusCode}}  {{.Elapsed}}ms\"", "queryType": "range", "refId": "A" } ]
+    },
+    {
+      "type": "logs",
+      "id": 5,
+      "title": "Slow requests (> 500 ms)",
+      "description": "Requests that took longer than 500 ms to respond. A handful is normal (cold caches, first DB hit); a sustained stream points at a performance problem — cross-reference the p95 panel on the API Metrics dashboard.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 31 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": false },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "{namespace=\"project-02\", component=\"backend\"} | json | SourceContext=\"Serilog.AspNetCore.RequestLoggingMiddleware\" | Elapsed > 500 | line_format \"{{.Elapsed}}ms  {{.RequestMethod}} {{.RequestPath}} (status {{.StatusCode}})\"", "queryType": "range", "refId": "A" } ]
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["myproperty", "loki"],
-  "templating": {
-    "list": [
-      {
-        "current": {
-          "selected": false,
-          "text": "Loki",
-          "value": "Loki"
-        },
-        "hide": 0,
-        "includeAll": false,
-        "multi": false,
-        "name": "DS_LOKI",
-        "options": [],
-        "query": "loki",
-        "refresh": 1,
-        "regex": "",
-        "type": "datasource"
-      }
-    ]
-  },
+  "tags": ["myproperty", "loki", "logs", "backend"],
   "time": { "from": "now-1h", "to": "now" },
-  "timepicker": {},
   "timezone": "browser",
-  "title": "MyProperty API Logs",
+  "title": "API (Backend) Logs",
   "uid": "myproperty-api-logs",
-  "version": 1
+  "version": 2
 }
