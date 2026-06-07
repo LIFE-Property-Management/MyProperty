@@ -17,10 +17,15 @@ function monthLabel(year: number, month: number): string {
 }
 
 function formatPercent(rate: number): string {
+  // Exact zero (e.g. the divide-by-zero guards return 0 on an empty platform)
+  // reads cleaner as "0%" than "0.0%". Non-zero rates keep one decimal.
+  if (rate === 0) return "0%";
   return `${(rate * 100).toFixed(1)}%`;
 }
 
 function formatHours(hours: number): string {
+  // Exact zero (no confirmed payments yet) reads cleaner as "0 h" than "0.0 h".
+  if (hours === 0) return "0 h";
   return `${hours.toFixed(1)} h`;
 }
 

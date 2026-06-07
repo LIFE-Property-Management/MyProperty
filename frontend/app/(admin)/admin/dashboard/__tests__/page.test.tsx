@@ -70,6 +70,26 @@ describe("<AdminDashboardPage />", () => {
     expect(screen.queryByRole("heading", { name: "Growth & users" })).not.toBeInTheDocument();
   });
 
+  it("formats exact-zero rates and hours without a trailing .0", () => {
+    const zeroed = {
+      ...stakeholderDashboardFixture,
+      adoption: { ...stakeholderDashboardFixture.adoption, occupancyRate: 0 },
+      inviteFunnel: { ...stakeholderDashboardFixture.inviteFunnel, acceptanceRate: 0 },
+      financial: {
+        ...stakeholderDashboardFixture.financial,
+        confirmationRate: 0,
+        avgHoursToConfirm: 0,
+      },
+    };
+    mockDashboard.mockReturnValue(makeReturn({ data: zeroed }));
+    render(<AdminDashboardPage />);
+    // "0%" (not "0.0%") for the zeroed rates, and "0 h" (not "0.0 h").
+    expect(screen.getAllByText("0%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("0 h")).toBeInTheDocument();
+    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.0 h")).not.toBeInTheDocument();
+  });
+
   it("shows a loading state before data resolves", () => {
     mockDashboard.mockReturnValue(makeReturn({ data: undefined, isLoading: true, isSuccess: false }));
     render(<AdminDashboardPage />);
