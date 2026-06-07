@@ -1,0 +1,75 @@
+@startuml
+title Receipt OCR pipeline - submit -> RabbitMQ -> Hangfire -> Anthropic
+
+skinparam BackgroundColor #FAFAFA
+skinparam sequenceMessageAlign center
+
+actor       "Tenant"                                       as tenant
+participant "Browser SPA"                                  as spa
+participant "PaymentsController"                           as ctrl
+participant "SubmitPaymentHandler"                         as handler
+participant "IFileStorage\n(LocalFileStorage)"             as fs
+participant "Receipt store\n(PVC volume, dev + prod)"      as store
+participant "PaymentRepository"                            as repo
+database    "PostgreSQL"                                   as pg
+participant "RabbitMqEventPublisher"                       as mqpub
+queue       "RabbitMQ\n'myproperty.events'"                as mq
+participant "PaymentSubmittedOcrConsumer\n+ IBackgroundJobQueue" as ocrcons
+participant "IFeatureFlags\n(Unleash snapshot)"            as flags
+participant "Hangfire server"                              as hf
+participant "ReceiptOcrJob"                                as ocrjob
+participant "AnthropicReceiptOcrService"                   as anth
+participant "Anthropic Claude\nclaude-sonnet-4-5"          as claude
+
+autonumber
+
+== Synchronous: tenant submits ==
+tenant -> spa: Upload receipt image + amount
+spa -> ctrl: POST /api/v1/payments/{id}/submit\nmultipart (file + fields)
+ctrl -> handler: Handle(SubmitPaymentCommand, ct)
+handler -> handler: FluentValidation (5 MB cap, MIME allowlist)
+handler -> fs: UploadAsync(stream, fileName, ct)
+fs -> store: PUT {LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}
+store --> fs: storage key
+fs --> handler: receiptKey
+handler -> repo: Add(Payment { Status=Pending, ReceiptKey })
+repo -> pg: INSERT / UPDATE
+pg --> repo: ok
+handler -> mqpub: Publish(PaymentSubmittedEvent)
+mqpub -> mq: AMQP publish\nrouting key: payment.submitted
+handler --> ctrl: 200 OK + PaymentDto
+ctrl --> spa: response
+
+== Asynchronous: OCR job (M5.6 feature-flag kill-switch) ==
+mq -> ocrcons: deliver PaymentSubmittedEvent
+ocrcons -> flags: IsEnabledAsync("payments.ocr-autoextract", default=true)
+flags --> ocrcons: enabled?
+alt flag OFF (kill-switch)
+  ocrcons -> ocrcons: log "OCR disabled by feature flag"; ack\n(payment stays manual-entry, no Anthropic call)
+else flag ON (default; fail-open if Unleash unreachable)
+  ocrcons -> hf: EnqueueReceiptOcr(paymentId) (queue "default")
+  hf -> ocrjob: execute
+  ocrjob -> repo: GetByIdAsync(paymentId)
+  repo -> pg: SELECT
+  pg --> repo: Payment { ReceiptKey }
+  repo --> ocrjob: entity
+  ocrjob -> fs: DownloadAsync(receiptKey)
+  fs -> store: GET file
+  store --> fs: stream
+  fs --> ocrjob: stream
+  ocrjob -> anth: OcrAsync(stream, ct)
+  anth -> claude: POST /v1/messages\n(vision, model=claude-sonnet-4-5, timeout=30s)
+  claude --> anth: { amount, date, merchant }
+  anth --> ocrjob: parsed result
+  ocrjob -> repo: Update(Payment.OcrResults = json)\nSaveChangesAsync
+  repo -> pg: UPDATE
+  pg --> repo: ok
+end
+
+note over ocrjob, tenant #LightYellow
+**Future:** emit OCRComplete event so the tenant's SPA
+gets a SignalR push and the OCR result appears live.
+Currently the tenant sees OCR output on next page load.
+end note
+
+@enduml

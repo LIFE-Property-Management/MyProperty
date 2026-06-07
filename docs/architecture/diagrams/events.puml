@@ -1,0 +1,63 @@
+@startuml
+title RabbitMQ event topology - 'myproperty.events' topic exchange
+
+skinparam BackgroundColor #FAFAFA
+skinparam componentBackgroundColor #FFFFFF
+skinparam queueBackgroundColor #FFF0F0
+skinparam packageBorderColor #999
+
+package "Producers (handlers in MyProperty.Application)" #E6F0FF {
+  component "SubmitPaymentHandler"  as h_submit
+  component "ConfirmPaymentHandler" as h_confirm
+  component "RejectPaymentHandler"  as h_reject
+  component "CreatePaymentHandler"  as h_create
+}
+
+component "<b>Exchange</b>\n<i>myproperty.events</i>\n(topic)" as exchange #FFEEDD
+
+package "Queues" #FFE6E6 {
+  queue "myproperty.payment.submitted.signalr" as q_submit_signalr
+  queue "myproperty.payment.submitted.ocr"     as q_submit_ocr
+  queue "myproperty.payment.confirmed.email"   as q_confirmed
+  queue "myproperty.payment.rejected.signalr"  as q_rejected
+  queue "myproperty.payment.created.signalr"   as q_created
+}
+
+package "Consumers (hosted services in API process)" #E6FFE6 {
+  component "PaymentSubmittedConsumer\n** -> SignalR push to landlord**" as c_submit_sig
+  component "PaymentSubmittedOcrConsumer\n** -> enqueue Hangfire ReceiptOcrJob**" as c_submit_ocr
+  component "PaymentConfirmedConsumer\n** -> email job + SignalR to tenant**" as c_confirmed
+  component "PaymentRejectedConsumer\n** -> email job + SignalR to tenant**" as c_rejected
+  component "PaymentCreatedConsumer\n** -> SignalR push**" as c_created
+}
+
+' ===== Producer -> Exchange (Publish) =====
+h_submit  --> exchange : Publish(PaymentSubmittedEvent)\nRK: payment.submitted
+h_confirm --> exchange : Publish(PaymentConfirmedEvent)\nRK: payment.confirmed
+h_reject  --> exchange : Publish(PaymentRejectedEvent)\nRK: payment.rejected
+h_create  --> exchange : Publish(PaymentCreatedEvent)\nRK: payment.created
+
+' ===== Exchange -> Queue (Bind) — note the fan-out on payment.submitted =====
+exchange --> q_submit_signalr : bind RK\npayment.submitted (fan-out)
+exchange --> q_submit_ocr     : bind RK\npayment.submitted (fan-out)
+exchange --> q_confirmed      : bind RK\npayment.confirmed
+exchange --> q_rejected       : bind RK\npayment.rejected
+exchange --> q_created        : bind RK\npayment.created
+
+' ===== Queue -> Consumer (Consume) =====
+q_submit_signalr --> c_submit_sig
+q_submit_ocr     --> c_submit_ocr
+q_confirmed      --> c_confirmed
+q_rejected       --> c_rejected
+q_created        --> c_created
+
+note bottom of exchange #LightYellow
+  Routing keys are auto-derived from the event type name
+  (IntegrationEventNaming.RoutingKey):
+    PaymentSubmittedEvent  -> payment.submitted
+    PaymentConfirmedEvent  -> payment.confirmed
+    PaymentRejectedEvent   -> payment.rejected
+    PaymentCreatedEvent    -> payment.created
+end note
+
+@enduml

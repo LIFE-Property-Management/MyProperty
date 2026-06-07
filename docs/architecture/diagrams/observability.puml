@@ -1,0 +1,74 @@
+@startuml
+title Observability stack - metrics, logs, alerts, external probes
+
+skinparam BackgroundColor #FAFAFA
+skinparam componentBackgroundColor #FFFFFF
+skinparam componentBorderColor #1168bd
+skinparam packageBorderColor #999
+skinparam packageBackgroundColor transparent
+
+actor "Operator (Admin)"    as op
+actor "Discord channels"    as discord
+actor "Tenant / Landlord"   as user
+component "API process\n(prometheus-net + Serilog)" as api
+component "All other containers\n(Postgres, Redis, RabbitMQ,\nKeycloak, Frontend, AIOps,\nLoki, Prometheus, ...)" as others
+component "Public hosts\napp.X / api.X / auth.X / status.X" as public
+
+package "Metrics path" #E6F0FF {
+    component "Prometheus\n(15s scrape, 15d retention,\nscrape wired in chart - no operator)" as prom
+    database  "Prometheus TSDB\n(20Gi PVC)" as tsdb
+}
+
+package "Logs path" #E6FFE6 {
+    component "Promtail\n(DaemonSet + namespaced Role in prod /\nDocker SD in dev)" as promtail
+    database  "Loki\n(10Gi PVC, label-indexed)" as loki
+}
+
+package "Alerts path" #FFE6E6 {
+    component "Alertmanager\n(group_by alertname+severity,\nrepeat_interval 12h,\ninhibit critical->warning)" as am
+    component "AIOps webhook\n(Python 3.14 + FastAPI,\ngraceful degradation)" as aiops
+    component "Claude Haiku\n(claude-haiku-4-5-20251001)" as claude
+}
+
+package "External probes" #FFF0E0 {
+    component "Uptime Kuma\n(StatefulSet + seed Job)" as kuma
+    database  "Kuma SQLite\n(2Gi PVC)" as kumadb
+}
+
+component "Grafana\n(chart-provisioned\ndashboards + datasources\nvia sidecar)" as grafana
+
+' ====== Metrics path ======
+api      --> prom    : GET /metrics
+prom     --> tsdb    : write
+prom     --> am      : fire alerts (chart rule files)
+
+' ====== Logs path ======
+api      --> loki    : Serilog -> Loki sink\n(structured, direct)
+others   --> promtail: stdout
+promtail --> loki    : HTTP push
+
+' ====== Alerts path ======
+am     --> aiops  : webhook POST /alerts
+aiops  --> claude : triage prompt
+claude --> aiops  : triage text
+aiops  --> discord : rich embed (#alerts)
+note right of aiops
+  Graceful degradation:
+  - ANTHROPIC_API_KEY empty -> raw labels posted to Discord
+  - DISCORD_WEBHOOK_URL empty -> message bodies to stdout
+    (-> Promtail -> Loki -> Grafana Explore)
+end note
+
+' ====== External probes ======
+kuma --> public   : HTTPS probes\n(every 60s)
+kuma --> kumadb   : persist results
+kuma --> discord  : outage notify (#uptime)
+kuma --> user     : public status page\n(status.X)
+
+' ====== Grafana consumption ======
+grafana --> tsdb : PromQL\n(api-metrics dashboard)
+grafana --> loki : LogQL\n(api-logs dashboard)
+grafana --> am   : alert state
+op      --> grafana : view dashboards\n(secret-backed admin in prod)
+
+@enduml
