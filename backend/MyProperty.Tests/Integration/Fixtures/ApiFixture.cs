@@ -28,6 +28,7 @@ public sealed class ApiFixture : IAsyncLifetime
     public const string Landlord2Email = "landlord2@test.local";
     public const string TenantEmail = "tenant@test.local";
     public const string ImposterEmail = "imposter@test.local";
+    public const string AdminEmail = "admin@test.local";
     public const string SeedPassword = "Password1!";
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
@@ -65,6 +66,9 @@ public sealed class ApiFixture : IAsyncLifetime
         await _admin.CreateUserAsync(RealmName, Landlord2Email, SeedPassword, "Landlord");
         await _admin.CreateUserAsync(RealmName, TenantEmail, SeedPassword, "Tenant");
         await _admin.CreateUserAsync(RealmName, ImposterEmail, SeedPassword, "Tenant");
+        // Admin portal user — holds ONLY the Admin realm role (matches the
+        // single-portal-role rule the frontend's decodePayload enforces).
+        await _admin.CreateUserAsync(RealmName, AdminEmail, SeedPassword, "Admin");
 
         var keycloakBaseUrl = _keycloak.GetBaseAddress().TrimEnd('/');
 
@@ -144,5 +148,17 @@ public sealed class ApiFixture : IAsyncLifetime
         using var scope = Factory.Services.CreateScope();
         var cache = scope.ServiceProvider.GetRequiredService<IDistributedCache>();
         await cache.RemoveAsync(CacheKeys.LandlordDashboard(landlordId));
+    }
+
+    /// <summary>
+    /// Removes the single global stakeholder-dashboard cache entry, so the next
+    /// request is guaranteed a cache miss regardless of what earlier tests in
+    /// this collection left warm.
+    /// </summary>
+    public async Task EvictStakeholderDashboardCacheAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var cache = scope.ServiceProvider.GetRequiredService<IDistributedCache>();
+        await cache.RemoveAsync(CacheKeys.StakeholderDashboard());
     }
 }

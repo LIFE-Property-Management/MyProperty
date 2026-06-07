@@ -35,5 +35,10 @@ internal sealed class LeaseConfiguration : IEntityTypeConfiguration<Lease>
         builder.HasIndex(l => new { l.TenantId, l.Status });
         builder.HasIndex(l => new { l.PropertyId, l.Status });
         builder.HasIndex(l => l.EndDate);
+
+        // Stakeholder dashboard: system-wide active-lease/occupancy counts
+        // (Status) and the lease-growth trend (CreatedAt month buckets).
+        builder.HasIndex(l => l.Status);
+        builder.HasIndex(l => l.CreatedAt);
     }
 }

@@ -17,6 +17,7 @@ using MyProperty.Api.Logging;
 using MyProperty.Api.Middleware;
 using MyProperty.Api.Options;
 using MyProperty.Api.Swagger;
+using MyProperty.Application.Admin.Queries.GetStakeholderDashboard;
 using MyProperty.Application.Auth.Commands.RegisterLandlord;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Notifications;
@@ -173,6 +174,9 @@ try
     builder.Services.AddScoped<GetInviteByTokenHandler>();
     builder.Services.AddScoped<AcceptInviteHandler>();
     builder.Services.AddScoped<RejectInviteHandler>();
+
+    // Admin handlers
+    builder.Services.AddScoped<GetStakeholderDashboardHandler>();
 
     // Landlord handlers
     builder.Services.AddScoped<GetLandlordDashboardHandler>();

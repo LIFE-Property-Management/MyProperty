@@ -29,6 +29,7 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
 - Hover: brand-green hover (hover:bg-primary etc.) only on primary/confirming actions. Chrome (sidebars, menus, secondary buttons) uses hover:bg-neutral-light.
 - Focus rings: use focus-visible: not focus:.
 - No motion library. The only blessed motion class is transition-colors duration-150.
+- **Charting: recharts** is the standard charting library — do not add other charting libraries (added for the admin/stakeholder dashboard). Feed series the design-system color tokens as CSS vars (e.g. `stroke="var(--color-primary)"`) so charts auto-flip in dark mode. Chart components must be client components (`"use client"`) — recharts needs the DOM. Keep data fetching in TanStack Query hooks, never in the chart.
 - <body> sets font-family: var(--font-sans) and h1...h6 use var(--font-heading) automatically (in globals.css). Do not add redundant font classes to headings or body. DO add font-heading to spans that need the heading font (e.g. brand text in headers
 
 ## Color token semantics
@@ -52,7 +53,7 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
 ## Coding Rules
 - TypeScript strict — no `any` without justification.
 - All data fetching via **TanStack Query** — no raw `fetch` or `useEffect`-based fetching.
-- Keep Landlord and Tenant portal code **strictly separated** — do not mix concerns.
+- Keep Landlord, Tenant, and Admin portal code **strictly separated** — do not mix concerns. The three portals are separate route groups: landlord under `app/dashboard/`, tenant under `app/(tenant)/`, admin under `app/(admin)/` (route `/admin/dashboard`). Each has its own `KeycloakInit` gate; the admin gate additionally bounces any non-admin portal to `/login`.
 - Tenant names are **always a `<Link>`** to the Tenant Detail page, everywhere they appear (tables, cards, logs).
 
 ## Auth

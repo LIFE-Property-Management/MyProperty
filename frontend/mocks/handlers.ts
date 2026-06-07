@@ -8,6 +8,7 @@ import {
     currentPaymentFixture,
     buildPaymentHistoryResponse,
     landlordDashboardFixture,
+    stakeholderDashboardFixture,
     buildUpcomingPaymentsResponse,
     buildPropertiesResponse,
     buildTenantsResponse,
@@ -73,6 +74,11 @@ export const handlers = [
     http.get("/landlord/dashboard", async () => {
         await delay(300);
         return HttpResponse.json(landlordDashboardFixture);
+    }),
+
+    http.get("/admin/dashboard", async () => {
+        await delay(300);
+        return HttpResponse.json(stakeholderDashboardFixture);
     }),
 
     http.get("/landlord/tenants", async ({ request }) => {

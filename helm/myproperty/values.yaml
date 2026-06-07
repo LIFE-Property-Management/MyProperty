@@ -120,6 +120,14 @@ keycloak:
       cpu: 1000m
       memory: 1Gi
 
+# Idempotent seed Job that provisions the portal Admin user in the live
+# MyProperty realm via kcadm (realm import only runs on Keycloak's first
+# startup, so the live admin must be created through the Admin API). Reuses
+# the Keycloak image — no separate image needed. Reads the admin login email
+# and password from the myproperty-admin-portal Secret (created by secrets.sh).
+adminSeed:
+  enabled: true
+
 backend:
   enabled: true
   image:

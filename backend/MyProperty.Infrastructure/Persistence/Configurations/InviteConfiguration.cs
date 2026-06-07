@@ -33,5 +33,8 @@ internal sealed class InviteConfiguration : IEntityTypeConfiguration<Invite>
         builder.HasIndex(i => i.TokenHash).IsUnique();
         builder.HasIndex(i => i.ExpiresAt);
         builder.HasIndex(i => new { i.LandlordId, i.Status });
+
+        // Stakeholder dashboard: invite-funnel trend (CreatedAt month buckets).
+        builder.HasIndex(i => i.CreatedAt);
     }
 }
