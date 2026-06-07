@@ -1,26 +1,26 @@
 {{- if .Values.networkPolicies.enabled }}
   {{- $ingressNS := .Values.networkPolicies.ingressNamespace }}
   {{- $nodeCIDRs := .Values.networkPolicies.nodeCIDRs }}
-  # ─────────────────────────────────────────────────────────────────────────
-  # NetworkPolicies (M4.8).
-  #
-  # Layered allow-list model:
-  #   1. default-deny — denies all ingress + egress in the namespace.
-  #   2. allow-dns-egress — every pod can talk to kube-system DNS.
-  #   3. per-workload policies — explicit ingress and egress sources.
-  #
-  # Allow on port 53 UDP and TCP separately because NetworkPolicy treats
-  # them as distinct port specs. Same for any TCP-only allow rule.
-  #
-  # Requires a CNI that enforces NetworkPolicy (DOKS ships Cilium by
-  # default). On a CNI without enforcement (e.g. flannel-only), these
-  # resources install cleanly but provide no security — the chart
-  # silently appears compliant while traffic is unrestricted.
-  #
-  # To verify enforcement post-install:
-  #   kubectl run -n {{ .Release.Namespace }} netshoot --rm -it --image=nicolaka/netshoot -- curl http://postgres:5432
-  # (should hang and time out from a pod without the backend label)
-  # ─────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────
+# NetworkPolicies (M4.8).
+#
+# Layered allow-list model:
+#   1. default-deny — denies all ingress + egress in the namespace.
+#   2. allow-dns-egress — every pod can talk to kube-system DNS.
+#   3. per-workload policies — explicit ingress and egress sources.
+#
+# Allow on port 53 UDP and TCP separately because NetworkPolicy treats
+# them as distinct port specs. Same for any TCP-only allow rule.
+#
+# Requires a CNI that enforces NetworkPolicy (DOKS ships Cilium by
+# default). On a CNI without enforcement (e.g. flannel-only), these
+# resources install cleanly but provide no security — the chart
+# silently appears compliant while traffic is unrestricted.
+#
+# To verify enforcement post-install:
+#   kubectl run -n {{ .Release.Namespace }} netshoot --rm -it --image=nicolaka/netshoot -- curl http://postgres:5432
+# (should hang and time out from a pod without the backend label)
+# ─────────────────────────────────────────────────────────────────────────
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
