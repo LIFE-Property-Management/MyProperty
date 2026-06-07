@@ -64,9 +64,9 @@ spec:
         - name: backend
           image: {{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}
           ports:
-              - name: http
-                containerPort: 8080
-                protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
           env:
             # Credentials extracted first so they can be interpolated into ConnectionStrings__Postgres.
             # Host and port come from the same Secret — same env var names regardless of whether the
@@ -226,4 +226,4 @@ spec:
         - name: backend-storage
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-backend-storage
-  {{- end }}
+{{- end }}

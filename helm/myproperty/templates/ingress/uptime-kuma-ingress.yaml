@@ -19,17 +19,17 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-  {{- include "myproperty.tlsHosts" . | nindent 8 }}
-secretName: {{ .Values.ingress.tls.secretName }}
-rules:
-  - host: {{ .Values.hosts.status }}
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: uptime-kuma
-              port:
-                name: http
-  {{- end }}
+{{- include "myproperty.tlsHosts" . | nindent 8 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  rules:
+    - host: {{ .Values.hosts.status }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: uptime-kuma
+                port:
+                  name: http
+{{- end }}

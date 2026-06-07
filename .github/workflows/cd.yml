@@ -286,6 +286,24 @@ jobs:
           echo "KUBECONFIG=$f" >> "$GITHUB_ENV"
           echo "Wrote kubeconfig to $f"
 
+      - name: Server-side dry-run validation (semantic guard)
+        # The render guard above catches MALFORMED YAML, but not manifests that
+        # parse yet are semantically invalid — e.g. an Ingress whose misindented
+        # `rules` landed at the document root, leaving spec.rules empty. That is
+        # rejected by API admission, NOT by YAML parsing or OpenAPI schema, so it
+        # only surfaces at `helm upgrade` apply time → failed --atomic + rollback.
+        # A server-side dry-run runs the SAME admission validation against the live
+        # API server without persisting anything (hooks are not executed), so such
+        # errors fail HERE — before the real atomic upgrade touches the cluster.
+        run: |
+          set -euo pipefail
+          helm upgrade --install myproperty helm/myproperty \
+            --kubeconfig "$KUBECONFIG" \
+            --namespace project-02 \
+            --values helm/myproperty/values-gjirafa.yaml \
+            --dry-run=server >/dev/null
+          echo "Server-side dry-run validation passed — manifests accepted by the API server."
+
       - name: Deploy (helm upgrade --install --atomic)
         # deploy.sh forwards "$@" to helm. --atomic implies --wait → readiness
         # gating + auto-rollback of WORKLOADS on failure (schema is forward-only).
