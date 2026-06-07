@@ -173,6 +173,25 @@ jobs:
         # values-gjirafa.yaml byte-for-byte, so a bump is a true one-line diff.
         run: pip install 'ruamel.yaml>=0.18,<0.19'
 
+      - name: Validate chart renders (pre-deploy guard)
+        # Catches malformed templates (e.g. a botched merge that misindents YAML)
+        # HERE — before the tag bump is committed and before any cluster contact —
+        # instead of at `helm upgrade` time, where a render error fails the deploy
+        # and forces an --atomic rollback (and a confusing "DB may be partly
+        # migrated" alert, even though nothing was applied). Renders with the SAME
+        # release/namespace/values the deploy uses, so it sees what helm will see.
+        # Image tags don't affect structural validity, so running before the bump
+        # is correct.
+        run: |
+          set -euo pipefail
+          VALUES="helm/myproperty/values-gjirafa.yaml"
+          helm lint helm/myproperty --values "$VALUES"
+          helm template myproperty helm/myproperty \
+            --namespace project-02 \
+            --values "$VALUES" \
+            >/dev/null
+          echo "Chart renders cleanly with values-gjirafa.yaml — safe to deploy."
+
       - name: Resolve per-component image tags and bump values
         id: bump
         env:

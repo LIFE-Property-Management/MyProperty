@@ -39,8 +39,8 @@ spec:
         - name: seed
           image: {{ .Values.uptimeKuma.seedImage.repository }}:{{ .Values.uptimeKuma.seedImage.tag }}
           env:
-              - name: KUMA_BASE_URL
-                value: "http://uptime-kuma:3001"
+                - name: KUMA_BASE_URL
+                  value: "http://uptime-kuma:3001"
                 - name: KUMA_PUBLIC_URL
                   value: {{ .Values.uptimeKuma.publicUrl | quote }}
                 - name: KUMA_ADMIN_USERNAME

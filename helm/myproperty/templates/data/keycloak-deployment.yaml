@@ -172,5 +172,5 @@ spec:
           configMap:
             name: {{ .Release.Name }}-keycloak-realm
         - name: realm-import
-        emptyDir: {}
+          emptyDir: {}
   {{- end }}

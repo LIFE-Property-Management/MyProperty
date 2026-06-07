@@ -40,33 +40,33 @@ spec:
         - name: efbundle
           image: {{ .Values.migration.image.repository }}:{{ .Values.migration.image.tag }}
           env:
-              - name: POSTGRES_USER
-                valueFrom:
-                  secretKeyRef:
-                    name: myproperty-postgres
-                    key: postgres-user
-                - name: POSTGRES_PASSWORD
-                  valueFrom:
-                    secretKeyRef:
-                      name: myproperty-postgres
-                      key: postgres-password
-                - name: POSTGRES_DB
-                  valueFrom:
-                    secretKeyRef:
-                      name: myproperty-postgres
-                      key: postgres-db
-                - name: POSTGRES_HOST
-                  valueFrom:
-                    secretKeyRef:
-                      name: myproperty-postgres
-                      key: postgres-host
-                - name: POSTGRES_PORT
-                  valueFrom:
-                    secretKeyRef:
-                      name: myproperty-postgres
-                      key: postgres-port
-                - name: ConnectionStrings__Postgres
-                  value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode={{ .Values.postgres.sslMode }};Trust Server Certificate=true"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-db
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-postgres
+                  key: postgres-port
+            - name: ConnectionStrings__Postgres
+              value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode={{ .Values.postgres.sslMode }};Trust Server Certificate=true"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
