@@ -1,0 +1,56 @@
+# .gitleaks.toml — MyProperty secret-scanning config (M5.5 security audit)
+#
+# Mirrors the role of `.trivyignore` for container CVEs: start from the full
+# upstream gitleaks ruleset, then record *triaged* false positives with a
+# rationale so the secret-scan CI gate (.github/workflows/security-ci.yml) stays
+# green on known-safe matches while still catching anything new.
+#
+# Triage policy (same spirit as docs/operations/security-hardening.md):
+#   • A genuine secret is NEVER allowlisted — it is rotated, then purged from
+#     history (git filter-repo / BFG) and the incident recorded.
+#   • Only non-sensitive false positives are listed below — generated build
+#     output, documentation/benchmark examples, test fixtures, and intentional
+#     *local-dev* placeholder credentials — each with a one-line reason.
+#
+# Verify after editing:  gitleaks git .      → expect "no leaks found"
+#                        gitleaks dir .      → expect "no leaks found"
+
+title = "MyProperty gitleaks config"
+
+[extend]
+useDefault = true   # inherit gitleaks' built-in detector set as the baseline
+
+[allowlist]
+description = "Triaged false positives — M5.5 security audit (2026-06-05)"
+# Match either repo-relative paths (`git` scan) or absolute container paths
+# (`dir` scan); the regexes below are intentionally unanchored to cover both.
+paths = [
+  # ── Generated build output. gitignored and never committed; the `dir` scan
+  #    walks the working tree incl. ignored files, while the CI gate runs `git`
+  #    on a clean checkout where these do not exist. Next.js bakes a random
+  #    previewModeSigningKey / previewModeEncryptionKey into .next/ each build.
+  '''(^|/)\.next/''',
+  '''(^|/)(bin|obj)/''',          # .NET build directories
+  '''(^|/)node_modules/''',
+  # ── Benchmark query-plan output: `Index Cond: Token = '<hex>'` captured from
+  #    EXPLAIN ANALYZE of the invite-by-token lookup (M3.4). Not a credential.
+  '''docs/performance/m3-sql-optimization/README\.md''',
+  # ── Unit-test fixture: a fake invite-token literal used by the validator test.
+  '''backend/MyProperty\.Tests/Unit/Validators/AcceptInviteValidatorTests\.cs''',
+  # ── This audit's own raw scan artifacts (match strings already redacted).
+  #    Scoped to the specific report files — NOT the whole folder — so any
+  #    secret later committed under docs/security/ is still flagged.
+  '''docs/security/(git-secrets-scan\.txt|gitleaks-report\.json|gitleaks-pre-allowlist-history\.json|trufflehog-report\.jsonl|zap-frontend-report\.(html|json|md)|lighthouse-security-home\.report\.(html|json))$''',
+]
+
+regexes = [
+  # Intentional LOCAL-DEV placeholder credentials. Documented in .env.example /
+  # docker-compose.yml and overridden in every deployed environment via External
+  # Secrets Operator / K8s Secrets (docs/operations/security-hardening.md). These
+  # grant access to nothing outside a developer's localhost compose stack.
+  '''dev-api-client-secret''',
+  '''unleash-insecure-(api|admin)-token''',
+  '''myproperty-n8n-dev-encryption-key-change-me''',
+  '''changeme-please-1234''',
+  '''GOOGLE_CLIENT_SECRET_PLACEHOLDER''',
+]

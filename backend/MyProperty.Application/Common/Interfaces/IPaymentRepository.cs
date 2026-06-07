@@ -1,3 +1,5 @@
+using MyProperty.Application.Common;
+using MyProperty.Application.Landlord.Queries.GetUpcomingPayments;
 using MyProperty.Domain.Entities;
 
 namespace MyProperty.Application.Common.Interfaces;
@@ -9,6 +11,10 @@ namespace MyProperty.Application.Common.Interfaces;
 /// </summary>
 public interface IPaymentRepository
 {
+    /// <summary>Returns Outstanding payments due within the next 30 days for the given landlord.</summary>
+    Task<PagedResult<UpcomingPaymentDto>> GetUpcomingForLandlordAsync(
+        Guid landlordId, int page, int pageSize, CancellationToken ct);
+
     /// <summary>
     /// Loads a payment with its parent <see cref="Lease"/> eagerly included.
     /// Used by every state-transition handler that needs to verify resource

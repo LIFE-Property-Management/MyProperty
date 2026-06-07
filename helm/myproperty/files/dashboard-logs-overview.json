@@ -1,0 +1,108 @@
+{
+  "annotations": { "list": [ { "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard" } ] },
+  "description": "Single pane of glass for logs across every MyProperty service running in project-02.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "templating": {
+    "list": [
+      {
+        "name": "component",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values({namespace=\"project-02\"}, component)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "text",
+      "id": 1,
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Platform Logs — Overview\nLogs from **every service** in `project-02`, collected by Promtail from each pod's stdout and stored in Loki. Use the **Service** dropdown to focus on one or more services. The error/warning panels below use a case-insensitive text match (`error|warn|fatal|exception`) so they catch problems in *all* services, even ones that don't emit a structured `level`. For the API's structured level breakdown and request logs, open the **API (Backend) Logs** dashboard."
+      }
+    },
+    {
+      "type": "stat",
+      "id": 2,
+      "title": "Total log lines (selected range)",
+      "description": "Every line ingested from the selected service(s) over the dashboard's time range. A sudden spike or drop to zero is usually the first sign something changed.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" }, "unit": "short" }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum(count_over_time({namespace=\"project-02\", component=~\"$component\"} [$__range]))", "queryType": "instant", "refId": "A" } ]
+    },
+    {
+      "type": "stat",
+      "id": 3,
+      "title": "Warning-ish lines (selected range)",
+      "description": "Lines whose text matches `warn` (case-insensitive) across the selected service(s). Not a structured level — a text match — so it works for every service.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum(count_over_time({namespace=\"project-02\", component=~\"$component\"} |~ \"(?i)warn\" [$__range]))", "queryType": "instant", "refId": "A" } ]
+    },
+    {
+      "type": "stat",
+      "id": 4,
+      "title": "Error-ish lines (selected range)",
+      "description": "Lines whose text matches `error`, `fatal`, or `exception` (case-insensitive) across the selected service(s). Red whenever any are present — start your investigation here.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum(count_over_time({namespace=\"project-02\", component=~\"$component\"} |~ \"(?i)error|fatal|exception\" [$__range]))", "queryType": "instant", "refId": "A" } ]
+    },
+    {
+      "type": "timeseries",
+      "id": 5,
+      "title": "Log volume by service",
+      "description": "How many lines per time bucket each service is producing. Tall bars = a chatty or busy service; a line going flat at zero = a service that stopped logging (possibly crashed or idle).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 1, "showPoints": "never", "stacking": { "group": "A", "mode": "normal" } }, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum by (component) (count_over_time({namespace=\"project-02\", component=~\"$component\"} [$__auto]))", "legendFormat": "{{component}}", "refId": "A" } ]
+    },
+    {
+      "type": "timeseries",
+      "id": 6,
+      "title": "Error-ish lines by service",
+      "description": "Rate of `error|fatal|exception` text matches per service over time. Use this to see WHICH service is failing and WHEN it started.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "bars", "fillOpacity": 70, "lineWidth": 0, "showPoints": "never", "stacking": { "group": "A", "mode": "normal" } }, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "sum by (component) (count_over_time({namespace=\"project-02\", component=~\"$component\"} |~ \"(?i)error|fatal|exception\" [$__auto]))", "legendFormat": "{{component}}", "refId": "A" } ]
+    },
+    {
+      "type": "logs",
+      "id": 7,
+      "title": "Live tail — problems across the stack",
+      "description": "The actual log lines matching `error|warn|fatal|exception|fail` from the selected service(s), newest first. Click a line to expand its full detail. This is your starting point when a stat above goes red.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 13, "w": 24, "x": 0, "y": 15 },
+      "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": true, "showLabels": false, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+      "targets": [ { "datasource": { "type": "loki", "uid": "loki" }, "editorMode": "code", "expr": "{namespace=\"project-02\", component=~\"$component\"} |~ \"(?i)error|warn|fatal|exception|fail\"", "queryType": "range", "refId": "A" } ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["myproperty", "loki", "logs", "overview"],
+  "time": { "from": "now-3h", "to": "now" },
+  "timezone": "browser",
+  "title": "Platform Logs — Overview",
+  "uid": "myproperty-logs-overview",
+  "version": 1
+}

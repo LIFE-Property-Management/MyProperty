@@ -77,42 +77,21 @@ describe("LandlordDashboard", () => {
 
   it("renders stat values from the fixture", () => {
     render(<LandlordDashboard />);
-    expect(screen.getByText("12")).toBeInTheDocument();
-    expect(screen.getByText("9")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument(); // totalProperties
+    expect(screen.getAllByText("9").length).toBeGreaterThan(0); // activeTenants + activeLeases
   });
 
-  it("renders overdue tenant names as links with correct hrefs", () => {
+  it("renders overdue payments count", () => {
     render(<LandlordDashboard />);
-    const johnLink = screen.getByRole("link", { name: "John Smith" });
-    expect(johnLink).toBeInTheDocument();
-    expect(johnLink).toHaveAttribute(
-      "href",
-      "/dashboard/tenants/01900000-0000-7000-8000-000000000001",
-    );
+    expect(screen.getAllByText("2").length).toBeGreaterThan(0); // overduePayments
   });
 
-  it('renders "All tenants are paid up." when overduePayments is empty', () => {
-    mockDashboard.mockReturnValue(
-      makeDashboardReturn({ data: { ...landlordDashboardFixture, overduePayments: [] } }),
+  it('renders "No upcoming payments." when upcoming items is empty', () => {
+    mockUpcoming.mockReturnValue(
+      makeUpcomingReturn({ data: { items: [], totalCount: 0, page: 1, pageSize: 10 } }),
     );
     render(<LandlordDashboard />);
-    expect(screen.getByText("All tenants are paid up.")).toBeInTheDocument();
-  });
-
-  it('renders "No leases expiring soon." when expiringLeases is empty', () => {
-    mockDashboard.mockReturnValue(
-      makeDashboardReturn({ data: { ...landlordDashboardFixture, expiringLeases: [] } }),
-    );
-    render(<LandlordDashboard />);
-    expect(screen.getByText("No leases expiring soon.")).toBeInTheDocument();
-  });
-
-  it('renders "No recent payments." when recentPayments is empty', () => {
-    mockDashboard.mockReturnValue(
-      makeDashboardReturn({ data: { ...landlordDashboardFixture, recentPayments: [] } }),
-    );
-    render(<LandlordDashboard />);
-    expect(screen.getByText("No recent payments.")).toBeInTheDocument();
+    expect(screen.getByText("No upcoming payments.")).toBeInTheDocument();
   });
 
   it("renders Pagination page-2 button when totalCount=18 and PAGE_SIZE=10", () => {

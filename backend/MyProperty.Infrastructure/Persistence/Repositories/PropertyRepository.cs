@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Properties.Queries.GetPropertyById;
 using MyProperty.Domain.Entities;
 
 namespace MyProperty.Infrastructure.Persistence.Repositories;
@@ -16,6 +17,33 @@ internal sealed class PropertyRepository(AppDbContext db) : IPropertyRepository
 
     public Task SaveChangesAsync(CancellationToken ct)
         => db.SaveChangesAsync(ct);
+
+    public async Task<PropertyDetailDto?> GetDetailAsync(Guid propertyId, Guid landlordId, CancellationToken ct)
+    {
+        var property = await db.Properties
+            .FirstOrDefaultAsync(p => p.Id == propertyId && p.LandlordId == landlordId, ct);
+
+        if (property is null) return null;
+
+        var leases = await db.Leases
+            .Include(l => l.Tenant)
+            .Where(l => l.PropertyId == propertyId)
+            .OrderByDescending(l => l.StartDate)
+            .ToListAsync(ct);
+
+        var tenants = leases.Select(l => new PropertyTenantDto(
+            l.TenantId,
+            $"{l.Tenant!.FirstName} {l.Tenant.LastName}",
+            l.Tenant.Email,
+            l.StartDate,
+            l.EndDate,
+            l.MonthlyRent,
+            l.Currency,
+            l.Status.ToString())).ToList();
+
+        return new PropertyDetailDto(property.Id, property.Name, property.Address,
+            property.UnitNumber, property.PropertyType, property.CreatedAt, tenants);
+    }
 
     public async Task<(IReadOnlyList<Property> Items, int TotalCount)> ListByLandlordAsync(
         Guid landlordId, int page, int pageSize, CancellationToken ct)

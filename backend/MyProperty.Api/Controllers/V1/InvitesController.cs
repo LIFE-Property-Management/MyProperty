@@ -45,19 +45,19 @@ public sealed class InvitesController(
         string token, CancellationToken ct)
         => Ok(await getByToken.Handle(new GetInviteByTokenQuery(token), ct));
 
-    /// <summary>Accepts an invite. The authenticated user's email must match the invite email.</summary>
+    /// <summary>Accepts an invite. Token is the auth — no JWT required. Creates the Keycloak user, User row, and Lease in one atomic operation.</summary>
     [HttpPost("{token}/accept")]
-    [Authorize]
-    [EnableRateLimiting("authenticated")]
+    [AllowAnonymous]
+    [EnableRateLimiting("anon-invite")]
     [ProducesResponseType(typeof(InviteAcceptedDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<InviteAcceptedDto>> Accept(
-        string token, CancellationToken ct)
-        => Ok(await accept.Handle(new AcceptInviteCommand(token), ct));
+        string token, AcceptInviteBody body, CancellationToken ct)
+        => Ok(await accept.Handle(
+            new AcceptInviteCommand(token, body.FirstName, body.LastName, body.Phone, body.Password), ct));
 
     /// <summary>Rejects an invite. Anonymous — no authentication required.</summary>
     [HttpPost("{token}/reject")]

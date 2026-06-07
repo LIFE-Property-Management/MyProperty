@@ -1,3 +1,4 @@
+{{- if .Values.monitoring.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -53,8 +54,8 @@ spec:
                   key: api-key
             - name: ANTHROPIC_MODEL
               value: "claude-haiku-4-5-20251001"
-            # Discord webhook URL — Discord accepts Slack-compatible payloads for simple text.
-            - name: SLACK_WEBHOOK_URL
+            # Discord incoming webhook — the service renders Discord-native embeds.
+            - name: DISCORD_WEBHOOK_URL
               valueFrom:
                 secretKeyRef:
                   name: myproperty-discord
@@ -89,3 +90,4 @@ spec:
             capabilities:
               drop: [ALL]
             readOnlyRootFilesystem: true
+{{- end }}

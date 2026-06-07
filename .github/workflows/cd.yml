@@ -1,67 +1,338 @@
-name: CD — deploy to DOKS
+name: CD — Deploy to project-02
+
+# Push-based continuous deployment for the shared Hetzner cluster (namespace
+# project-02, namespace-admin only — no cluster-scoped controllers, so no
+# ArgoCD/Flux). Fires after the per-component image CI workflows finish on a
+# deploy branch, resolves which component images exist at the triggering SHA,
+# auto-commits a per-component tag bump to values-gjirafa.yaml, then deploys
+# with `deploy.sh --atomic` (readiness gating + auto-rollback on failure).
+#
+# Guardrails (see docs/operations/ci-cd.md § Continuous deployment):
+#   * Behind the protected `project-02` Environment (manual approval gate).
+#   * Serialized — never two deploys on the one namespace.
+#   * `--atomic` rolls back WORKLOADS; EF schema migrations are FORWARD-ONLY,
+#     so a failed deploy may leave the DB partly migrated — verify manually.
+#   * CD is deploy-only. It NEVER wipes/auto-provisions data stores (the
+#     pre-upgrade migration hook aborts on a fresh store); the two-phase wipe
+#     (`deploy.sh --no-hooks` then normal) stays manual.
 
 on:
-  push:
-    branches: [main, develop]
+  # Runs in the DEFAULT-branch (develop) context, but deploys head_branch.
+  # Realm Import Smoke is deliberately excluded — it builds no deployable image.
+  workflow_run:
+    workflows: ["Backend CI", "Frontend CI", "AIOps Webhook CI", "Uptime Kuma Init CI"]
+    types: [completed]
+  # Manual run (deploys the branch it is dispatched from; the project-02
+  # Environment branch policy still restricts this to develop/main).
+  workflow_dispatch:
 
 concurrency:
-  group: cd-${{ github.ref }}
-  cancel-in-progress: true
+  # Shared, never cancelled — queue deploys so the namespace sees one at a time.
+  # Redundant fires (one per CI workflow on a multi-component push) are safe:
+  # tag resolution is idempotent and converges.
+  group: deploy-project-02
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # auto-commit the tag bump back to the deploy branch
+  packages: read    # query GHCR for per-component image existence
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   deploy:
-    name: helm upgrade
+    name: Deploy to project-02
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    # Budget: setup (~5m) + helm --atomic (10m) + two rollout gates (5m each) +
+    # curl probes (~2m) ≈ 27m worst case. 35m leaves the inner helm/rollout
+    # timeouts room to fire FIRST — so a slow deploy surfaces as a real step
+    # failure (→ atomic rollback → `failure()` → Discord), not a job-level
+    # cancellation that would skip the notify step.
+    timeout-minutes: 35
+    # Deploy ONLY on a manual dispatch, or a SUCCESSFUL, PUSH-triggered CI run on
+    # develop/main. The `event == 'push'` guard stops PR-triggered CI from
+    # deploying a PR branch; the head_branch guard double-locks to the two deploy
+    # branches (the Environment branch policy can't help here — workflow_run always
+    # executes in the default-branch context, so github.ref is always develop).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       (github.event.workflow_run.head_branch == 'develop' ||
+        github.event.workflow_run.head_branch == 'main'))
+    environment: project-02
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Resolve deploy branch
+        id: ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_BRANCH: ${{ github.ref_name }}
+          WR_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WR_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            BRANCH="$DISPATCH_BRANCH"
+            SHA=""   # resolved from HEAD after checkout
+          else
+            BRANCH="$WR_BRANCH"
+            SHA="$WR_SHA"
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "preset_sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Deploy branch: $BRANCH (sha: ${SHA:-resolve-after-checkout})"
 
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
+      - name: Mint GitHub App token (lets the bump push bypass the branch ruleset)
+        # The default GITHUB_TOKEN / github-actions[bot] CANNOT be a ruleset bypass
+        # actor (GitHub blocks it by design), and develop/main require PRs. This App
+        # is installed on the repo with Contents:write and added to BOTH rulesets'
+        # bypass lists, so its short-lived (~1h) installation token can push the
+        # one-line tag bump directly. Humans still go through reviewed PRs.
+        id: app-token
+        uses: actions/create-github-app-token@v3
         with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          app-id: ${{ vars.CD_BOT_APP_ID }}
+          private-key: ${{ secrets.CD_BOT_APP_PRIVATE_KEY }}
 
-      - name: Install Helm
+      - name: Resolve App bot identity (for correct commit attribution)
+        # The bump commit is authored as the App's bot user. The no-reply email
+        # needs the bot's numeric user id; this is the pattern from the
+        # create-github-app-token README.
+        id: bot
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          uid="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          echo "user-id=$uid" >> "$GITHUB_OUTPUT"
+          echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
+          echo "email=${uid}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout deploy branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.branch }}
+          fetch-depth: 0
+          # Persist the APP token (not GITHUB_TOKEN) so the later `git push` of the
+          # bump is authenticated as the App — the identity on the ruleset bypass list.
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Resolve target SHA
+        id: sha
+        env:
+          PRESET_SHA: ${{ steps.ref.outputs.preset_sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "$PRESET_SHA" ]; then
+            FULL="$PRESET_SHA"
+          else
+            FULL="$(git rev-parse HEAD)"
+          fi
+          echo "full=$FULL" >> "$GITHUB_OUTPUT"
+          echo "short=${FULL:0:7}" >> "$GITHUB_OUTPUT"
+          echo "Target SHA: $FULL (short ${FULL:0:7})"
+
+      - name: Set up Helm 3.20.0
+        # Pinned: setup-helm@v5 defaults to `latest` = Helm 4, where --atomic was
+        # renamed and --wait fails fast. v3.20.0 is the locally-validated line.
         uses: azure/setup-helm@v5
         with:
           version: v3.20.0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure kubeconfig
-        run: doctl kubernetes cluster kubeconfig save myproperty-cluster
+      - name: Set up kubectl 1.31.x
+        # Match the cluster (v1.31.14) within the supported skew.
+        uses: azure/setup-kubectl@v5
+        with:
+          version: v1.31.14
 
-      - name: Update Helm dependencies
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR (read-only, for image existence checks)
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python (for the format-preserving tag bumper)
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install ruamel.yaml
+        # The bump uses ruamel (not yq): mikefarah yq -i re-serialises the whole
+        # document (strips blank lines, normalises comment spacing), which would
+        # put an unreviewed reformat into the bot's commit. ruamel round-trips
+        # values-gjirafa.yaml byte-for-byte, so a bump is a true one-line diff.
+        run: pip install 'ruamel.yaml>=0.18,<0.19'
+
+      - name: Resolve per-component image tags and bump values
+        id: bump
+        env:
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
         run: |
-          cd helm/myproperty
-          helm dependency update
+          set -euo pipefail
+          VALUES="helm/myproperty/values-gjirafa.yaml"
+          REGISTRY="ghcr.io/life-property-management"
 
-      - name: Helm upgrade
-        id: helm
-        run: |
-          helm upgrade --install myproperty ./helm/myproperty \
-            --namespace myproperty \
-            --create-namespace \
-            --atomic \
-            --timeout 10m \
-            --wait \
-            --set postgres.enabled=false \
-            --set backend.image.tag=${{ github.sha }} \
-            --set frontend.image.tag=${{ github.sha }} \
-            --set migration.image.tag=${{ github.sha }} \
-            --set aiopsWebhook.image.tag=${{ github.sha }}
+          # True iff the image exists in GHCR at the triggering short SHA.
+          image_exists() { docker buildx imagetools inspect "$REGISTRY/$1:$SHORT_SHA" >/dev/null 2>&1; }
 
-      - name: Notify Discord (success)
-        if: success()
-        run: |
-          curl -X POST -H 'Content-Type: application/json' \
-            -d "{\"content\": \"✅ **deploy** \`${{ github.ref_name }}\` → cluster\n• release: myproperty\n• sha: \`${{ github.sha }}\`\n• actor: ${{ github.actor }}\n• run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
+          assigns=()
+          changed=()
+          # backend-ci builds myproperty-api AND myproperty-migrations at the SAME
+          # SHA — so a present API image bumps both keys.
+          if image_exists myproperty-api; then
+            assigns+=("backend.image.tag=$SHORT_SHA" "migration.image.tag=$SHORT_SHA")
+            changed+=("backend" "migration")
+          fi
+          if image_exists myproperty-frontend; then
+            assigns+=("frontend.image.tag=$SHORT_SHA"); changed+=("frontend")
+          fi
+          if image_exists myproperty-aiops-webhook; then
+            assigns+=("aiopsWebhook.image.tag=$SHORT_SHA"); changed+=("aiopsWebhook")
+          fi
+          if image_exists myproperty-uptime-kuma-init; then
+            assigns+=("uptimeKuma.seedImage.tag=$SHORT_SHA"); changed+=("uptimeKuma")
+          fi
 
-      - name: Notify Discord (failure)
-        if: failure()
+          if [ ${#assigns[@]} -eq 0 ]; then
+            echo "::warning::No component image found at $SHORT_SHA — redeploying current pinned tags (idempotent)."
+            echo "components=" >> "$GITHUB_OUTPUT"
+          else
+            python infrastructure/gjirafa/bump_image_tags.py "$VALUES" "${assigns[@]}"
+            echo "Components present at $SHORT_SHA: ${changed[*]}"
+            echo "components=${changed[*]}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push tag bump
+        env:
+          BRANCH: ${{ steps.ref.outputs.branch }}
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+          COMPONENTS: ${{ steps.bump.outputs.components }}
+          GIT_AUTHOR: ${{ steps.bot.outputs.name }}
+          GIT_EMAIL: ${{ steps.bot.outputs.email }}
         run: |
-          curl -X POST -H 'Content-Type: application/json' \
-            -d "{\"content\": \"❌ **deploy failed** \`${{ github.ref_name }}\` → cluster\n• sha: \`${{ github.sha }}\`\n• actor: ${{ github.actor }}\n• run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n_helm rolled back to previous release (--atomic flag)_\"}" \
-            ${{ secrets.DISCORD_WEBHOOK_URL }}
+          set -euo pipefail
+          VALUES="helm/myproperty/values-gjirafa.yaml"
+          if git diff --quiet -- "$VALUES"; then
+            echo "values-gjirafa.yaml already current — no bump commit."
+            exit 0
+          fi
+          git config user.name  "$GIT_AUTHOR"
+          git config user.email "$GIT_EMAIL"
+          git add "$VALUES"
+          git commit -m "Deploy(cd): bump [${COMPONENTS}] image tag(s) to ${SHORT_SHA} on ${BRANCH}"
+          # GITHUB_TOKEN pushes do not retrigger workflows (loop-safe); the bumped
+          # file also matches no CI path filter.
+          #
+          # A human (or another actor) may push to the deploy branch during the
+          # deploy/approval window. Concurrency serialises CD runs, but not human
+          # pushes — so rebase-then-push can still lose a TOCTOU race if the remote
+          # advances between our rebase and our push. Retry the pull --rebase + push
+          # so a concurrent push just re-rebases instead of failing the deploy. A
+          # genuine rebase CONFLICT (someone hand-edited the same tag lines) still
+          # hard-fails via set -e — that needs a human, not a retry.
+          pushed=false
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase origin "$BRANCH"
+            if git push origin "HEAD:refs/heads/$BRANCH"; then
+              pushed=true
+              echo "Pushed tag bump to $BRANCH (attempt $attempt)."
+              break
+            fi
+            echo "Push rejected on attempt $attempt — remote moved; re-rebasing and retrying."
+            sleep $((attempt * 3))
+          done
+          if [ "$pushed" != true ]; then
+            echo "::error::Could not push tag bump to $BRANCH after 5 attempts (remote kept advancing)."
+            exit 1
+          fi
+
+      - name: Write kubeconfig from secret
+        env:
+          KCFG: ${{ secrets.KUBECONFIG_PROJECT_02 }}
+        run: |
+          set -euo pipefail
+          f="$RUNNER_TEMP/project-02.kubeconfig"
+          printf '%s' "$KCFG" > "$f"
+          chmod 600 "$f"
+          echo "KUBECONFIG=$f" >> "$GITHUB_ENV"
+          echo "Wrote kubeconfig to $f"
+
+      - name: Deploy (helm upgrade --install --atomic)
+        # deploy.sh forwards "$@" to helm. --atomic implies --wait → readiness
+        # gating + auto-rollback of WORKLOADS on failure (schema is forward-only).
+        run: |
+          set -euo pipefail
+          bash infrastructure/gjirafa/deploy.sh --atomic --cleanup-on-fail --timeout 10m
+
+      - name: Health gate
+        run: |
+          set -euo pipefail
+          kubectl -n project-02 rollout status deploy/myproperty-backend  --timeout=5m
+          kubectl -n project-02 rollout status deploy/myproperty-frontend --timeout=5m
+
+          echo "Probing api readiness (/api/v1/health/ready, expect 200)…"
+          curl -fsS --max-time 20 https://api.myproperty.works/api/v1/health/ready >/dev/null
+          echo "  api ready OK"
+
+          # app. serves 200; auth./grafana./status. legitimately 302 to a login —
+          # treat anything < 400 as 'host is up and serving'.
+          for h in app auth grafana status; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$h.myproperty.works")"
+            if [ "$code" -ge 400 ]; then
+              echo "::error::https://$h.myproperty.works returned HTTP $code"
+              exit 1
+            fi
+            echo "  $h.myproperty.works -> $code OK"
+          done
+
+      - name: Notify Discord on failure
+        # `failure()` alone is false when the job is CANCELLED (e.g. a job-level
+        # timeout, or a manual cancel) — `|| cancelled()` ensures those still
+        # alert instead of dying silently. The message branches on job.status
+        # because the two states have DIFFERENT workload implications:
+        #   * failure   → a step failed; `--atomic` ran its rollback to completion.
+        #   * cancelled → helm was killed mid-flight; rollback may be incomplete,
+        #                 so the live workload state is unknown.
+        if: failure() || cancelled()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_DEPLOY_WEBHOOK_URL }}
+          BRANCH: ${{ steps.ref.outputs.branch }}
+          SHORT_SHA: ${{ steps.sha.outputs.short }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK:-}" ]; then
+            echo "DISCORD_DEPLOY_WEBHOOK_URL not set — skipping notification."
+            exit 0
+          fi
+          # Backticks below are literal Markdown for Discord; single-quoted, so the
+          # shell never treats them as command substitution (no backslash needed —
+          # an escaped \` would leak a literal backslash into the message).
+          # shellcheck disable=SC2016
+          if [ "$STATUS" = "cancelled" ]; then
+            HEADLINE='🚫 **CD deploy to project-02 CANCELLED** (job timeout or manual cancel)'
+            STATE_LINE='`--atomic` may have been interrupted mid-flight — workload/rollback state is UNKNOWN; check `helm history -n project-02` and `kubectl` before retrying.'
+          else
+            HEADLINE='⚠️ **CD deploy to project-02 FAILED**'
+            STATE_LINE='`--atomic` rolled the workloads back to the prior revision.'
+          fi
+          MSG="$(printf '%s — branch `%s` @ `%s`.\n%s\n**Schema migrations are forward-only — the DB may be partly migrated; verify manually.**\nLogs: %s' \
+            "$HEADLINE" "${BRANCH:-?}" "${SHORT_SHA:-?}" "$STATE_LINE" "$RUN_URL")"
+          curl -fsS -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg c "$MSG" '{content:$c}')" \
+            "$WEBHOOK" >/dev/null && echo "Discord notice sent ($STATUS)." || echo "Discord notify failed (non-fatal)."
+
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f "${KUBECONFIG:-}" || true

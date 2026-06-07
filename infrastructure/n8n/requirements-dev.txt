@@ -1,0 +1,4 @@
+# Dev/test dependencies for the n8n workflow structure guard (M5.8).
+# Runtime is the n8nio/n8n image — there is no Python runtime to install here;
+# these are only for `pytest infrastructure/n8n/tests`.
+pytest==8.3.4

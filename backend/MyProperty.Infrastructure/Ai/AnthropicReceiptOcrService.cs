@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Ocr;
+using MyProperty.Application.Common.Options;
 
 namespace MyProperty.Infrastructure.Ai;
 

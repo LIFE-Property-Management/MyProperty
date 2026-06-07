@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
@@ -14,14 +12,14 @@ public sealed class AcceptInviteHandler(
     IInviteRepository invites,
     ILeaseRepository leases,
     IUserRepository users,
-    ICurrentUser currentUser,
+    IUserAccountProvisioner provisioner,
     ILandlordDashboardCache dashboardCache)
 {
     public async Task<InviteAcceptedDto> Handle(AcceptInviteCommand cmd, CancellationToken ct)
     {
         await validator.EnsureValidAsync(cmd, ct);
 
-        var tokenHash = HashToken(cmd.Token);
+        var tokenHash = InviteTokenHasher.Hash(cmd.Token);
 
         var invite = await invites.GetByTokenHashAsync(tokenHash, ct)
             ?? throw new NotFoundException("Invite", "token");
@@ -32,10 +30,31 @@ public sealed class AcceptInviteHandler(
         if (invite.ExpiresAt <= DateTime.UtcNow)
             throw new NotFoundException("Invite", "token");
 
-        var user = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        // Reject if an account already exists for this email — existing-user flow
+        // is out of scope for this release.
+        var existingUser = await users.GetByEmailAsync(invite.Email, ct);
+        if (existingUser is not null)
+            throw new ConflictException(
+                $"An account for {invite.Email} already exists. Please log in instead.");
 
-        if (!string.Equals(user.Email, invite.Email, StringComparison.OrdinalIgnoreCase))
-            throw new ForbiddenException("This invite was sent to a different email address.");
+        var keycloakSub = await provisioner.CreateAsync(new ProvisionUserRequest(
+            Email: invite.Email,
+            FirstName: cmd.FirstName,
+            LastName: cmd.LastName,
+            Phone: cmd.Phone,
+            Password: cmd.Password,
+            RealmRole: "Tenant"), ct);
+
+        var user = new User
+        {
+            KeycloakSubId = keycloakSub,
+            Email = invite.Email,
+            FirstName = cmd.FirstName,
+            LastName = cmd.LastName,
+            Phone = cmd.Phone,
+            AccountStatus = TenantAccountStatus.Active,
+        };
+        await users.AddAsync(user, ct);
 
         var lease = new Lease
         {
@@ -45,9 +64,8 @@ public sealed class AcceptInviteHandler(
             StartDate = invite.ProposedStartDate,
             EndDate = invite.ProposedEndDate,
             MonthlyRent = invite.ProposedMonthlyRent,
-            Currency = invite.Currency
+            Currency = invite.Currency,
         };
-
         await leases.AddAsync(lease, ct);
 
         invite.Status = InviteStatus.Accepted;
@@ -55,14 +73,8 @@ public sealed class AcceptInviteHandler(
 
         await invites.SaveChangesAsync(ct);
 
-        // The new lease changes the landlord's "active leases / tenants"
-        // counters; drop the cached dashboard so the next read repopulates.
         await dashboardCache.InvalidateAsync(invite.LandlordId, ct);
 
         return new InviteAcceptedDto(invite.Id, lease.Id);
     }
-
-    private static string HashToken(string plainToken)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainToken)))
-            .ToLowerInvariant();
 }

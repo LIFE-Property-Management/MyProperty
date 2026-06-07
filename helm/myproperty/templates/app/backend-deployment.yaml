@@ -1,3 +1,4 @@
+{{- if .Values.backend.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -20,6 +21,8 @@ spec:
   # replicas: 1 — ReadWriteOnce PVC limits to single pod. M5 follow-up: migrate
   # file storage to DO Spaces (S3-compatible) to remove this constraint.
   replicas: {{ .Values.backend.replicas }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "myproperty.selectorLabels" . | nindent 6 }}
@@ -53,6 +56,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+              add: [CHOWN]
           volumeMounts:
             - name: backend-storage
               mountPath: /var/myproperty/storage
@@ -96,23 +100,39 @@ spec:
                   name: myproperty-postgres
                   key: postgres-port
             - name: ConnectionStrings__Postgres
-              value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode=Require;Trust Server Certificate=true"
+              value: "Host=$(POSTGRES_HOST);Port=$(POSTGRES_PORT);Database=$(POSTGRES_DB);Username=$(POSTGRES_USER);Password=$(POSTGRES_PASSWORD);SSL Mode={{ .Values.postgres.sslMode }};Trust Server Certificate=true"
             - name: ASPNETCORE_URLS
               value: "http://+:8080"
-            - name: LokiUrl
-              value: "http://loki:3100"
             - name: Keycloak__Authority
-              value: "https://auth.myproperty.works/realms/MyProperty"
+              value: "https://{{ .Values.hosts.auth }}/realms/MyProperty"
             - name: Keycloak__MetadataAddress
               value: "http://keycloak:8080/realms/MyProperty/.well-known/openid-configuration"
+            - name: Keycloak__RequireHttpsMetadata
+              value: "false"
+            - name: KeycloakAdmin__BaseUrl
+              value: "http://keycloak:8080"
+            - name: KeycloakAdmin__Realm
+              value: "MyProperty"
+            - name: KeycloakAdmin__ClientId
+              value: "myproperty-api"
+            - name: KeycloakAdmin__ClientSecret
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-api-client
+                  key: client-secret
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-redis
+                  key: redis-password
             - name: Cache__RedisConnection
-              value: "redis:6379"
+              value: "redis:6379,password=$(REDIS_PASSWORD)"
             - name: Cache__InstancePrefix
               value: "myproperty:prod:"
             - name: SignalR__UseRedisBackplane
               value: "true"
             - name: Cors__AllowedOrigins__0
-              value: "https://app.myproperty.works"
+              value: "https://{{ .Values.hosts.app }}"
             # MailHog not deployed in M4.4 — invite email flow degrades gracefully.
             # Tracked as post-M4 follow-up (real SMTP or hosted MailDev).
             - name: Smtp__Host
@@ -126,7 +146,7 @@ spec:
             - name: Smtp__FromName
               value: "MyProperty"
             - name: Invites__PortalBaseUrl
-              value: "https://app.myproperty.works"
+              value: "https://{{ .Values.hosts.app }}"
             - name: Invites__ExpiryDays
               value: "7"
             - name: RabbitMq__Enabled
@@ -160,6 +180,16 @@ spec:
               value: "claude-sonnet-4-5-20250929"
             - name: Anthropic__TimeoutSeconds
               value: "30"
+            - name: Unleash__ApiUrl
+              value: "http://unleash:4242/api/"
+            # Optional: absent Secret → unset token → NullFeatureFlags (flags
+            # inert, backend healthy). Create myproperty-unleash to go live.
+            - name: Unleash__ApiToken
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-unleash
+                  key: client-api-token
+                  optional: true
           livenessProbe:
             httpGet:
               path: /api/v1/health/live
@@ -196,3 +226,4 @@ spec:
         - name: backend-storage
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-backend-storage
+{{- end }}

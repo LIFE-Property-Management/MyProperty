@@ -2,16 +2,16 @@
 AIOps webhook receiver — M4.11.
 
 Receives Alertmanager webhook POSTs at /alerts, triages firing alerts via
-Anthropic Claude, and posts results to Slack as Block Kit messages. For
-resolved alerts, skips the LLM and posts a short resolution.
+Anthropic Claude, and posts results to Discord as rich embeds. For resolved
+alerts, skips the LLM and posts a short resolution.
 
 Graceful degradation paths (so `docker compose up` on a fresh clone works
 without any external accounts):
   - ANTHROPIC_API_KEY unset → LLM call is skipped; raw labels/annotations
-    are posted to Slack with a "Triage disabled" header.
-  - SLACK_WEBHOOK_URL unset → Slack messages are logged to stdout, where
-    Promtail picks them up and ships them to Loki. The demo flow is still
-    visible in Grafana even without a Slack workspace.
+    are posted with a "Triage disabled" note.
+  - DISCORD_WEBHOOK_URL unset → messages are logged to stdout, where Promtail
+    picks them up and ships them to Loki. The demo flow is still visible in
+    Grafana even without a Discord server.
 """
 
 import logging
@@ -30,10 +30,10 @@ from pydantic import BaseModel, ConfigDict, Field
 # path, not a crash.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001").strip()
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
 LOG_LEVEL = os.environ.get("AIOPS_LOG_LEVEL", "INFO").upper()
 CLAUDE_TIMEOUT_SECONDS = float(os.environ.get("AIOPS_CLAUDE_TIMEOUT_SECONDS", "15"))
-SLACK_TIMEOUT_SECONDS = float(os.environ.get("AIOPS_SLACK_TIMEOUT_SECONDS", "10"))
+DISCORD_TIMEOUT_SECONDS = float(os.environ.get("AIOPS_DISCORD_TIMEOUT_SECONDS", "10"))
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -43,8 +43,8 @@ log = logging.getLogger("aiops")
 
 if not ANTHROPIC_API_KEY:
     log.warning("ANTHROPIC_API_KEY unset — LLM triage disabled, alerts will post raw")
-if not SLACK_WEBHOOK_URL:
-    log.warning("SLACK_WEBHOOK_URL unset — Slack messages will be logged to stdout")
+if not DISCORD_WEBHOOK_URL:
+    log.warning("DISCORD_WEBHOOK_URL unset — messages will be logged to stdout")
 
 claude_client: anthropic.Anthropic | None = None
 if ANTHROPIC_API_KEY:
@@ -158,132 +158,121 @@ def triage_alert(alert: Alert, payload_status: str) -> str | None:
         return f"Triage call failed; raw alert details follow.\n\n{user_prompt}"
 
 
-# ── Slack delivery ────────────────────────────────────────────
+# ── Discord delivery ──────────────────────────────────────────
+# Discord webhooks expect a native {"content", "embeds"} payload — they do
+# NOT understand Slack Block Kit and reject it as an empty message. Emoji are
+# unicode (Discord doesn't resolve Slack's :colon: shortcodes), and embeds
+# carry the detail while `content` gives a plain-text mobile-push preview.
 SEVERITY_EMOJI = {
-    "critical": ":rotating_light:",
-    "warning": ":warning:",
-    "info": ":information_source:",
+    "critical": "🚨",
+    "warning": "⚠️",
+    "info": "ℹ️",
 }
+# Discord embed colors (decimal RGB). Red = firing/critical, green = resolved.
+SEVERITY_COLOR = {
+    "critical": 0xE01E5A,
+    "warning": 0xECB22E,
+    "info": 0x36C5F0,
+}
+RESOLVED_COLOR = 0x2EB67D
+DEFAULT_COLOR = 0x95A5A6
+
+# Discord limits: embed title 256, description 4096, field value 1024,
+# content 2000. We truncate defensively rather than risk a 400.
+DISCORD_TITLE_LIMIT = 256
+DISCORD_DESC_LIMIT = 4096
+DISCORD_FIELD_VALUE_LIMIT = 1024
+DISCORD_CONTENT_LIMIT = 2000
 
 
-def build_slack_blocks(
+def build_discord_payload(
     alert: Alert,
     alert_status: str,
     triage_text: str | None,
-) -> list[dict[str, Any]]:
-    """Render one alert as a Block Kit message. Block list is in `blocks`;
-    callers should also pass a plain-text `text` summary as a notification
-    fallback for screen readers + mobile push previews."""
+) -> dict[str, Any]:
+    """Render one alert as a Discord webhook payload ({"content", "embeds"}).
+
+    `content` is a plain-text one-liner (mobile push preview); the embed
+    carries the summary, description, triage, metadata fields, and links."""
     alertname = alert.labels.get("alertname", "Unknown alert")
     severity = alert.labels.get("severity", "info")
-    emoji = SEVERITY_EMOJI.get(severity, ":bell:")
 
     if alert_status == "resolved":
-        header_text = f":white_check_mark: [RESOLVED] {alertname}"
+        title = f"✅ [RESOLVED] {alertname}"
+        color = RESOLVED_COLOR
     else:
-        header_text = f"{emoji} [{severity.upper()}] {alertname}"
+        emoji = SEVERITY_EMOJI.get(severity, "🔔")
+        title = f"{emoji} [{severity.upper()}] {alertname}"
+        color = SEVERITY_COLOR.get(severity, DEFAULT_COLOR)
 
-    blocks: list[dict[str, Any]] = [
-        {
-            "type": "header",
-            # Slack header text caps at 150 chars; truncate defensively.
-            "text": {"type": "plain_text", "text": header_text[:150], "emoji": True},
-        },
-    ]
-
-    summary = alert.annotations.get("summary", "")
-    if summary:
-        blocks.append(
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"*{summary}*"}}
-        )
-
-    fields: list[dict[str, str]] = []
-    if alert.startsAt:
-        fields.append({"type": "mrkdwn", "text": f"*Started:*\n{alert.startsAt}"})
-    if alert_status == "resolved" and alert.endsAt:
-        fields.append({"type": "mrkdwn", "text": f"*Resolved:*\n{alert.endsAt}"})
-    if service := alert.labels.get("service"):
-        fields.append({"type": "mrkdwn", "text": f"*Service:*\n{service}"})
-    if instance := alert.labels.get("instance"):
-        fields.append({"type": "mrkdwn", "text": f"*Instance:*\n{instance}"})
-    if fields:
-        blocks.append({"type": "section", "fields": fields})
-
-    description = alert.annotations.get("description")
-    if description:
-        blocks.append(
-            {"type": "section", "text": {"type": "mrkdwn", "text": description}}
-        )
-
+    # Description blocks, joined with blank lines. Discord renders markdown.
+    parts: list[str] = []
+    if summary := alert.annotations.get("summary"):
+        parts.append(f"**{summary}**")
+    if description := alert.annotations.get("description"):
+        parts.append(description)
     if triage_text and alert_status != "resolved":
-        # Slack section text caps at 3000 chars.
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Triage*\n{triage_text[:2900]}"},
-            }
-        )
+        parts.append(f"**Triage**\n{triage_text}")
     elif alert_status != "resolved" and triage_text is None and not ANTHROPIC_API_KEY:
-        blocks.append(
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": "_Triage disabled — ANTHROPIC_API_KEY unset._",
-                    }
-                ],
-            }
-        )
+        parts.append("_Triage disabled — ANTHROPIC_API_KEY unset._")
 
-    accessory_buttons: list[dict[str, Any]] = []
+    # Discord embeds have no buttons; surface links as a markdown line.
+    links: list[str] = []
     if runbook := alert.annotations.get("runbook_url"):
-        accessory_buttons.append(
-            {
-                "type": "button",
-                "text": {"type": "plain_text", "text": "Runbook"},
-                "url": runbook,
-            }
-        )
+        links.append(f"[Runbook]({runbook})")
     if alert.generatorURL:
-        accessory_buttons.append(
-            {
-                "type": "button",
-                "text": {"type": "plain_text", "text": "Prometheus"},
-                "url": alert.generatorURL,
-            }
+        links.append(f"[Prometheus]({alert.generatorURL})")
+    if links:
+        parts.append(" · ".join(links))
+
+    fields: list[dict[str, Any]] = []
+
+    def add_field(name: str, value: str) -> None:
+        fields.append(
+            {"name": name, "value": value[:DISCORD_FIELD_VALUE_LIMIT], "inline": True}
         )
-    if accessory_buttons:
-        blocks.append({"type": "actions", "elements": accessory_buttons})
 
-    blocks.append({"type": "divider"})
-    return blocks
+    if alert.startsAt:
+        add_field("Started", alert.startsAt)
+    if alert_status == "resolved" and alert.endsAt:
+        add_field("Resolved", alert.endsAt)
+    if service := alert.labels.get("service"):
+        add_field("Service", service)
+    if instance := alert.labels.get("instance"):
+        add_field("Instance", instance)
+
+    embed: dict[str, Any] = {"title": title[:DISCORD_TITLE_LIMIT], "color": color}
+    if parts:
+        embed["description"] = "\n\n".join(parts)[:DISCORD_DESC_LIMIT]
+    if fields:
+        embed["fields"] = fields
+
+    content = f"[{alert_status.upper()}] {alertname} ({severity})"
+    return {"content": content[:DISCORD_CONTENT_LIMIT], "embeds": [embed]}
 
 
-def post_to_slack(blocks: list[dict[str, Any]], summary_text: str) -> None:
-    """POST a Block Kit payload to the Slack incoming webhook.
+def post_to_discord(payload: dict[str, Any], summary_text: str) -> None:
+    """POST an embed payload to the Discord incoming webhook.
 
-    `summary_text` is the plain-text fallback Slack uses for notifications,
-    accessibility, and clients that don't render blocks. Failures are
-    logged but never raised — see the always-2xx contract on /alerts."""
-    payload = {"text": summary_text, "blocks": blocks}
-    if not SLACK_WEBHOOK_URL:
-        log.info("Slack webhook not configured; would have sent: %s", summary_text)
-        log.debug("Slack payload (stdout fallback): %s", payload)
+    Failures are logged but never raised — see the always-2xx contract on
+    /alerts. Discord returns 204 No Content on success (200 with ?wait=true)."""
+    if not DISCORD_WEBHOOK_URL:
+        log.info("Discord webhook not configured; would have sent: %s", summary_text)
+        log.debug("Discord payload (stdout fallback): %s", payload)
         return
     try:
-        with httpx.Client(timeout=SLACK_TIMEOUT_SECONDS) as client:
-            response = client.post(SLACK_WEBHOOK_URL, json=payload)
-            if response.status_code != 200:
+        with httpx.Client(timeout=DISCORD_TIMEOUT_SECONDS) as client:
+            response = client.post(DISCORD_WEBHOOK_URL, json=payload)
+            if response.status_code not in (200, 204):
                 log.error(
-                    "Slack returned %s: %s",
+                    "Discord returned %s: %s",
                     response.status_code,
                     response.text[:200],
                 )
             else:
-                log.info("Posted to Slack: %s", summary_text)
+                log.info("Posted to Discord: %s", summary_text)
     except Exception:
-        log.exception("Slack post failed")
+        log.exception("Discord post failed")
 
 
 # ── FastAPI app ───────────────────────────────────────────────
@@ -310,9 +299,9 @@ def process_payload(payload: AlertmanagerPayload) -> None:
         triage_text: str | None = None
         if alert.status == "firing":
             triage_text = triage_alert(alert, payload.status)
-        blocks = build_slack_blocks(alert, alert.status, triage_text)
+        payload_msg = build_discord_payload(alert, alert.status, triage_text)
         summary_text = f"[{alert.status.upper()}] {alertname} ({severity})"
-        post_to_slack(blocks, summary_text)
+        post_to_discord(payload_msg, summary_text)
 
 
 @app.post("/alerts", status_code=status.HTTP_202_ACCEPTED)
@@ -324,7 +313,7 @@ def alerts(
     Returns 202 immediately after queuing background work — keeps the response
     inside AM's default 10s http_config.timeout even when Claude is slow.
     Always returns 2xx — AM retries non-2xx, which would compound a transient
-    LLM/Slack outage into an alert storm. Failures inside process_payload are
+    LLM/Discord outage into an alert storm. Failures inside process_payload are
     logged and swallowed; the firing alert stays visible in Prometheus +
     Alertmanager + Grafana UIs regardless."""
     log.info(

@@ -1,10 +1,10 @@
 using Moq;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Invites;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
-using MyProperty.Tests.Unit.Handlers.TestUtils;
 
 namespace MyProperty.Tests.Unit.Handlers.Invites;
 
@@ -13,11 +13,14 @@ public sealed class AcceptInviteHandlerTests
     private readonly Mock<IInviteRepository> _invites = new(MockBehavior.Strict);
     private readonly Mock<ILeaseRepository> _leases = new(MockBehavior.Strict);
     private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
-    private readonly Mock<ICurrentUser> _currentUser = new();
+    private readonly Mock<IUserAccountProvisioner> _provisioner = new(MockBehavior.Strict);
     private readonly Mock<ILandlordDashboardCache> _cache = new(MockBehavior.Strict);
 
     private const string PlainToken = "valid-token-1234567890ABCDE";
-    private static readonly string TokenHashHex = TokenHasher.Hash(PlainToken);
+    private static readonly string TokenHashHex = InviteTokenHasher.Hash(PlainToken);
+
+    private static AcceptInviteCommand ValidCommand(string token = PlainToken) =>
+        new(token, "Ada", "Lovelace", null, "Password1");
 
     private AcceptInviteHandler BuildSut() =>
         new(
@@ -25,7 +28,7 @@ public sealed class AcceptInviteHandlerTests
             _invites.Object,
             _leases.Object,
             _users.Object,
-            _currentUser.Object,
+            _provisioner.Object,
             _cache.Object);
 
     private static Invite SeedInvite(
@@ -49,30 +52,27 @@ public sealed class AcceptInviteHandlerTests
             Currency = "EUR",
         };
 
-    private static User SeedTenant(string email) => new()
-    {
-        Id = Guid.NewGuid(),
-        KeycloakSubId = "kc-tenant",
-        Email = email,
-        FirstName = "Ada",
-        LastName = "Lovelace",
-    };
-
     [Fact]
-    public async Task Happy_path_creates_lease_marks_invite_accepted_and_invalidates_cache()
+    public async Task Happy_path_creates_keycloak_user_row_lease_and_invalidates_cache()
     {
+        const string keycloakSub = "kc-new-tenant-sub";
         var invite = SeedInvite();
-        var tenant = SeedTenant(invite.Email);
 
         _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(invite);
-        _currentUser.SetupGet(c => c.Principal).Returns(TestPrincipal.Authenticated(tenant.KeycloakSubId, tenant.Email));
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
+        _users.Setup(u => u.GetByEmailAsync(invite.Email, It.IsAny<CancellationToken>()))
+              .ReturnsAsync((User?)null);
+        _provisioner.Setup(p => p.CreateAsync(It.IsAny<ProvisionUserRequest>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(keycloakSub);
 
-        Lease? added = null;
+        User? addedUser = null;
+        _users.Setup(u => u.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
+              .Callback<User, CancellationToken>((u, _) => addedUser = u)
+              .Returns(Task.CompletedTask);
+
+        Lease? addedLease = null;
         _leases.Setup(l => l.AddAsync(It.IsAny<Lease>(), It.IsAny<CancellationToken>()))
-               .Callback<Lease, CancellationToken>((lease, _) => added = lease)
+               .Callback<Lease, CancellationToken>((l, _) => addedLease = l)
                .Returns(Task.CompletedTask);
 
         _invites.Setup(i => i.SaveChangesAsync(It.IsAny<CancellationToken>()))
@@ -80,44 +80,35 @@ public sealed class AcceptInviteHandlerTests
         _cache.Setup(c => c.InvalidateAsync(invite.LandlordId, It.IsAny<CancellationToken>()))
               .Returns(Task.CompletedTask);
 
-        var sut = BuildSut();
+        var result = await BuildSut().Handle(ValidCommand(), CancellationToken.None);
 
-        var result = await sut.Handle(new AcceptInviteCommand(PlainToken), CancellationToken.None);
-
-        Assert.NotEqual(Guid.Empty, result.InviteId);
         Assert.Equal(invite.Id, result.InviteId);
-        Assert.NotNull(added);
-        Assert.Equal(LeaseStatus.Active, added!.Status);
-        Assert.Equal(invite.LandlordId, added.LandlordId);
-        Assert.Equal(invite.PropertyId, added.PropertyId);
-        Assert.Equal(tenant.Id, added.TenantId);
-        Assert.Equal(invite.ProposedMonthlyRent, added.MonthlyRent);
-        Assert.Equal(invite.Currency, added.Currency);
+        Assert.NotEqual(Guid.Empty, result.LeaseId);
+
+        // User row created with correct fields
+        Assert.NotNull(addedUser);
+        Assert.Equal(keycloakSub, addedUser!.KeycloakSubId);
+        Assert.Equal(invite.Email, addedUser.Email);
+        Assert.Equal(TenantAccountStatus.Active, addedUser.AccountStatus);
+
+        // Lease created with correct foreign keys
+        Assert.NotNull(addedLease);
+        Assert.Equal(invite.LandlordId, addedLease!.LandlordId);
+        Assert.Equal(invite.PropertyId, addedLease.PropertyId);
+        Assert.Equal(LeaseStatus.Active, addedLease.Status);
+        Assert.Equal(invite.ProposedMonthlyRent, addedLease.MonthlyRent);
 
         Assert.Equal(InviteStatus.Accepted, invite.Status);
         Assert.NotNull(invite.AcceptedAt);
 
+        // Provisioner called with Tenant role
+        _provisioner.Verify(p => p.CreateAsync(
+            It.Is<ProvisionUserRequest>(r =>
+                r.Email == invite.Email &&
+                r.RealmRole == "Tenant"),
+            It.IsAny<CancellationToken>()), Times.Once);
+
         _cache.Verify(c => c.InvalidateAsync(invite.LandlordId, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task Email_match_is_case_insensitive()
-    {
-        var invite = SeedInvite(email: "Tenant@Example.com");
-        var tenant = SeedTenant("tenant@example.COM");
-
-        _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
-                .ReturnsAsync(invite);
-        _currentUser.SetupGet(c => c.Principal).Returns(TestPrincipal.Authenticated(tenant.KeycloakSubId, tenant.Email));
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync(tenant);
-        _leases.Setup(l => l.AddAsync(It.IsAny<Lease>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        _invites.Setup(i => i.SaveChangesAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        _cache.Setup(c => c.InvalidateAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-
-        var sut = BuildSut();
-        var result = await sut.Handle(new AcceptInviteCommand(PlainToken), CancellationToken.None);
-        Assert.Equal(invite.Id, result.InviteId);
     }
 
     [Fact]
@@ -126,10 +117,8 @@ public sealed class AcceptInviteHandlerTests
         _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((Invite?)null);
 
-        var sut = BuildSut();
-
         await Assert.ThrowsAsync<NotFoundException>(
-            () => sut.Handle(new AcceptInviteCommand(PlainToken), CancellationToken.None));
+            () => BuildSut().Handle(ValidCommand(), CancellationToken.None));
     }
 
     [Theory]
@@ -142,10 +131,8 @@ public sealed class AcceptInviteHandlerTests
         _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(invite);
 
-        var sut = BuildSut();
-
         await Assert.ThrowsAsync<NotFoundException>(
-            () => sut.Handle(new AcceptInviteCommand(PlainToken), CancellationToken.None));
+            () => BuildSut().Handle(ValidCommand(), CancellationToken.None));
 
         _leases.VerifyNoOtherCalls();
     }
@@ -157,32 +144,35 @@ public sealed class AcceptInviteHandlerTests
         _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(invite);
 
-        var sut = BuildSut();
-
         await Assert.ThrowsAsync<NotFoundException>(
-            () => sut.Handle(new AcceptInviteCommand(PlainToken), CancellationToken.None));
+            () => BuildSut().Handle(ValidCommand(), CancellationToken.None));
 
         _leases.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task Throws_Forbidden_when_emails_differ()
+    public async Task Throws_Conflict_when_email_already_has_an_account()
     {
-        var invite = SeedInvite(email: "intended@example.com");
-        var someoneElse = SeedTenant("imposter@example.com");
+        var invite = SeedInvite(email: "already@example.com");
+        var existingUser = new User
+        {
+            Id = Guid.NewGuid(),
+            KeycloakSubId = "existing-kc-sub",
+            Email = "already@example.com",
+            FirstName = "Existing",
+            LastName = "User",
+        };
 
         _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(invite);
-        _currentUser.SetupGet(c => c.Principal).Returns(TestPrincipal.Authenticated(someoneElse.KeycloakSubId, someoneElse.Email));
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(It.IsAny<System.Security.Claims.ClaimsPrincipal>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync(someoneElse);
+        _users.Setup(u => u.GetByEmailAsync(invite.Email, It.IsAny<CancellationToken>()))
+              .ReturnsAsync(existingUser);
 
-        var sut = BuildSut();
+        var ex = await Assert.ThrowsAsync<ConflictException>(
+            () => BuildSut().Handle(ValidCommand(), CancellationToken.None));
+        Assert.Contains("already exists", ex.Message, StringComparison.OrdinalIgnoreCase);
 
-        var ex = await Assert.ThrowsAsync<ForbiddenException>(
-            () => sut.Handle(new AcceptInviteCommand(PlainToken), CancellationToken.None));
-        Assert.Contains("different email", ex.Message, StringComparison.OrdinalIgnoreCase);
-
+        _provisioner.VerifyNoOtherCalls();
         _leases.VerifyNoOtherCalls();
         _cache.VerifyNoOtherCalls();
     }

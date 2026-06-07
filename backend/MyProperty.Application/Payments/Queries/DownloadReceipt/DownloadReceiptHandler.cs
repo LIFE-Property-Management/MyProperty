@@ -9,24 +9,19 @@ namespace MyProperty.Application.Payments.Queries.DownloadReceipt;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Pattern matches the inline <c>KeycloakSubId → User</c> lookup used by the
-/// other payment handlers. The post-M3 <c>ICurrentUserContext</c> extraction
-/// will dedupe this — for now we duplicate the pattern to stay consistent.
+/// Resolves the caller to the internal <see cref="MyProperty.Domain.Entities.User"/>
+/// via <see cref="ICurrentUserContext"/>, then enforces lease-scoped access
+/// (tenant on the payment's lease OR landlord that owns it).
 /// </para>
 /// </remarks>
 public sealed class DownloadReceiptHandler(
-    ICurrentUser currentUser,
-    IUserRepository userRepo,
+    ICurrentUserContext currentUserContext,
     IPaymentRepository paymentRepo,
     IFileStorage fileStorage)
 {
     public async Task<DownloadReceiptResult> Handle(Guid paymentId, CancellationToken ct)
     {
-        if (currentUser.KeycloakSubId is null)
-            throw new ForbiddenException("Authentication required.");
-
-        var user = await userRepo.GetByKeycloakSubIdAsync(currentUser.KeycloakSubId, ct)
-            ?? throw new ForbiddenException("Authenticated user not found in user table.");
+        var user = await currentUserContext.GetUserAsync(ct);
 
         var payment = await paymentRepo.GetByIdWithLeaseAsync(paymentId, ct)
             ?? throw new NotFoundException("Payment", paymentId);

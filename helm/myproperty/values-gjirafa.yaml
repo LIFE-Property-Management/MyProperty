@@ -1,0 +1,103 @@
+# values-gjirafa.yaml — overlay for namespace project-02 on the shared Hetzner
+# cluster. Deploy with:
+#   helm upgrade --install myproperty ./helm/myproperty \
+#     --kubeconfig project-02.kubeconfig -n project-02 -f helm/myproperty/values-gjirafa.yaml
+
+hosts:
+  app: app.myproperty.works
+  api: api.myproperty.works
+  auth: auth.myproperty.works
+  grafana: grafana.myproperty.works
+
+postgres:
+  enabled: true
+  storage:
+    storageClassName: longhorn
+  sslMode: Disable
+redis:
+  enabled: true
+unleash:
+  enabled: true
+rabbitmq:
+  enabled: true
+  storage:
+    storageClassName: longhorn
+keycloak:
+  enabled: true
+backend:
+  enabled: true
+  image:
+    tag: "8c6b2d1"
+  storage:
+    storageClassName: longhorn
+migration:
+  image:
+    tag: "8c6b2d1"
+frontend:
+  enabled: true
+  image:
+    tag: "8c6b2d1"
+
+ingress:
+  enabled: true
+  tls:
+    secretName: myproperty-tls
+    issuerKind: Issuer
+    issuerName: letsencrypt-prod
+    createIssuers: true
+    acmeEmail: erdi.syla@gjirafa.com
+    issuers:
+      - name: letsencrypt-staging
+        server: https://acme-staging-v02.api.letsencrypt.org/directory
+      - name: letsencrypt-prod
+        server: https://acme-v02.api.letsencrypt.org/directory
+
+monitoring:
+  enabled: true
+uptimeKuma:
+  enabled: true
+  storage:
+    storageClassName: longhorn
+  seedImage:
+    tag: "54f096d"
+
+aiopsWebhook:
+  image:
+    tag: "fa19084"
+
+prometheus:
+  storage:
+    storageClassName: longhorn
+
+alertmanager:
+  storage:
+    storageClassName: longhorn
+
+grafana:
+  storage:
+    storageClassName: longhorn
+  ingressAllowlist: ""
+
+loki:
+  storage:
+    storageClassName: longhorn
+
+# NetworkPolicies stay OFF here — enable deliberately via
+#   ./infrastructure/gjirafa/deploy.sh --set networkPolicies.enabled=true
+# in a watched window (rollback: kubectl -n project-02 delete networkpolicy --all).
+#
+# CNI is Calico (enforces policy) and ingress-nginx is a hostNetwork DaemonSet on
+# the workers. Canary (2026-06-01) showed: allowing the public node IPs only
+# admitted *same-node* requests (Calico failsafes local host→pod); cross-node
+# requests were dropped because Calico encapsulation rewrites the source to the
+# originating node's *tunnel* address, which lives in the pod CIDR — not the
+# public node IP. So nodeCIDRs is the Calico pod CIDR (192.168.0.0/16).
+#
+# Trade-off: this admits any in-cluster pod to the public-facing services' HTTP
+# ports (frontend/backend/keycloak/grafana/uptime-kuma) — acceptable, since those
+# are already internet-facing via ingress. The data tier (postgres/redis/rabbitmq)
+# stays locked to component selectors, which is the protection that matters.
+networkPolicies:
+  enabled: true   # validated on project-02 (Calico) 2026-06-01: all ingress + 13 Kuma monitors green
+  nodeCIDRs:
+    - 192.168.0.0/16   # Calico pod CIDR — covers node tunnel IPs (hostNetwork ingress)

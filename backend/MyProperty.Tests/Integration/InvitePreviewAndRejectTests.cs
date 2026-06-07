@@ -1,7 +1,6 @@
 using System.Net;
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
+using MyProperty.Application.Invites;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 using MyProperty.Tests.Integration.Fixtures;
@@ -104,7 +103,7 @@ public sealed class InvitePreviewAndRejectTests(ApiFixture fixture)
         DateTime? expiresAt = null)
     {
         var plainToken = "T" + Convert.ToHexString(Guid.NewGuid().ToByteArray()).ToLowerInvariant();
-        var hash = HashToken(plainToken);
+        var hash = InviteTokenHasher.Hash(plainToken);
         var inviteId = Guid.NewGuid();
 
         await fixture.WithDbAsync(async db =>
@@ -164,7 +163,4 @@ public sealed class InvitePreviewAndRejectTests(ApiFixture fixture)
 
         return (inviteId, plainToken);
     }
-
-    private static string HashToken(string plainToken)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plainToken))).ToLowerInvariant();
 }

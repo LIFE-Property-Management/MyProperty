@@ -11,8 +11,7 @@ namespace MyProperty.Application.Payments.Commands.CreatePayment;
 
 public sealed class CreatePaymentHandler(
     IValidator<CreatePaymentCommand> validator,
-    ICurrentUser currentUser,
-    IUserRepository userRepo,
+    ICurrentUserContext currentUserContext,
     ILeaseRepository leaseRepo,
     IPaymentRepository paymentRepo,
     ILandlordDashboardCache dashboardCache,
@@ -23,13 +22,7 @@ public sealed class CreatePaymentHandler(
         await validator.EnsureValidAsync(cmd, ct);
 
         // Resource-scoped authorization: landlord must own the lease.
-        // TODO post-M3: extract this lookup pattern (KeycloakSubId → internal User)
-        // into ICurrentUserContext to remove the duplication across payment handlers.
-        if (currentUser.KeycloakSubId is null)
-            throw new ForbiddenException("Authentication required.");
-
-        var landlord = await userRepo.GetByKeycloakSubIdAsync(currentUser.KeycloakSubId, ct)
-            ?? throw new ForbiddenException("Authenticated user not found in user table.");
+        var landlord = await currentUserContext.GetUserAsync(ct);
 
         var lease = await leaseRepo.GetByIdAsync(cmd.LeaseId, ct)
             ?? throw new NotFoundException("Lease", cmd.LeaseId);

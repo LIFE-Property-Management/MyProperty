@@ -1,0 +1,95 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-alertmanager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alertmanager
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-alertmanager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alertmanager
+spec:
+  serviceName: alertmanager
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "myproperty.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: alertmanager
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: alertmanager
+    spec:
+      serviceAccountName: {{ .Release.Name }}-alertmanager
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alertmanager
+          image: {{ .Values.alertmanager.image.repository }}:{{ .Values.alertmanager.image.tag }}
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+          ports:
+            - name: http
+              containerPort: 9093
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.alertmanager.resources.requests.cpu }}
+              memory: {{ .Values.alertmanager.resources.requests.memory }}
+            limits:
+              memory: {{ .Values.alertmanager.resources.limits.memory }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: alertmanager-config
+              mountPath: /etc/alertmanager
+            - name: alertmanager-data
+              mountPath: /alertmanager
+      volumes:
+        - name: alertmanager-config
+          configMap:
+            name: {{ .Release.Name }}-alertmanager-config
+  volumeClaimTemplates:
+    - metadata:
+        name: alertmanager-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.alertmanager.storage.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.alertmanager.storage.size }}
+{{- end }}

@@ -8,15 +8,14 @@ namespace MyProperty.Application.Properties.Commands.CreateProperty;
 public sealed class CreatePropertyHandler(
     IValidator<CreatePropertyCommand> validator,
     IPropertyRepository properties,
-    IUserRepository users,
-    ICurrentUser currentUser,
+    ICurrentUserContext currentUserContext,
     ILandlordDashboardCache dashboardCache)
 {
     public async Task<PropertyCreatedDto> Handle(CreatePropertyCommand cmd, CancellationToken ct)
     {
         await validator.EnsureValidAsync(cmd, ct);
 
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
         var property = new Property
         {
@@ -24,6 +23,7 @@ public sealed class CreatePropertyHandler(
             Name = cmd.Name,
             Address = cmd.Address,
             UnitNumber = cmd.UnitNumber,
+            PropertyType = cmd.PropertyType,
         };
 
         await properties.AddAsync(property, ct);
