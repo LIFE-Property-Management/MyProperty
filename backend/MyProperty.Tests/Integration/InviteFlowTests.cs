@@ -16,7 +16,7 @@ namespace MyProperty.Tests.Integration;
 /// background-job queue captures the email (production would deliver it via
 /// Hangfire + SMTP), the plain token is extracted from the email body, the
 /// tenant fetches a preview anonymously, then accepts — producing a real
-/// Lease row in the Postgres container.
+/// Lease row and Keycloak user in the live containers.
 /// </summary>
 [Collection(ApiCollection.Name)]
 public sealed class InviteFlowTests(ApiFixture fixture)
@@ -25,8 +25,7 @@ public sealed class InviteFlowTests(ApiFixture fixture)
     public async Task End_to_end_invite_flow()
     {
         // ── 1. Lazy-upsert landlord's User row by hitting /me, then seed a
-        //      Property they own. The CreateInvite handler validates property
-        //      ownership against User.Id, so this row must exist first.
+        //      Property they own.
         var landlordClient = await fixture.CreateAuthenticatedClientAsync(ApiFixture.LandlordEmail);
         var meResp = await landlordClient.GetAsync("/api/v1/me");
         Assert.Equal(HttpStatusCode.OK, meResp.StatusCode);
@@ -47,13 +46,16 @@ public sealed class InviteFlowTests(ApiFixture fixture)
             await db.SaveChangesAsync();
         });
 
-        // ── 2. Landlord creates an invite for the tenant seed user.
+        // ── 2. Landlord creates an invite for a fresh (never-seen) email.
+        //      Must NOT be one of the pre-seeded Keycloak users so the
+        //      provisioner can create the account from scratch.
+        const string freshEmail = "fresh-tenant@test.local";
         fixture.Queue.Clear();
         var createCmd = new CreateInviteCommand(
             PropertyId: propertyId,
-            Email: ApiFixture.TenantEmail,
-            FirstName: "Tenant",
-            LastName: "Seed",
+            Email: freshEmail,
+            FirstName: "Fresh",
+            LastName: "Tenant",
             ProposedStartDate: DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
             ProposedEndDate: DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
             ProposedMonthlyRent: 950m,
@@ -64,10 +66,9 @@ public sealed class InviteFlowTests(ApiFixture fixture)
         var created = await createResp.Content.ReadFromJsonAsync<InviteCreatedDto>();
         Assert.NotNull(created);
 
-        // ── 3. The recorded email contains the plain token in the CTA URL —
-        //      mirroring how a real recipient would extract it from their inbox.
+        // ── 3. Extract the plain token from the captured email.
         var email = Assert.Single(fixture.Queue.Emails);
-        Assert.Equal(ApiFixture.TenantEmail, email.To);
+        Assert.Equal(freshEmail, email.To);
         var plainToken = ExtractTokenFromEmailBody(email.Body);
         Assert.NotNull(plainToken);
 
@@ -78,13 +79,15 @@ public sealed class InviteFlowTests(ApiFixture fixture)
         var preview = await previewResp.Content.ReadFromJsonAsync<InvitePreviewDto>();
         Assert.NotNull(preview);
         Assert.Equal("Sunset Apt 12B", preview!.PropertyName);
-        Assert.Equal(ApiFixture.TenantEmail, preview.TenantEmail);
+        Assert.Equal(freshEmail, preview.TenantEmail);
         Assert.Equal(950m, preview.ProposedMonthlyRent);
 
-        // ── 5. Tenant accepts the invite (email matches their JWT).
-        var tenantClient = await fixture.CreateAuthenticatedClientAsync(ApiFixture.TenantEmail);
-        var acceptResp = await tenantClient.PostAsJsonAsync(
-            $"/api/v1/invites/{plainToken}/accept", new { });
+        // ── 5. Anonymous accept — no Bearer header; new JSON body shape.
+        const string tenantPassword = "Tenant1Pass!";
+        var acceptResp = await anonClient.PostAsJsonAsync(
+            $"/api/v1/invites/{plainToken}/accept",
+            new { firstName = "Fresh", lastName = "Tenant", phone = (string?)null, password = tenantPassword });
+
         Assert.Equal(HttpStatusCode.OK, acceptResp.StatusCode);
         var accepted = await acceptResp.Content.ReadFromJsonAsync<InviteAcceptedDto>();
         Assert.NotNull(accepted);
@@ -103,22 +106,31 @@ public sealed class InviteFlowTests(ApiFixture fixture)
             Assert.Equal(landlordUserId, lease.LandlordId);
             Assert.Equal(propertyId, lease.PropertyId);
             Assert.Equal(950m, lease.MonthlyRent);
+
+            // User row was created directly (not via lazy-sync).
+            var user = await db.Users.FirstAsync(u => u.Email == freshEmail);
+            Assert.Equal(TenantAccountStatus.Active, user.AccountStatus);
         });
 
         // ── 7. Replaying the same token returns 404 (invite is no longer Pending).
-        var replayResp = await tenantClient.PostAsJsonAsync(
-            $"/api/v1/invites/{plainToken}/accept", new { });
+        var replayResp = await anonClient.PostAsJsonAsync(
+            $"/api/v1/invites/{plainToken}/accept",
+            new { firstName = "Fresh", lastName = "Tenant", phone = (string?)null, password = tenantPassword });
         Assert.Equal(HttpStatusCode.NotFound, replayResp.StatusCode);
+
+        // ── 8. The new Keycloak user can authenticate with the chosen password.
+        //      This confirms the provisioner wired the password correctly.
+        var newToken = await fixture.GetTokenForNewUserAsync(freshEmail, tenantPassword);
+        Assert.NotEmpty(newToken);
     }
 
     [Fact]
-    public async Task Tenant_with_mismatched_email_gets_403_on_accept()
+    public async Task Second_accept_for_same_email_returns_conflict()
     {
-        // Seed landlord User + Property
+        // Landlord + property setup.
         var landlordClient = await fixture.CreateAuthenticatedClientAsync(ApiFixture.Landlord2Email);
-        await landlordClient.GetAsync("/api/v1/me"); // lazy-upsert
-
-        var landlord2Id = await fixture.WithDbAsync(async db =>
+        await landlordClient.GetAsync("/api/v1/me");
+        var landlordId = await fixture.WithDbAsync(async db =>
             (await db.Users.FirstAsync(u => u.Email == ApiFixture.Landlord2Email)).Id);
 
         var propertyId = Guid.NewGuid();
@@ -127,31 +139,47 @@ public sealed class InviteFlowTests(ApiFixture fixture)
             db.Properties.Add(new Property
             {
                 Id = propertyId,
-                LandlordId = landlord2Id,
-                Name = "Riverside Loft",
-                Address = "5 River Rd",
+                LandlordId = landlordId,
+                Name = "Conflict Test Apt",
+                Address = "2 Main St",
             });
             await db.SaveChangesAsync();
         });
 
+        const string conflictEmail = "conflict-tenant@test.local";
+        const string conflictPassword = "ConflictPass1!";
+
+        // Create first invite and accept it.
         fixture.Queue.Clear();
-        var createCmd = new CreateInviteCommand(
-            propertyId, ApiFixture.TenantEmail, "Tenant", "Two",
+        var firstCreate = await landlordClient.PostAsJsonAsync("/api/v1/invites", new CreateInviteCommand(
+            propertyId, conflictEmail, "Conflict", "Tenant",
             DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
             DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
-            1200m, "USD");
+            1100m, "EUR"));
+        Assert.Equal(HttpStatusCode.OK, firstCreate.StatusCode);
+        var firstToken = ExtractTokenFromEmailBody(fixture.Queue.Emails.Last().Body);
 
-        var createResp = await landlordClient.PostAsJsonAsync("/api/v1/invites", createCmd);
-        Assert.Equal(HttpStatusCode.OK, createResp.StatusCode);
-        var plainToken = ExtractTokenFromEmailBody(fixture.Queue.Emails.Last().Body);
+        var anonClient = fixture.CreateClient();
+        var firstAccept = await anonClient.PostAsJsonAsync(
+            $"/api/v1/invites/{firstToken}/accept",
+            new { firstName = "Conflict", lastName = "Tenant", phone = (string?)null, password = conflictPassword });
+        Assert.Equal(HttpStatusCode.OK, firstAccept.StatusCode);
 
-        // Imposter has the Tenant role but a different email. Their JWT email
-        // claim won't match the invite — accept must 403, not 404.
-        var imposterClient = await fixture.CreateAuthenticatedClientAsync(ApiFixture.ImposterEmail);
-        var resp = await imposterClient.PostAsJsonAsync(
-            $"/api/v1/invites/{plainToken}/accept", new { });
+        // Create a second invite for the same email and try to accept it.
+        fixture.Queue.Clear();
+        var secondCreate = await landlordClient.PostAsJsonAsync("/api/v1/invites", new CreateInviteCommand(
+            propertyId, conflictEmail, "Conflict", "Tenant",
+            DateOnly.FromDateTime(DateTime.UtcNow.Date).AddDays(1),
+            DateOnly.FromDateTime(DateTime.UtcNow.Date).AddYears(1),
+            1100m, "EUR"));
+        Assert.Equal(HttpStatusCode.OK, secondCreate.StatusCode);
+        var secondToken = ExtractTokenFromEmailBody(fixture.Queue.Emails.Last().Body);
 
-        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+        var secondAccept = await anonClient.PostAsJsonAsync(
+            $"/api/v1/invites/{secondToken}/accept",
+            new { firstName = "Conflict", lastName = "Tenant", phone = (string?)null, password = conflictPassword });
+
+        Assert.Equal(HttpStatusCode.Conflict, secondAccept.StatusCode);
     }
 
     [Fact]
@@ -190,7 +218,7 @@ public sealed class InviteFlowTests(ApiFixture fixture)
         });
 
         var landlord2Client = await fixture.CreateAuthenticatedClientAsync(ApiFixture.Landlord2Email);
-        await landlord2Client.GetAsync("/api/v1/me"); // ensure user row
+        await landlord2Client.GetAsync("/api/v1/me");
 
         var resp = await landlord2Client.PostAsJsonAsync("/api/v1/invites", new CreateInviteCommand(
             propertyId, ApiFixture.TenantEmail, "Tenant", "X",
@@ -203,7 +231,6 @@ public sealed class InviteFlowTests(ApiFixture fixture)
 
     private static string ExtractTokenFromEmailBody(string body)
     {
-        // Email body contains the CTA URL: "{PortalBaseUrl}/invites/{plainToken}"
         var match = Regex.Match(body, @"/invites/([A-Za-z0-9_-]{20,100})");
         Assert.True(match.Success, $"Could not find invite token in email body:\n{body}");
         return match.Groups[1].Value;

@@ -7,15 +7,14 @@ namespace MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
 public sealed class GetLeasesExpiringSoonHandler(
     IValidator<GetLeasesExpiringSoonQuery> validator,
     ILeaseRepository leases,
-    IUserRepository users,
-    ICurrentUser currentUser)
+    ICurrentUserContext currentUserContext)
 {
     public async Task<IReadOnlyList<ExpiringLeaseDto>> Handle(
         GetLeasesExpiringSoonQuery query, CancellationToken ct)
     {
         await validator.EnsureValidAsync(query, ct);
 
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var leasesExpiringSoon = await leases.ListExpiringSoonAsync(

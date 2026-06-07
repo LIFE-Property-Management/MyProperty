@@ -1,3 +1,4 @@
+{{- if .Values.keycloak.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -42,10 +43,10 @@ spec:
           command:
             - sh
             - -c
-            - apk add --no-cache gettext > /dev/null && envsubst < /template/realm-export.template.json > /import/realm-export.json
+            - apk add --no-cache gettext > /dev/null && envsubst '${MYPROPERTY_FRONTEND_BASE_URL} ${GOOGLE_CLIENT_ID} ${GOOGLE_CLIENT_SECRET} ${MYPROPERTY_API_CLIENT_SECRET}' < /template/realm-export.template.json > /import/realm-export.json
           env:
             - name: MYPROPERTY_FRONTEND_BASE_URL
-              value: "https://app.myproperty.works"
+              value: "https://{{ .Values.hosts.app }}"
             - name: GOOGLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -55,6 +56,11 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: myproperty-google-oauth
+                  key: client-secret
+            - name: MYPROPERTY_API_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-api-client
                   key: client-secret
           securityContext:
             runAsNonRoot: false
@@ -70,7 +76,7 @@ spec:
       containers:
         - name: keycloak
           image: {{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}
-          command: ["start", "--import-realm"]
+          args: ["start", "--import-realm"]
           ports:
             - name: http
               containerPort: 8080
@@ -80,7 +86,7 @@ spec:
               protocol: TCP
           env:
             - name: KC_HOSTNAME
-              value: "https://auth.myproperty.works"
+              value: "https://{{ .Values.hosts.auth }}"
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
             - name: KC_HTTP_ENABLED
@@ -104,15 +110,12 @@ spec:
             - name: KC_DB_URL
               value: "jdbc:postgresql://$(KC_DB_HOST):$(KC_DB_PORT)/keycloak"
             - name: KC_DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: myproperty-postgres
-                  key: postgres-user
+              value: "keycloak"
             - name: KC_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: myproperty-postgres
-                  key: postgres-password
+                  key: keycloak-db-password
             - name: KEYCLOAK_ADMIN
               valueFrom:
                 secretKeyRef:
@@ -169,4 +172,5 @@ spec:
           configMap:
             name: {{ .Release.Name }}-keycloak-realm
         - name: realm-import
-          emptyDir: {}
+        emptyDir: {}
+  {{- end }}

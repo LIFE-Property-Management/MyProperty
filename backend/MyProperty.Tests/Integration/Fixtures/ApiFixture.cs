@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
+using MyProperty.Infrastructure.Caching;
 using MyProperty.Infrastructure.Persistence;
 using Testcontainers.Keycloak;
 using Testcontainers.PostgreSql;
@@ -20,6 +21,8 @@ public sealed class ApiFixture : IAsyncLifetime
 {
     private const string RealmName = "MyPropertyTest";
     private const string ClientId = "test-cli";
+    private const string ApiClientId = "test-api";
+    private const string ApiClientSecret = "test-api-secret";
 
     public const string LandlordEmail = "landlord@test.local";
     public const string Landlord2Email = "landlord2@test.local";
@@ -56,15 +59,22 @@ public sealed class ApiFixture : IAsyncLifetime
         await _admin.EnsureRealmRoleAsync(RealmName, "Landlord");
         await _admin.EnsureRealmRoleAsync(RealmName, "Admin");
         await _admin.EnsurePublicClientAsync(RealmName, ClientId);
+        await _admin.EnsureServiceAccountClientAsync(RealmName, ApiClientId, ApiClientSecret);
 
         await _admin.CreateUserAsync(RealmName, LandlordEmail, SeedPassword, "Landlord");
         await _admin.CreateUserAsync(RealmName, Landlord2Email, SeedPassword, "Landlord");
         await _admin.CreateUserAsync(RealmName, TenantEmail, SeedPassword, "Tenant");
         await _admin.CreateUserAsync(RealmName, ImposterEmail, SeedPassword, "Tenant");
 
+        var keycloakBaseUrl = _keycloak.GetBaseAddress().TrimEnd('/');
+
         Factory = new MyPropertyApiFactory(
             postgresConnectionString: _postgres.GetConnectionString(),
-            keycloakAuthority: $"{_keycloak.GetBaseAddress().TrimEnd('/')}/realms/{RealmName}");
+            keycloakAuthority: $"{keycloakBaseUrl}/realms/{RealmName}",
+            keycloakBaseUrl: keycloakBaseUrl,
+            keycloakAdminRealm: RealmName,
+            keycloakAdminClientId: ApiClientId,
+            keycloakAdminClientSecret: ApiClientSecret);
 
         // Force factory bootstrap by resolving the service provider, then run
         // EF Core migrations against the real Postgres container.
@@ -87,6 +97,13 @@ public sealed class ApiFixture : IAsyncLifetime
     /// no signing keys are stubbed, no auth handler is replaced.
     /// </summary>
     public Task<string> GetTokenAsync(string email, string password = SeedPassword)
+        => _admin.GetAccessTokenAsync(RealmName, ClientId, email, password);
+
+    /// <summary>
+    /// Mints a token for a user that was provisioned during the test (not a seed user).
+    /// Uses the same password-grant client as <see cref="GetTokenAsync"/>.
+    /// </summary>
+    public Task<string> GetTokenForNewUserAsync(string email, string password)
         => _admin.GetAccessTokenAsync(RealmName, ClientId, email, password);
 
     public HttpClient CreateClient() => Factory.CreateClient();
@@ -126,6 +143,6 @@ public sealed class ApiFixture : IAsyncLifetime
     {
         using var scope = Factory.Services.CreateScope();
         var cache = scope.ServiceProvider.GetRequiredService<IDistributedCache>();
-        await cache.RemoveAsync($"landlord:{landlordId}:dashboard");
+        await cache.RemoveAsync(CacheKeys.LandlordDashboard(landlordId));
     }
 }

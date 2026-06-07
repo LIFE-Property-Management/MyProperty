@@ -1,0 +1,77 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-prometheus-rules
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prometheus
+data:
+  api-alerts.yaml: |
+    groups:
+      - name: myproperty-api
+        interval: 15s
+        rules:
+          - alert: MyPropertyApiDown
+            expr: up{job="myproperty-api"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              service: api
+            annotations:
+              summary: "MyProperty API is down"
+              description: "Prometheus has been unable to scrape {{ "{{" }} $labels.instance {{ "}}" }} for at least 2 minutes."
+              runbook_url: "https://github.com/life-property-management/MyProperty/blob/main/docs/operations/health-probes.md"
+
+          - alert: MyPropertyApiHighErrorRate
+            expr: |
+              (
+                sum(rate(http_requests_received_total{job="myproperty-api", code=~"5.."}[5m]))
+                /
+                sum(rate(http_requests_received_total{job="myproperty-api"}[5m]))
+              ) > 0.05
+            for: 5m
+            labels:
+              severity: warning
+              service: api
+            annotations:
+              summary: "API 5xx error rate above 5%"
+              description: "More than 5% of requests have returned 5xx for at least 5 minutes."
+
+          - alert: MyPropertyApiHighLatencyP95
+            expr: |
+              histogram_quantile(
+                0.95,
+                sum by (le) (rate(http_request_duration_seconds_bucket{job="myproperty-api"}[5m]))
+              ) > 1
+            for: 10m
+            labels:
+              severity: warning
+              service: api
+            annotations:
+              summary: "API p95 latency above 1s"
+              description: "p95 request duration has exceeded 1 second for 10 minutes."
+
+          - alert: MyPropertyApiHighInFlightRequests
+            expr: sum(http_requests_in_progress{job="myproperty-api"}) > 100
+            for: 5m
+            labels:
+              severity: warning
+              service: api
+            annotations:
+              summary: "API saturating — many in-flight requests"
+              description: "More than 100 concurrent requests in flight for 5 minutes."
+
+      - name: generic
+        interval: 15s
+        rules:
+          - alert: PrometheusTargetDown
+            expr: up == 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Scrape target down"
+              description: "Target {{ "{{" }} $labels.instance {{ "}}" }} has been unreachable for 5 minutes."
+{{- end }}

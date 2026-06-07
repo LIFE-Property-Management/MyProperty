@@ -9,18 +9,17 @@ namespace MyProperty.Application.Leases.Commands.TerminateLease;
 public sealed class TerminateLeaseHandler(
     IValidator<TerminateLeaseCommand> validator,
     ILeaseRepository leases,
-    IUserRepository users,
-    ICurrentUser currentUser,
+    ICurrentUserContext currentUserContext,
     ILandlordDashboardCache dashboardCache)
 {
     public async Task Handle(TerminateLeaseCommand cmd, CancellationToken ct)
     {
         await validator.EnsureValidAsync(cmd, ct);
 
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
+        var landlord = await currentUserContext.GetOrSyncUserAsync(ct);
 
         var lease = await leases.GetByIdAsync(cmd.LeaseId, ct)
-            ?? throw new NotFoundException("Lease", cmd.LeaseId);
+                    ?? throw new NotFoundException("Lease", cmd.LeaseId);
 
         if (lease.LandlordId != landlord.Id)
             throw new ForbiddenException("You do not own this lease.");

@@ -1,3 +1,4 @@
+{{- if .Values.uptimeKuma.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -38,38 +39,79 @@ spec:
         - name: seed
           image: {{ .Values.uptimeKuma.seedImage.repository }}:{{ .Values.uptimeKuma.seedImage.tag }}
           env:
-            - name: KUMA_BASE_URL
-              value: "http://uptime-kuma:3001"
-            - name: KUMA_PUBLIC_URL
-              value: {{ .Values.uptimeKuma.publicUrl | quote }}
-            - name: KUMA_ADMIN_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: myproperty-uptime-kuma
-                  key: admin-username
-            - name: KUMA_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: myproperty-uptime-kuma
-                  key: admin-password
-            # Slack channel reuses the same secret as the M4.11 aiops-webhook.
-            # Empty value short-circuits the channel inside seed.py — no Job
-            # failure, just no Slack notifications until the secret is set.
-            - name: SLACK_WEBHOOK_URL
-              valueFrom:
-                secretKeyRef:
-                  name: myproperty-discord
-                  key: webhook-url
-            - name: KUMA_SMTP_HOST
-              value: {{ .Values.uptimeKuma.smtp.host | quote }}
-            - name: KUMA_SMTP_PORT
-              value: {{ .Values.uptimeKuma.smtp.port | quote }}
-            - name: KUMA_SMTP_FROM
-              value: {{ .Values.uptimeKuma.smtp.from | quote }}
-            - name: KUMA_SMTP_TO
-              value: {{ .Values.uptimeKuma.smtp.to | quote }}
-            - name: KUMA_LOG_LEVEL
-              value: "INFO"
+              - name: KUMA_BASE_URL
+                value: "http://uptime-kuma:3001"
+                - name: KUMA_PUBLIC_URL
+                  value: {{ .Values.uptimeKuma.publicUrl | quote }}
+                - name: KUMA_ADMIN_USERNAME
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-uptime-kuma
+                      key: admin-username
+                - name: KUMA_ADMIN_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-uptime-kuma
+                      key: admin-password
+            # Discord channel for uptime alerts — a SEPARATE webhook from the
+            # aiops-webhook's #alerts channel (myproperty-discord/webhook-url),
+            # so black-box uptime checks and Prometheus/AIOps triage land in
+            # different channels. Empty value short-circuits the channel inside
+            # seed.py — no Job failure, just no Discord notifications until set.
+                - name: DISCORD_WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-discord
+                      key: uptime-webhook-url
+                - name: KUMA_SMTP_HOST
+                  value: {{ .Values.uptimeKuma.smtp.host | quote }}
+                - name: KUMA_SMTP_PORT
+                  value: {{ .Values.uptimeKuma.smtp.port | quote }}
+                - name: KUMA_SMTP_FROM
+                  value: {{ .Values.uptimeKuma.smtp.from | quote }}
+                - name: KUMA_SMTP_TO
+                  value: {{ .Values.uptimeKuma.smtp.to | quote }}
+                - name: KUMA_LOG_LEVEL
+                  value: "INFO"
+            # Real data-store credentials for the Postgres/Redis/RabbitMQ
+            # monitors. monitors.json references these via ${VAR} placeholders
+            # (seed.py expands them); the same Secrets the backend consumes.
+            {{- if .Values.postgres.enabled }}
+                - name: POSTGRES_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-postgres
+                      key: postgres-user
+                - name: POSTGRES_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-postgres
+                      key: postgres-password
+                - name: POSTGRES_DB
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-postgres
+                      key: postgres-db
+            {{- end }}
+            {{- if .Values.redis.enabled }}
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-redis
+                      key: redis-password
+            {{- end }}
+            {{- if .Values.rabbitmq.enabled }}
+                - name: RABBITMQ_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-rabbitmq
+                      key: rabbitmq-user
+                - name: RABBITMQ_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: myproperty-rabbitmq
+                      key: rabbitmq-password
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -82,3 +124,4 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+  {{- end }}

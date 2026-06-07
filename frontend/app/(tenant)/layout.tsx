@@ -7,10 +7,11 @@ import { MockProvider } from "@/mocks/MockProvider";
 export default function TenantLayout({ children }: { children: ReactNode }) {
     return (
         <MockProvider>
-            <KeycloakInit />
-            {children}
-            <TenantNotifications />
-            <PaymentSubmissionModal />
+            <KeycloakInit>
+                {children}
+                <TenantNotifications />
+                <PaymentSubmissionModal />
+            </KeycloakInit>
         </MockProvider>
     );
 }

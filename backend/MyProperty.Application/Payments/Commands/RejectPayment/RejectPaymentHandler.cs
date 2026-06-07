@@ -10,8 +10,7 @@ namespace MyProperty.Application.Payments.Commands.RejectPayment;
 
 public sealed class RejectPaymentHandler(
     IValidator<RejectPaymentCommand> validator,
-    ICurrentUser currentUser,
-    IUserRepository userRepo,
+    ICurrentUserContext currentUserContext,
     IPaymentRepository paymentRepo,
     ILandlordDashboardCache dashboardCache,
     IEventPublisher events)
@@ -21,12 +20,7 @@ public sealed class RejectPaymentHandler(
         await validator.EnsureValidAsync(cmd, ct);
 
         // Resource-scoped authorization: landlord must own the lease this payment is on.
-        // TODO post-M3: extract KeycloakSubId → User lookup into ICurrentUserContext.
-        if (currentUser.KeycloakSubId is null)
-            throw new ForbiddenException("Authentication required.");
-
-        var landlord = await userRepo.GetByKeycloakSubIdAsync(currentUser.KeycloakSubId, ct)
-            ?? throw new ForbiddenException("Authenticated user not found in user table.");
+        var landlord = await currentUserContext.GetUserAsync(ct);
 
         var payment = await paymentRepo.GetByIdWithLeaseAsync(cmd.PaymentId, ct)
             ?? throw new NotFoundException("Payment", cmd.PaymentId);

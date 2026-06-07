@@ -1,38 +1,70 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { initKeycloak } from "@/lib/auth/keycloak";
 import useAuthStore from "@/lib/store/auth/useAuthStore";
 
-// Landlord-portal KeycloakInit. Kept separate from the tenant version
+// Landlord-portal auth gate. Kept separate from the tenant version
 // (app/(tenant)/_components/KeycloakInit.tsx) so each portal can diverge
 // independently when real Keycloak roles are wired per Decision 5 (Batch K).
-export default function KeycloakInit() {
-  useEffect(() => {
-    // Dev-only auth bypass. When NEXT_PUBLIC_DEV_AUTH_BYPASS is "true",
-    // KeycloakInit short-circuits Keycloak initialization and signs the user
-    // in as a fixture identity. Useful for local UI work without a running
-    // Keycloak. Must be off (unset or "false") in any deployed environment.
-    const isDevAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+//
+// Acts as a render gate: children (the portal shell) are not shown until
+// Keycloak init resolves. If there is no authenticated session, the user is
+// redirected to /login rather than being left on a dashboard that would only
+// produce 401s. This keeps the client authoritative; the middleware cookie is
+// just a coarse edge gate.
+export default function KeycloakInit({ children }: { children: ReactNode }) {
+    const router = useRouter();
+    const [ready, setReady] = useState(false);
 
-    if (isDevAuthBypass && process.env.NODE_ENV === "production") {
-      console.warn(
-        "[KeycloakInit] NEXT_PUBLIC_DEV_AUTH_BYPASS is enabled in a production " +
-        "build. This bypasses authentication and is unsafe outside local dev."
-      );
+    useEffect(() => {
+        // Dev-only auth bypass. When NEXT_PUBLIC_DEV_AUTH_BYPASS is "true",
+        // KeycloakInit short-circuits Keycloak initialization and signs the user
+        // in as a fixture identity. Useful for local UI work without a running
+        // Keycloak. Must be off (unset or "false") in any deployed environment.
+        const isDevAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+
+        if (isDevAuthBypass && process.env.NODE_ENV === "production") {
+            console.warn(
+                "[KeycloakInit] NEXT_PUBLIC_DEV_AUTH_BYPASS is enabled in a production " +
+                "build. This bypasses authentication and is unsafe outside local dev."
+            );
+        }
+
+        let active = true;
+        const settled = isDevAuthBypass
+            ? Promise.resolve().then(() => {
+                useAuthStore.getState().setAuth({
+                    portal: "landlord",
+                    sub: "dev-landlord",
+                    email: "landlord@dev.local",
+                });
+            })
+            : initKeycloak();
+
+        settled.finally(() => {
+            if (!active) return;
+            if (!useAuthStore.getState().user) {
+                router.replace("/login");
+                return;
+            }
+            setReady(true);
+        });
+        return () => {
+            active = false;
+        };
+    }, [router]);
+
+    if (!ready) {
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <p className="text-sm text-muted-text" role="status">
+                    Loading…
+                </p>
+            </div>
+        );
     }
 
-    if (isDevAuthBypass) {
-      useAuthStore.getState().setAuth({
-        portal: "landlord",
-        sub: "dev-landlord",
-        email: "landlord@dev.local",
-      });
-      return;
-    }
-
-    initKeycloak();
-  }, []);
-
-  return null;
+    return <>{children}</>;
 }

@@ -59,3 +59,30 @@ ServiceAccount name helper. Override via values.serviceAccount.name.
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+TLS SAN host list. Includes only hosts whose backing component is enabled, so the
+ACME certificate request never contains a name with no Ingress/DNS — which would
+fail its HTTP-01 challenge and block issuance of the entire shared SAN cert.
+*/}}
+{{- define "myproperty.tlsHosts" -}}
+{{- $hosts := list -}}
+{{- if .Values.frontend.enabled -}}{{- $hosts = append $hosts .Values.hosts.app -}}{{- end -}}
+{{- if .Values.backend.enabled -}}{{- $hosts = append $hosts .Values.hosts.api -}}{{- end -}}
+{{- if .Values.keycloak.enabled -}}{{- $hosts = append $hosts .Values.hosts.auth -}}{{- end -}}
+{{- if .Values.uptimeKuma.enabled -}}{{- $hosts = append $hosts .Values.hosts.status -}}{{- end -}}
+{{- if .Values.monitoring.enabled -}}{{- $hosts = append $hosts .Values.hosts.grafana -}}{{- end -}}
+{{- toYaml $hosts -}}
+{{- end -}}
+
+{{/*
+cert-manager annotation — emits cluster-issuer vs namespaced issuer key based on
+ingress.tls.issuerKind.
+*/}}
+{{- define "myproperty.certIssuerAnnotation" -}}
+{{- if eq .Values.ingress.tls.issuerKind "ClusterIssuer" -}}
+cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.issuerName }}
+{{- else -}}
+cert-manager.io/issuer: {{ .Values.ingress.tls.issuerName }}
+{{- end -}}
+{{- end -}}

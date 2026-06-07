@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using MyProperty.Application.Common.FeatureFlags;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Messaging;
 
@@ -17,10 +18,15 @@ namespace MyProperty.Tests.Integration.Fixtures;
 /// </summary>
 internal sealed class MyPropertyApiFactory(
     string postgresConnectionString,
-    string keycloakAuthority) : WebApplicationFactory<Program>
+    string keycloakAuthority,
+    string keycloakBaseUrl,
+    string keycloakAdminRealm,
+    string keycloakAdminClientId,
+    string keycloakAdminClientSecret) : WebApplicationFactory<Program>
 {
     public RecordingBackgroundJobQueue Queue { get; } = new();
     public RecordingEventPublisher Events { get; } = new();
+    public StubFeatureFlags Flags { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -31,6 +37,10 @@ internal sealed class MyPropertyApiFactory(
 
         builder.UseSetting("ConnectionStrings:Postgres", postgresConnectionString);
         builder.UseSetting("Keycloak:Authority", keycloakAuthority);
+        builder.UseSetting("KeycloakAdmin:BaseUrl", keycloakBaseUrl);
+        builder.UseSetting("KeycloakAdmin:Realm", keycloakAdminRealm);
+        builder.UseSetting("KeycloakAdmin:ClientId", keycloakAdminClientId);
+        builder.UseSetting("KeycloakAdmin:ClientSecret", keycloakAdminClientSecret);
 
         // Redis cache options must satisfy ValidateDataAnnotations() at startup,
         // but the connection itself is never opened — we substitute IDistributedCache
@@ -65,6 +75,12 @@ internal sealed class MyPropertyApiFactory(
         // in-process backplane.
         builder.UseSetting("SignalR:UseRedisBackplane", "false");
 
+        // Unleash options must satisfy ValidateDataAnnotations() at startup, but no
+        // live server is contacted: an empty ApiToken makes AddFeatureFlags register
+        // NullFeatureFlags, which we replace with the recording stub below.
+        builder.UseSetting("Unleash:ApiUrl", "http://unused:4242/api/");
+        builder.UseSetting("Unleash:ApiToken", "");
+
         builder.ConfigureServices(services =>
         {
             // ── Cache ──────────────────────────────────────────────────────
@@ -87,6 +103,12 @@ internal sealed class MyPropertyApiFactory(
             // handler tests can assert on published events.
             services.RemoveAll<IEventPublisher>();
             services.AddSingleton<IEventPublisher>(Events);
+
+            // ── Feature flags ──────────────────────────────────────────────
+            // AddFeatureFlags registered NullFeatureFlags (empty token above);
+            // swap in the stub so tests can force flag values via Factory.Flags.
+            services.RemoveAll<IFeatureFlags>();
+            services.AddSingleton<IFeatureFlags>(Flags);
         });
     }
 }

@@ -1,0 +1,20 @@
+{{- if .Values.unleash.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: unleash
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: unleash
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "myproperty.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: unleash
+  ports:
+    - name: http
+      port: 4242
+      targetPort: http
+      protocol: TCP
+{{- end }}

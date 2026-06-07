@@ -1,10 +1,10 @@
 using Moq;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Invites;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
-using MyProperty.Tests.Unit.Handlers.TestUtils;
 
 namespace MyProperty.Tests.Unit.Handlers.Invites;
 
@@ -13,7 +13,7 @@ public sealed class RejectInviteHandlerTests
     private readonly Mock<IInviteRepository> _invites = new(MockBehavior.Strict);
 
     private const string PlainToken = "valid-token-1234567890ABCDE";
-    private static readonly string TokenHashHex = TokenHasher.Hash(PlainToken);
+    private static readonly string TokenHashHex = InviteTokenHasher.Hash(PlainToken);
 
     private RejectInviteHandler BuildSut() =>
         new(new RejectInviteValidator(), _invites.Object);

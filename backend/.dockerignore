@@ -13,6 +13,11 @@
 **/bin/
 **/obj/
 **/publish/
+# Literal-backslash dirs Rider/MSBuild on Linux writes as a single component
+# named "bin\Debug" (not bin/Debug). **/bin/ does NOT match these; left in the
+# context they break the build with a bogus MSB3552 "**/*.resx" error.
+**/bin\Debug/
+**/obj\Debug/
 
 # ── Test results & coverage ─────────────────────────────────
 **/TestResults/

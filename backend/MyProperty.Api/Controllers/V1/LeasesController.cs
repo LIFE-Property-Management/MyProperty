@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Common;
-using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Leases.Commands.TerminateLease;
 using MyProperty.Application.Leases.Queries.GetLandlordLeases;
 using MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
@@ -20,9 +19,7 @@ namespace MyProperty.Api.Controllers.V1;
 public sealed class LeasesController(
     GetLandlordLeasesHandler getLandlordLeases,
     GetLeasesExpiringSoonHandler getLeasesExpiringSoon,
-    TerminateLeaseHandler terminateLease,
-    IUserRepository users,
-    ICurrentUser currentUser) : ControllerBase
+    TerminateLeaseHandler terminateLease) : ControllerBase
 {
     /// <summary>Returns a paginated list of leases for the authenticated landlord.</summary>
     [HttpGet]
@@ -35,7 +32,6 @@ public sealed class LeasesController(
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLandlordLeases.Handle(
             new GetLandlordLeasesQuery(page, pageSize), ct);
         return Ok(result);
@@ -54,7 +50,6 @@ public sealed class LeasesController(
         [FromQuery] int daysThreshold = 30,
         CancellationToken ct = default)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         var result = await getLeasesExpiringSoon.Handle(
             new GetLeasesExpiringSoonQuery(daysThreshold), ct);
         return Ok(result);
@@ -71,7 +66,6 @@ public sealed class LeasesController(
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Terminate(Guid id, CancellationToken ct)
     {
-        var landlord = await users.GetOrSyncFromClaimsAsync(currentUser.Principal!, ct);
         await terminateLease.Handle(new TerminateLeaseCommand(id), ct);
         return NoContent();
     }

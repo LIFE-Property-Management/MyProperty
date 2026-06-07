@@ -44,13 +44,13 @@
 # Isolated stage for npm ci so source-only changes don't bust
 # the layer cache. node_modules from this stage flows into the
 # builder stage; runtime never sees the full tree.
-FROM node:26-alpine@sha256:7c6af15abe4e3de859690e7db171d0d711bf37d27528eddfe625b2fe89e097f8 AS deps
+FROM node:26-alpine@sha256:144769ec3f32e8ee36b3cfde91e82bee25d9367b20f31a151f3f7eea3a2a8541 AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # ── Stage 2: build ───────────────────────────────────────────
-FROM node:26-alpine@sha256:7c6af15abe4e3de859690e7db171d0d711bf37d27528eddfe625b2fe89e097f8 AS builder
+FROM node:26-alpine@sha256:144769ec3f32e8ee36b3cfde91e82bee25d9367b20f31a151f3f7eea3a2a8541 AS builder
 WORKDIR /app
 
 # Build args — NEXT_PUBLIC_* vars are inlined into the bundle
@@ -60,11 +60,16 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_KEYCLOAK_URL
 ARG NEXT_PUBLIC_KEYCLOAK_REALM
 ARG NEXT_PUBLIC_KEYCLOAK_CLIENT_ID
+# Optional local-only mock-auth toggle. When set to "true", proxy.ts and the
+# two KeycloakInit components short-circuit auth and stamp a fixture identity.
+# Wired through docker-compose for local dev. Must remain unset in CI and deploys.
+ARG NEXT_PUBLIC_DEV_AUTH_BYPASS
 
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
     NEXT_PUBLIC_KEYCLOAK_URL=$NEXT_PUBLIC_KEYCLOAK_URL \
     NEXT_PUBLIC_KEYCLOAK_REALM=$NEXT_PUBLIC_KEYCLOAK_REALM \
     NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=$NEXT_PUBLIC_KEYCLOAK_CLIENT_ID \
+    NEXT_PUBLIC_DEV_AUTH_BYPASS=$NEXT_PUBLIC_DEV_AUTH_BYPASS \
     NODE_ENV=production
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -82,13 +87,8 @@ RUN npm run build
 #   /.next/standalone/         <- server.js + traced node_modules
 #   /.next/static/             <- static chunks (must be copied separately)
 #   /public/                   <- static assets (must be copied separately)
-# Digest pinning TODO: first post-merge Dependabot run will append the
-# @sha256:... digest. Tag-only references break the M4.3 supply-chain
-# convention but the alternative — making one up by hand — is worse.
-# A scheduled `docker pull gcr.io/distroless/nodejs20-debian12:nonroot
-# && docker inspect --format '{{index .RepoDigests 0}}' …` lookup and
-# manual pin is acceptable as an interim before Dependabot picks it up.
-FROM gcr.io/distroless/nodejs20-debian12:nonroot AS runner
+# Digest pinned for supply-chain integrity (M4.3). Bumped via Dependabot.
+FROM gcr.io/distroless/nodejs20-debian12:nonroot@sha256:2cd820156cf039c8b54ae2d2a97e424b6729070714de8707a6b79f20d56f6a9a AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \

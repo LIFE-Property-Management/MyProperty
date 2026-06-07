@@ -1,3 +1,5 @@
+using MyProperty.Domain.Enums;
+
 namespace MyProperty.Application.Properties.Queries.GetLandlordProperties;
 
 public sealed record PropertyDto(
@@ -5,4 +7,5 @@ public sealed record PropertyDto(
     string Name,
     string Address,
     string? UnitNumber,
+    PropertyType PropertyType,
     DateTime CreatedAt);

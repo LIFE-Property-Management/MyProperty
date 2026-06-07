@@ -81,5 +81,5 @@ internal sealed class RedisLandlordDashboardCache(
         }
     }
 
-    private static string KeyFor(Guid landlordId) => $"landlord:{landlordId}:dashboard";
+    private static string KeyFor(Guid landlordId) => CacheKeys.LandlordDashboard(landlordId);
 }
