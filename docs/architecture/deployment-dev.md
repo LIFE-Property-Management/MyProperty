@@ -1,6 +1,6 @@
 # Deployment — Dev (Docker Compose)
 
-The local development stack. One `docker compose up` brings up 19 services on a single bridge network (`myproperty-net`); two more come up when you opt into the `--profile proxy` flag for the Nginx + Certbot edge.
+The local development stack. One `docker compose up` brings up 21 services on a single bridge network (`myproperty-net`); two more come up when you opt into the `--profile proxy` flag for the Nginx + Certbot edge.
 
 ![Dev deployment topology (docker compose)](./diagrams/deployment-dev.svg)
 
@@ -12,9 +12,9 @@ A complete, production-shaped stack on the local machine — every dependency th
 
 ## Service inventory
 
-21 services total, 19 default + 2 behind the `proxy` profile. Init containers are one-shots that exit after they've prepared a volume or seeded a peer.
+23 services total, 21 default + 2 behind the `proxy` profile. Init containers are one-shots that exit after they've prepared a volume or seeded a peer.
 
-### Default profile (19 services)
+### Default profile (21 services)
 
 | # | Service | Image | Host port(s) | Volume(s) | Role |
 |---|---|---|---|---|---|
@@ -37,15 +37,17 @@ A complete, production-shaped stack on the local machine — every dependency th
 | 17 | `uptime-kuma-init` | `myproperty-uptime-kuma-init:dev` (custom) | — | — | One-shot socket.io seed of monitors + notify channels |
 | 18 | `unleash` | `unleashorg/unleash-server:7.6.4` | 4242 | — (uses Postgres `unleash` DB) | **Feature flags (M5.6)** — UI + API at `:4242`; seeds a fixed client token |
 | 19 | `unleash-flag-init` | `alpine:3.20` (one-shot) | — | `seed-flags.sh` (RO bind) | Seeds + enables `payments.ocr-autoextract` via the Unleash Admin API |
+| 20 | `n8n` | `n8nio/n8n:1.76.1` | 5678 | `n8n_data` | **Self-hosted workflow automation (M5.8)** — tenant-inquiry triage (webhook → Claude → Discord) |
+| 21 | `n8n-init` | `n8nio/n8n:1.76.1` (one-shot) | — | `n8n_data` (RW), `tenant-inquiry.json` (RO bind) | Imports + activates the tenant-inquiry workflow into `n8n_data`, then exits |
 
 ### `proxy` profile (2 extras — opt-in via `docker compose --profile proxy up`)
 
 | # | Service | Image | Host port(s) | Volume(s) | Role |
 |---|---|---|---|---|---|
-| 20 | `nginx` | `nginx:1.27-alpine` | 80, 443 | `certbot_certs` (RO), `certbot_www` (RO), templated config (RO) | Routes 4 subdomains, reloads every 6 h |
-| 21 | `certbot` | `certbot/certbot:v2.11.0` | — | `certbot_certs` (RW), `certbot_www` (RW) | `certbot renew` every 12 h |
+| 22 | `nginx` | `nginx:1.27-alpine` | 80, 443 | `certbot_certs` (RO), `certbot_www` (RO), templated config (RO) | Routes 4 subdomains, reloads every 6 h |
+| 23 | `certbot` | `certbot/certbot:v2.11.0` | — | `certbot_certs` (RW), `certbot_www` (RW) | `certbot renew` every 12 h |
 
-## Volumes (12 named volumes)
+## Volumes (13 named volumes)
 
 | Volume | Used by | Purpose |
 |---|---|---|
@@ -59,12 +61,13 @@ A complete, production-shaped stack on the local machine — every dependency th
 | `alertmanager_data` | alertmanager | Silences |
 | `grafana_data` | grafana | Dashboards + state |
 | `uptime_kuma_data` | uptime-kuma | SQLite DB |
+| `n8n_data` | n8n-init (RW), n8n (RW) | n8n SQLite store + the imported tenant-inquiry workflow |
 | `certbot_certs` | nginx (RO), certbot (RW) | TLS material |
 | `certbot_www` | nginx (RO), certbot (RW) | ACME HTTP-01 challenge webroot |
 
 ## Init-container pattern
 
-Four services use the *one-shot init container* pattern — a sidecar that prepares a named volume or seeds a peer, then exits. Volume-prep ones gate the dependent service via `depends_on: condition: service_completed_successfully`; seed ones just run once the peer is healthy. This pattern maps 1:1 to a Kubernetes `initContainer` / post-install hook (see [`deployment-prod.md`](./deployment-prod.md)):
+Five services use the *one-shot init container* pattern — a sidecar that prepares a named volume or seeds a peer, then exits. Volume-prep ones gate the dependent service via `depends_on: condition: service_completed_successfully`; seed ones just run once the peer is healthy. This pattern maps 1:1 to a Kubernetes `initContainer` / post-install hook (see [`deployment-prod.md`](./deployment-prod.md)):
 
 | Init | Prepares / seeds | Gates |
 |---|---|---|
@@ -72,6 +75,7 @@ Four services use the *one-shot init container* pattern — a sidecar that prepa
 | `backend-storage-init` | `backend_storage` (chowns to UID 1654 for chiseled backend) | `backend` startup |
 | `uptime-kuma-init` | Seeds monitors + notification channels via Kuma's socket.io API | (No gate; runs after `uptime-kuma` is healthy) |
 | `unleash-flag-init` | Seeds + enables `payments.ocr-autoextract` via the Unleash Admin API | (No gate; runs after `unleash` is healthy) |
+| `n8n-init` | Imports + activates the tenant-inquiry workflow into `n8n_data` | `n8n` startup |
 
 ## Healthcheck conventions
 
@@ -97,10 +101,10 @@ These deltas are intentional — they're justified in [`deployment-prod.md`](./d
 ## How to run
 
 ```bash
-# Default stack (19 services)
+# Default stack (21 services)
 docker compose up -d
 
-# Add Nginx + Certbot edge (21 services)
+# Add Nginx + Certbot edge (23 services)
 docker compose --profile proxy up -d
 
 # Tail everything via Loki
@@ -121,3 +125,4 @@ External UIs at a glance:
 | Grafana | http://localhost:3001 |
 | Uptime Kuma + status page | http://localhost:3002 |
 | Unleash (feature flags) | http://localhost:4242 |
+| n8n (workflow editor + webhook) | http://localhost:5678 |

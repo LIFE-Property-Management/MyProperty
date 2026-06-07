@@ -52,6 +52,11 @@ Deployment_Node(host, "Developer workstation", "Docker Engine 29", "docker compo
             Container(unlInit, "unleash-flag-init", "alpine:3.20 (one-shot, restart: no)", "Seeds payments.ocr-autoextract via Admin API")
         }
 
+        Deployment_Node(autom, "Automation (M5.8)", "n8n workflow") {
+            Container(n8n,     "n8n",      "n8nio/n8n:1.76.1 | host :5678 | vol n8n_data", "Tenant-inquiry triage: webhook -> Claude -> Discord; graceful degradation if keys empty")
+            Container(n8nInit, "n8n-init", "n8nio/n8n:1.76.1 (one-shot, restart: no)", "Imports + activates the tenant-inquiry workflow into n8n_data")
+        }
+
         Deployment_Node(edge, "Edge (compose profile: proxy)", "opt-in via --profile proxy") {
             Container(nx, "nginx",   "nginx:1.27-alpine | host :80 + :443 | vol certbot_certs (ro) + certbot_www (ro) | nginx -s reload every 6h", "envsubst on MYPROPERTY_DOMAIN; routes 4 subdomains")
             Container(cb, "certbot", "certbot/certbot:v2.11.0 | vol certbot_certs (rw) + certbot_www (rw) | renew every 12h", "Let's Encrypt; first-time issuance via init-letsencrypt.sh")
@@ -64,6 +69,7 @@ Rel(kcInit, kc,  "Volume hand-off (keycloak_import)", "service_completed_success
 Rel(beInit, be,  "Ownership hand-off (backend_storage)", "service_completed_successfully")
 Rel(ukInit, uk,  "Seeds via socket.io API", "after uptime-kuma is healthy")
 Rel(unlInit, unl, "Seeds flag via Admin API", "after unleash is healthy")
+Rel(n8nInit, n8n, "Workflow seed (n8n_data)", "service_completed_successfully")
 
 ' === Data dependencies ===
 Rel(be, pg,    "Npgsql", "TCP :5432")

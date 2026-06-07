@@ -22,6 +22,8 @@ System_Boundary(mp, "MyProperty Platform") {
 
     Container(aiops, "AIOps Webhook", "Python 3.14, FastAPI, httpx", "Alertmanager webhook receiver → Claude Haiku triage → Discord (#alerts)")
 
+    Container(n8n, "n8n", "n8n 1.76 (self-hosted)", "Tenant-inquiry triage workflow (M5.8): webhook → Claude Haiku triage → Discord; graceful degradation if keys empty")
+
     Container(kc, "Keycloak", "Keycloak 26.2 (Quarkus)", "OIDC + OAuth2 IdP, RBAC realm (Tenant / Landlord / Admin), admin console, Google IdP federation")
 
     Container(unleash, "Unleash", "Unleash OSS (Node)", "Self-hosted feature flags (M5.6); backend SDK polls a cached snapshot. First flag: payments.ocr-autoextract")
@@ -76,6 +78,11 @@ Rel(api, unleash,   "Evaluate feature flags (cached SDK poll)", "HTTP")
 Rel(alert, aiops,     "Webhook POST (firing alerts)", "HTTPS")
 Rel(aiops, anthropic, "Triage prompt",                "HTTPS")
 Rel(aiops, discord,   "Channel notification (#alerts)", "HTTPS webhook")
+
+' ====== Edges: n8n tenant-inquiry pipeline (M5.8) ======
+Rel(tenant, n8n,    "Submit inquiry (POST /tenant-inquiry)", "HTTPS webhook")
+Rel(n8n,    anthropic, "Triage prompt",                "HTTPS")
+Rel(n8n,    discord,   "Inquiry notification",          "HTTPS webhook")
 
 ' ====== Edges: observability ======
 Rel(prom,     api,    "Scrape /metrics", "HTTPS")
