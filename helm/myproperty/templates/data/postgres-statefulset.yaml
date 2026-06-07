@@ -45,7 +45,7 @@ spec:
             - sh
             - -c
             - |
-            cp /init-scripts/init.sh /docker-entrypoint-initdb.d/init.sh
+              cp /init-scripts/init.sh /docker-entrypoint-initdb.d/init.sh
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -125,7 +125,7 @@ spec:
           configMap:
             name: {{ .Release.Name }}-postgres-init
         - name: initdb
-        emptyDir: {}
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: postgres-data
