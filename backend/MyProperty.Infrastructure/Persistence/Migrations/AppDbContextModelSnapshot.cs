@@ -163,6 +163,8 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("PropertyId");
@@ -228,7 +230,11 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("EndDate");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("LandlordId", "Status");
 
@@ -335,9 +341,13 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ConfirmedAt");
+
                     b.HasIndex("DueDate")
                         .HasDatabaseName("IX_payments_DueDate_Outstanding")
                         .HasFilter("\"Status\" = 'Outstanding' AND \"DeletedAt\" IS NULL");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("LeaseId", "Status");
 
@@ -444,6 +454,8 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
 
                     b.HasIndex("Email")
                         .IsUnique();

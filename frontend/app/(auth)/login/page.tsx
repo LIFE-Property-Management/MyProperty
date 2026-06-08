@@ -36,8 +36,9 @@ export default function LoginPage() {
             router.replace("/dashboard");
         } else if (user.portal === "tenant") {
             router.replace("/tenant/dashboard");
+        } else if (user.portal === "admin") {
+            router.replace("/admin/dashboard");
         }
-        // admin: no portal yet — handled in render below.
     }, [user, router]);
 
     if (initializing) {
@@ -50,21 +51,8 @@ export default function LoginPage() {
         );
     }
 
-    if (user?.portal === "admin") {
-        return (
-            <Card padding="lg" className="w-full max-w-md">
-                <h2 className="font-heading text-2xl font-semibold text-primary-text tracking-tight mb-1.5">
-                    No portal yet
-                </h2>
-                <p className="text-sm text-muted-text">
-                    There is no portal for the admin role yet. Please check back later.
-                </p>
-            </Card>
-        );
-    }
-
-    // landlord / tenant are being redirected by the effect above; render the
-    // redirecting state rather than flashing the sign-in button.
+    // landlord / tenant / admin are being redirected by the effect above; render
+    // the redirecting state rather than flashing the sign-in button.
     if (user) {
         return (
             <Card padding="lg" className="w-full max-w-md">

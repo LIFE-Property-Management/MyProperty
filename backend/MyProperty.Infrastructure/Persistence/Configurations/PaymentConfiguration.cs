@@ -31,6 +31,12 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 
         builder.HasIndex(p => new { p.LeaseId, p.Status });
 
+        // Stakeholder dashboard: system-wide per-status/per-currency financial
+        // totals (Status) and the confirmed-revenue trend (ConfirmedAt month
+        // buckets).
+        builder.HasIndex(p => p.Status);
+        builder.HasIndex(p => p.ConfirmedAt);
+
         // Partial index sized to the recurring "mark overdue" Hangfire job's
         // filter. ~74% of payment rows match `DueDate < today`, so an
         // unfiltered b-tree on DueDate hurts the job (the planner walks the

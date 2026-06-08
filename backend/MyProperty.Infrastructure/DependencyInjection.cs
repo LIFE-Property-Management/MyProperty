@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<ILeaseRepository, LeaseRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
         services.AddScoped<ILandlordDashboardRepository, LandlordDashboardRepository>();
+        services.AddScoped<IStakeholderDashboardRepository, StakeholderDashboardRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
 
         services.AddCaching(configuration);
@@ -130,6 +131,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<ILandlordDashboardCache, RedisLandlordDashboardCache>();
+        services.AddScoped<IStakeholderDashboardCache, RedisStakeholderDashboardCache>();
 
         return services;
     }
