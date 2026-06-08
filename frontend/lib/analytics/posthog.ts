@@ -44,7 +44,7 @@ export function initAnalytics(): void {
     // the SDK's history-based pageview.
     capture_pageview: false,
     capture_pageleave: true,
-    autocapture: true,
+    autocapture: false,
     persistence: "localStorage+cookie",
     // Only mint person profiles for users we identify (landlords/tenants),
     // not anonymous visitors — leaner data + a lighter GDPR footprint.
