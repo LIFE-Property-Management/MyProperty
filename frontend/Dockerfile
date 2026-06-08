@@ -64,12 +64,20 @@ ARG NEXT_PUBLIC_KEYCLOAK_CLIENT_ID
 # two KeycloakInit components short-circuit auth and stamp a fixture identity.
 # Wired through docker-compose for local dev. Must remain unset in CI and deploys.
 ARG NEXT_PUBLIC_DEV_AUTH_BYPASS
+# Optional PostHog analytics (M6.1). Both default to empty — when the KEY is
+# blank the analytics facade no-ops, so builds without these args ship a fully
+# working app with analytics simply turned off. Set the KEY at build time to
+# enable. HOST defaults to PostHog EU cloud in code when omitted.
+ARG NEXT_PUBLIC_POSTHOG_KEY
+ARG NEXT_PUBLIC_POSTHOG_HOST
 
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
     NEXT_PUBLIC_KEYCLOAK_URL=$NEXT_PUBLIC_KEYCLOAK_URL \
     NEXT_PUBLIC_KEYCLOAK_REALM=$NEXT_PUBLIC_KEYCLOAK_REALM \
     NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=$NEXT_PUBLIC_KEYCLOAK_CLIENT_ID \
     NEXT_PUBLIC_DEV_AUTH_BYPASS=$NEXT_PUBLIC_DEV_AUTH_BYPASS \
+    NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY \
+    NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST \
     NODE_ENV=production
 
 COPY --from=deps /app/node_modules ./node_modules

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { makeQueryClient } from "@/test-utils/renderWithQuery";
 import apiClient from "@/lib/api/client";
+import { ANALYTICS_EVENTS, capture } from "@/lib/analytics";
 import type { SignupFormValues } from "@/lib/schemas/auth/signup";
 import { useSignupMutation } from "../useSignupMutation";
 
@@ -18,7 +19,16 @@ jest.mock("@/lib/api/client", () => ({
   default: { post: jest.fn() },
 }));
 
+// Keep the real event taxonomy, spy on the emit. Asserts the funnel event fires
+// without depending on PostHog being initialised (the facade no-ops in tests).
+jest.mock("@/lib/analytics", () => ({
+  __esModule: true,
+  ...jest.requireActual("@/lib/analytics"),
+  capture: jest.fn(),
+}));
+
 const mockedPost = apiClient.post as jest.MockedFunction<typeof apiClient.post>;
+const mockedCapture = capture as jest.MockedFunction<typeof capture>;
 
 function makeWrapper() {
   const client = makeQueryClient();
@@ -44,6 +54,7 @@ function values(overrides: Partial<SignupFormValues> = {}): SignupFormValues {
 beforeEach(() => {
   mockedPost.mockReset();
   mockPush.mockReset();
+  mockedCapture.mockReset();
 });
 
 describe("useSignupMutation", () => {
@@ -98,5 +109,29 @@ describe("useSignupMutation", () => {
     });
 
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("emits the signup_completed funnel event on success", async () => {
+    mockedPost.mockResolvedValueOnce({ data: null });
+    const { result } = renderHook(() => useSignupMutation(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current.mutateAsync(values());
+    });
+
+    expect(mockedCapture).toHaveBeenCalledWith(ANALYTICS_EVENTS.signupCompleted, {
+      method: "email",
+    });
+  });
+
+  it("does not emit the funnel event when the request fails", async () => {
+    mockedPost.mockRejectedValueOnce(new Error("network"));
+    const { result } = renderHook(() => useSignupMutation(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current.mutateAsync(values()).catch(() => {});
+    });
+
+    expect(mockedCapture).not.toHaveBeenCalled();
   });
 });
