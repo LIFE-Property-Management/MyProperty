@@ -84,6 +84,9 @@ backend/obj/
 **/bin/
 **/obj/
 backend/artifacts/
+# MSBuild on Windows can emit dirs whose literal name contains a backslash ("bin\Debug");
+# **/bin/ does not match these. The backslash must be escaped to match the literal char.
+backend/**/bin\\Debug/
 
 # User-specific VS / Rider files
 *.user

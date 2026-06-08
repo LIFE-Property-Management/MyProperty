@@ -396,6 +396,13 @@ try
     });
 
     // North Star Metric — background worker updates the gauge every 60 s.
+    // TODO(NSM): Deviates from our recurring-job convention — scheduled work in this repo runs as
+    // Hangfire recurring jobs (IRecurringJobManager, see MarkExpiredInvitesJob/OrphanCleanupJob),
+    // while AddHostedService is reserved for RabbitMQ consumers. As a BackgroundService this also runs
+    // in every API replica, so each instance independently queries the DB and reports the same
+    // platform-wide count under its own instance label (N duplicate series + N queries/min). A Hangfire
+    // recurring job runs once across the cluster — the correct semantics for a platform-global metric.
+    // Replace with a Hangfire recurring job in a later iteration.
     builder.Services.AddHostedService<MyProperty.Api.Metrics.NorthStarMetricWorker>();
 
     var app = builder.Build();
