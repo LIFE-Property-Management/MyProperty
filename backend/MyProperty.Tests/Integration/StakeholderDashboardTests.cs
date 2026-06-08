@@ -283,7 +283,7 @@ public sealed class StakeholderDashboardTests(ApiFixture fixture)
             .Single(t => t.Year == sixMonthsAgo.Year && t.Month == sixMonthsAgo.Month);
         Assert.Equal(0, emptyBucket.Count);
 
-        // The revenue series for QZX confirmed this month should carry a value
+        // The revenue series for QZY confirmed this month should carry a value
         // in the current-month bucket and zeros elsewhere — proves per-currency
         // zero-fill rather than dropping empty months.
         var currentRevenue = trendRevenue.Single(r => r.Year == now.Year && r.Month == now.Month);

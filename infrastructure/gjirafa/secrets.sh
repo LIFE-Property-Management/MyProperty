@@ -40,7 +40,8 @@ MYPROPERTY_API_CLIENT_SECRET="${MYPROPERTY_API_CLIENT_SECRET:-$(gen)}"; persist 
 GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-$(gen)}";              persist GRAFANA_ADMIN_PASSWORD "$GRAFANA_ADMIN_PASSWORD"
 KUMA_ADMIN_PASSWORD="${KUMA_ADMIN_PASSWORD:-$(gen)}";                    persist KUMA_ADMIN_PASSWORD "$KUMA_ADMIN_PASSWORD"
 # Portal-admin login password — generated and persisted like the others. The
-# login email (ADMIN_PORTAL_EMAIL) is operator-supplied (see the refusal loop).
+# login email (ADMIN_PORTAL_EMAIL) is operator-supplied (validated by the
+# placeholder check in step 4 below).
 ADMIN_PORTAL_PASSWORD="${ADMIN_PORTAL_PASSWORD:-$(gen)}";                 persist ADMIN_PORTAL_PASSWORD "$ADMIN_PORTAL_PASSWORD"
 # Unleash client API token: format is <project>:<environment>.<secret>. The
 # secret half is generated; default:production. targets the prod environment

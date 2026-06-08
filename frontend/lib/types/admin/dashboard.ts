@@ -44,7 +44,7 @@ const growthSectionSchema = z.object({
 const adoptionSectionSchema = z.object({
   totalProperties: z.number().int().nonnegative(),
   activeLeases: z.number().int().nonnegative(),
-  occupancyRate: z.number(),
+  occupancyRate: z.number().min(0).max(1),
   leasesExpiringSoon: z.number().int().nonnegative(),
   newLeasesThisMonth: z.number().int().nonnegative(),
   leaseGrowthTrend: z.array(monthlyCountSchema),
@@ -56,13 +56,13 @@ const inviteFunnelSectionSchema = z.object({
   rejected: z.number().int().nonnegative(),
   expired: z.number().int().nonnegative(),
   pending: z.number().int().nonnegative(),
-  acceptanceRate: z.number(),
+  acceptanceRate: z.number().min(0).max(1),
   trend: z.array(monthlyInviteSchema),
 });
 
 const financialSectionSchema = z.object({
   byCurrency: z.array(currencyTotalsSchema),
-  confirmationRate: z.number(),
+  confirmationRate: z.number().min(0).max(1),
   avgHoursToConfirm: z.number(),
   revenueTrend: z.array(monthlyCurrencyAmountSchema),
 });
