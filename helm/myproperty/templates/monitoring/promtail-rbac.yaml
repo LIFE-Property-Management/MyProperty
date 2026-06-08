@@ -28,4 +28,4 @@ subjects:
   - kind: ServiceAccount
     name: {{ .Release.Name }}-promtail
     namespace: {{ .Release.Namespace }}
-  {{- end }}
+{{- end }}

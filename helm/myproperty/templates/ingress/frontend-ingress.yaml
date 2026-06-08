@@ -14,17 +14,17 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-  {{- include "myproperty.tlsHosts" . | nindent 8 }}
-secretName: {{ .Values.ingress.tls.secretName }}
-rules:
-  - host: {{ .Values.hosts.app }}
-    http:
-      paths:
-        - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: frontend
-              port:
-                name: http
-  {{- end }}
+{{- include "myproperty.tlsHosts" . | nindent 8 }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  rules:
+    - host: {{ .Values.hosts.app }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+{{- end }}

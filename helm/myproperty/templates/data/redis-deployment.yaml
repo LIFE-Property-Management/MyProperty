@@ -77,4 +77,4 @@ spec:
             capabilities:
               drop: [ALL]
             readOnlyRootFilesystem: true
-  {{- end }}
+{{- end }}
