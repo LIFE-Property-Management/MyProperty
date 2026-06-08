@@ -27,12 +27,12 @@ keycloak:
 backend:
   enabled: true
   image:
-    tag: "b9fbe2e"
+    tag: "dcfebdd"
   storage:
     storageClassName: longhorn
 migration:
   image:
-    tag: "b9fbe2e"
+    tag: "dcfebdd"
 frontend:
   enabled: true
   image:
