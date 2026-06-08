@@ -505,11 +505,22 @@ try
     app.UseRateLimiter();
     app.UseAuthorization();
 
-    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    if (app.Environment.IsDevelopment())
     {
-        Authorization = [new AdminOnlyDashboardFilter()],
-        DashboardTitle = "MyProperty — Background Jobs",
-    });
+        app.MapHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = [],
+            DashboardTitle = "MyProperty — Background Jobs",
+        }).AllowAnonymous();
+    }
+    else
+    {
+        app.UseHangfireDashboard("/hangfire", new DashboardOptions
+        {
+            Authorization = [new AdminOnlyDashboardFilter()],
+            DashboardTitle = "MyProperty — Background Jobs",
+        });
+    }
 
     // ── Recurring background jobs ───────────────────────────────────────────────
     // Registered against the already-configured Hangfire (Postgres) storage.
@@ -524,6 +535,8 @@ try
         "mark-expired-invites", j => j.ExecuteAsync(CancellationToken.None), "0 * * * *");   // hourly
     recurringJobs.AddOrUpdate<OrphanCleanupJob>(
         "orphan-cleanup", j => j.ExecuteAsync(CancellationToken.None), "0 3 * * *");          // 03:00 UTC daily
+    recurringJobs.AddOrUpdate<LeaseExpiringSoonJob>(
+        "lease-expiring-soon", j => j.ExecuteAsync(CancellationToken.None), "0 8 * * *");     // 08:00 UTC daily
 
     app.MapControllers();
     app.MapHub<NotificationsHub>(NotificationsHub.Path);

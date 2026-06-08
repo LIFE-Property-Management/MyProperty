@@ -94,6 +94,18 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
         return (items, totalCount);
     }
 
+    public async Task<IReadOnlyList<Lease>> ListAllExpiringSoonAsync(int daysThreshold, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var threshold = today.AddDays(daysThreshold);
+
+        return await db.Leases
+            .Include(l => l.Tenant)
+            .Where(l => l.Status == LeaseStatus.Active && l.EndDate <= threshold)
+            .OrderBy(l => l.EndDate)
+            .ToListAsync(ct);
+    }
+
     public Task<bool> HasActiveLeaseForPropertyAsync(Guid propertyId, CancellationToken ct)
         => db.Leases.AnyAsync(
             l => l.PropertyId == propertyId && l.Status == LeaseStatus.Active, ct);
