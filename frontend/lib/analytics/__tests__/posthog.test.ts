@@ -74,6 +74,18 @@ describe("analytics facade — configured (key present)", () => {
     );
   });
 
+  it("disables autocapture so only explicit typed events are sent", () => {
+    process.env[KEY_ENV] = "phc_test_key";
+    const { posthog, facade } = loadFacade();
+
+    facade.initAnalytics();
+
+    expect(posthog.init).toHaveBeenCalledWith(
+      "phc_test_key",
+      expect.objectContaining({ autocapture: false }),
+    );
+  });
+
   it("honours a custom host", () => {
     process.env[KEY_ENV] = "phc_test_key";
     process.env[HOST_ENV] = "https://us.i.posthog.com";
