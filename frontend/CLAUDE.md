@@ -84,6 +84,11 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
 - It's **env-driven and no-op without a key** (`NEXT_PUBLIC_POSTHOG_KEY`), like `WebVitalsReporter`. Don't add the key to `requirePublicEnv` (analytics must not be a required build var).
 - Identify/reset is handled centrally in `AnalyticsProvider` (root layout) by subscribing to `useAuthStore` — do not add `identify` calls in the portals.
 - See `docs/milestones/m6-product-analytics.md` for the event taxonomy + funnel definitions.
+- `autocapture` is **off** by design — we only send the explicit, typed events declared in `events.ts` (matches the `identified_only` privacy posture). Don't flip it back on without a deliberate decision.
+- **Status: plumbed but OFF everywhere — no key is provisioned yet.** `NEXT_PUBLIC_POSTHOG_KEY` is build-time-inlined (not a Helm/runtime env), so analytics is enabled per build:
+  - **Local:** put a `phc_…` project key in `frontend/.env.local`.
+  - **Cluster:** add the `NEXT_PUBLIC_POSTHOG_KEY` GitHub **repo secret** (Settings → Secrets), then rebuild the frontend image — `frontend-ci.yml` bakes it in. No manifest change needed.
+  - The key is a PostHog **project** API key (`phc_…`, publishable/write-only — safe to inline); NOT a personal API key.
 
 ## Key Omissions (intentional)
 - **v0.dev: opted out.** Do not suggest it.
