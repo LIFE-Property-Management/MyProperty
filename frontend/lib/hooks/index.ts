@@ -9,3 +9,4 @@ export { useSubmitManualRequest } from "./useSubmitManualRequest";
 export { queryKeys } from "./queryKeys";
 export { useLandlordDashboard } from "./useLandlordDashboard";
 export { useLandlordUpcomingPayments } from "./useLandlordUpcomingPayments";
+export { useStakeholderDashboard } from "./useStakeholderDashboard";

@@ -348,3 +348,4 @@ None of these are M4 critical-path; PSS=restricted is an M5 carry-over.
 | [`health-probes.md`](health-probes.md) | Three-endpoint K8s probe model |
 | [`nginx-ssl.md`](nginx-ssl.md) | Compose-time Nginx + Let's Encrypt |
 | **`security-hardening.md`** (this doc) | Trivy gate, ESO, NetworkPolicies, distroless, PSS |
+| [`../security/audit-m5.5.md`](../security/audit-m5.5.md) | M5.5 security audit — source secret scanning, OWASP ZAP DAST baseline, Lighthouse CI |

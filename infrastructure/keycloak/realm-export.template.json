@@ -960,6 +960,25 @@
       ]
     },
     {
+      "id": "f3a1c7e2-9b4d-4c8a-8e1f-2d6b5a0c9e44",
+      "username": "admin@dev.local",
+      "email": "admin@dev.local",
+      "firstName": "Admin",
+      "lastName": "Dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Admin"
+      ]
+    },
+    {
       "username": "service-account-myproperty-api",
       "serviceAccountClientId": "myproperty-api",
       "enabled": true,

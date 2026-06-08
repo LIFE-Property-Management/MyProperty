@@ -1,0 +1,109 @@
+@startuml
+!include <C4/C4_Deployment>
+
+LAYOUT_TOP_DOWN()
+
+title MyProperty Platform - Production deployment (shared Hetzner cluster, namespace project-02 + Helm)
+
+Person(user, "Tenant / Landlord", "browser")
+Person(admin, "Admin")
+Person(operator, "Operator", "helm via project-02 kubeconfig")
+
+Deployment_Node(hetzner, "Shared Hetzner Kubernetes cluster", "operated by Gjirafa; CNI: Calico") {
+
+    Deployment_Node(clusterScoped, "Cluster-scoped (operated by Gjirafa, not us)", "we have namespace-admin only") {
+        Container(ingCtrl,     "ingress-nginx controller", "hostNetwork DaemonSet on workers", "Single external entry point for the 5 hosts")
+        Container(certManager, "cert-manager",             "cluster-wide controller",          "Honours our namespaced Issuer (HTTP-01)")
+    }
+
+    Deployment_Node(mpNs, "Namespace: project-02", "Helm release 'myproperty' (values-gjirafa.yaml)") {
+
+        Deployment_Node(appTier, "Application tier") {
+            Container(be, "backend",        "Deployment, 1 replica, PVC (longhorn)", "ghcr.io/.../myproperty-api:{sha} - chiseled .NET 10, UID 1654; LocalFileStorage for receipts")
+            Container(fe, "frontend",       "Deployment, 2 replicas",                "ghcr.io/.../myproperty-frontend:{sha} - distroless Node 20, UID 65532")
+            Container(aw, "aiops-webhook",  "Deployment, 1 replica",                 "ghcr.io/.../myproperty-aiops-webhook:{sha} - Python 3.14")
+            Container(migJob, "migration-job", "pre-upgrade Helm Hook Job",          "EF Core migration bundle (forward-only) - ghcr.io/.../myproperty-migrations:{sha}")
+        }
+
+        Deployment_Node(dataTier, "Data tier (all self-hosted, PVCs on longhorn)") {
+            ContainerDb(pg,  "postgres",  "StatefulSet + PVC (longhorn)",        "App + Hangfire + Keycloak + Unleash schemas")
+            ContainerDb(rds, "redis",     "Deployment, ephemeral",               "Cache + SignalR backplane")
+            ContainerQueue(rmq, "rabbitmq", "StatefulSet + PVC (longhorn)",      "Topic exchange 'myproperty.events'")
+            Container(kc,    "keycloak",  "Deployment + alpine realm-init initContainer + ConfigMap", "OIDC IdP, realm import via ConfigMap")
+            Container(unl,   "unleash",   "Deployment, 1 replica (UID 1000)",    "Feature-flag server (M5.6); ClusterIP only, no ingress; reuses Postgres 'unleash' DB")
+        }
+
+        Deployment_Node(obs, "Observability (self-contained manifests - no operator, no CRDs)") {
+            Container(prom,  "prometheus",    "Deployment + PVC (longhorn)", "Scrape config + alert rules wired directly")
+            Container(am,    "alertmanager",  "Deployment + PVC (longhorn)", "Routes -> aiops-webhook ClusterIP")
+            Container(graf,  "grafana",       "Deployment + PVC (longhorn)", "Secret-backed admin; metrics + log dashboards; grafana.X")
+            Container(loki,  "loki",          "StatefulSet + PVC (longhorn)","Single-binary log store")
+            Container(ptail, "promtail",      "DaemonSet + namespaced Role", "Tails project-02 pods only")
+            Container(uk,    "uptime-kuma",   "StatefulSet + PVC (longhorn) + seed hook", "HTTPS probes + status.X; 13 monitors")
+        }
+
+        Deployment_Node(crd, "Namespaced K8s objects (chart-rendered)") {
+            Container(ingApi,    "api-ingress",         "Ingress", "api.X -> backend:8080")
+            Container(ingFe,     "frontend-ingress",    "Ingress", "app.X -> frontend:3000")
+            Container(ingAuth,   "keycloak-ingress",    "Ingress", "auth.X -> keycloak:8080")
+            Container(ingGraf,   "grafana-ingress",     "Ingress", "grafana.X -> grafana:3000")
+            Container(ingStatus, "uptime-kuma-ingress", "Ingress", "status.X -> uptime-kuma:3001")
+            Container(issuer,    "cert-manager Issuer", "namespaced Issuer + Certificate", "letsencrypt-prod / -staging (HTTP-01)")
+            Container(secrets,   "K8s Secrets",         "manual via secrets.sh", "Postgres / RabbitMQ / Keycloak / Redis / OAuth / Anthropic / Grafana / Discord / Unleash")
+            Container(netPol,    "NetworkPolicies",     "default-deny + targeted-allow (ON)", "Enforced by Calico; data tier locked to selectors")
+        }
+    }
+}
+
+' ====== External ======
+System_Ext(le,    "Let's Encrypt",  "ACME v2 CA")
+System_Ext(ghcr,  "GHCR",            "ghcr.io/life-property-management/*")
+System_Ext(anth,  "Anthropic API",   "Claude vision + Haiku")
+System_Ext(discord, "Discord",       "#alerts / #uptime / #deployments webhooks")
+System_Ext(gh,    "GitHub Actions",  "CD: kubeconfig secret + deploy.sh --atomic")
+
+' ====== User / operator traffic ======
+Rel(user, ingCtrl, "HTTPS to app/api/auth/grafana/status", "*.myproperty.works")
+Rel(admin, ingCtrl, "HTTPS to api.X/hangfire + auth.X (realm admin)", "")
+Rel(operator, mpNs, "helm upgrade --install", "deploy.sh + kubeconfig")
+Rel(gh, mpNs, "CD on push to develop/main (workflow_run)", "kubeconfig secret + helm")
+
+' ====== Ingress -> workloads ======
+Rel(ingCtrl, fe,  "Routes app.X")
+Rel(ingCtrl, be,  "Routes api.X")
+Rel(ingCtrl, kc,  "Routes auth.X")
+Rel(ingCtrl, graf,"Routes grafana.X")
+Rel(ingCtrl, uk,  "Routes status.X")
+Rel(certManager, issuer, "Reconciles namespaced Issuer/Certificate")
+Rel(certManager, le, "ACME HTTP-01", "HTTPS")
+
+' ====== Workloads -> data ======
+Rel(be, pg,   "Npgsql", "TCP")
+Rel(be, rds,  "StackExchange.Redis", "TCP")
+Rel(be, rmq,  "AMQP", "TCP")
+Rel(be, kc,   "JWKS / Admin REST", "in-cluster HTTP")
+Rel(be, unl,  "Feature-flag SDK poll", "in-cluster HTTP")
+Rel(be, anth, "Receipt OCR", "HTTPS")
+Rel(kc, pg,   "Realm DB")
+Rel(unl, pg,  "Unleash DB")
+
+' ====== Migration job ======
+Rel(migJob, pg, "EF Core migrations (pre-upgrade Helm Hook)", "")
+
+' ====== Observability ======
+Rel(prom, be,   "Scrape /metrics")
+Rel(prom, am,   "Fire alerts")
+Rel(am,   aw,   "Webhook")
+Rel(aw,   anth, "Triage")
+Rel(aw,   discord, "Notify #alerts")
+Rel(ptail, loki, "Push pod logs")
+Rel(graf, prom, "Query metrics")
+Rel(graf, loki, "Query logs")
+Rel(graf, am,   "Alert state")
+Rel(uk,   ingCtrl, "Probe app/api/auth.X", "HTTPS")
+Rel(uk,   discord, "Notify #uptime")
+
+' ====== Image pulls ======
+Rel(mpNs, ghcr, "Pull container images", "HTTPS")
+
+@enduml

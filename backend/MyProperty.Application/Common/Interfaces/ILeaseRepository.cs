@@ -52,4 +52,9 @@ public interface ILeaseRepository
     /// </summary>
     Task<(IReadOnlyList<Lease> Items, int TotalCount)> ListActiveTenantsByLandlordAsync(
         Guid landlordId, int page, int pageSize, CancellationToken ct);
+
+    /// <summary>
+    /// True if the property has at least one Active lease. Used to block property deletion.
+    /// </summary>
+    Task<bool> HasActiveLeaseForPropertyAsync(Guid propertyId, CancellationToken ct);
 }

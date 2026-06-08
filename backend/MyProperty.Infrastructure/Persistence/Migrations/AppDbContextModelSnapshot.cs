@@ -17,7 +17,7 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -163,6 +163,8 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("PropertyId");
@@ -228,7 +230,11 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("EndDate");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("LandlordId", "Status");
 
@@ -335,9 +341,13 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ConfirmedAt");
+
                     b.HasIndex("DueDate")
                         .HasDatabaseName("IX_payments_DueDate_Outstanding")
                         .HasFilter("\"Status\" = 'Outstanding' AND \"DeletedAt\" IS NULL");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("LeaseId", "Status");
 
@@ -371,6 +381,11 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<string>("PropertyType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
 
                     b.Property<string>("UnitNumber")
                         .HasMaxLength(32)
@@ -439,6 +454,8 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
 
                     b.HasIndex("Email")
                         .IsUnique();

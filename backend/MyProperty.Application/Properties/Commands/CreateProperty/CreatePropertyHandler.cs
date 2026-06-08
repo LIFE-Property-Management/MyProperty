@@ -23,6 +23,7 @@ public sealed class CreatePropertyHandler(
             Name = cmd.Name,
             Address = cmd.Address,
             UnitNumber = cmd.UnitNumber,
+            PropertyType = cmd.PropertyType,
         };
 
         await properties.AddAsync(property, ct);

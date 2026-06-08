@@ -120,6 +120,24 @@ keycloak:
       cpu: 1000m
       memory: 1Gi
 
+# Idempotent seed Job that provisions the portal Admin user in the live
+# MyProperty realm via kcadm (realm import only runs on Keycloak's first
+# startup, so the live admin must be created through the Admin API). Reuses
+# the Keycloak image — no separate image needed. Reads the admin login email
+# and password from the myproperty-admin-portal Secret (created by secrets.sh).
+#
+# NOTE: enabled by default deliberately. The post-upgrade hook mounts the
+# myproperty-admin-portal Secret via secretKeyRef, so on a cluster where
+# secrets.sh has NOT been run the Job pod fails to start and a `helm --atomic`
+# upgrade rolls back the whole release. This is an accepted tradeoff: it
+# mirrors the established chart convention (uptime-kuma-seed and every other
+# component are likewise enabled-by-default and consume secrets.sh Secrets via
+# secretKeyRef), and our only deployment (project-02/gjirafa) always runs
+# secrets.sh first. If we ever support fresh-cluster installs, flip ALL seed
+# Jobs to default-off here and re-enable them together in values-gjirafa.yaml.
+adminSeed:
+  enabled: true
+
 backend:
   enabled: true
   image:

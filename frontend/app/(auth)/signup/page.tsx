@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
@@ -8,9 +9,15 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { signupSchema, type SignupFormValues } from "@/lib/schemas/auth/signup";
 import { useSignupMutation } from "@/lib/hooks/auth/useSignupMutation";
+import { ANALYTICS_EVENTS, capture } from "@/lib/analytics";
 
 export default function SignupPage() {
     const mutation = useSignupMutation();
+
+    // Landlord activation funnel — step 1 (entered the signup form).
+    useEffect(() => {
+        capture(ANALYTICS_EVENTS.signupStarted);
+    }, []);
 
     const {
         register,

@@ -1,0 +1,153 @@
+{{- if and .Values.keycloak.enabled .Values.adminSeed.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-keycloak-admin-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keycloak-admin-seed
+  annotations:
+    # Provisions the portal Admin user in the live MyProperty realm. The realm
+    # import (`start --import-realm`) only runs on Keycloak's FIRST startup, so
+    # editing the realm template never mutates an already-running realm — the
+    # live admin account must be created via kcadm.sh against the Admin API.
+    # This Job is the K8s equivalent of a one-shot provisioning step, mirroring
+    # uptime-kuma-seed. The script is idempotent (check-before-create + role
+    # add is a no-op when already assigned), so it is safe to re-run on every
+    # upgrade. hook-weight "20" sequences it after the uptime-kuma seed ("10");
+    # a retry loop handles Keycloak still warming up. before-hook-creation,
+    # hook-succeeded means the next upgrade replaces this Job rather than
+    # leaving it around.
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "20"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: keycloak-admin-seed
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seed
+          # Reuse the Keycloak image — it ships /opt/keycloak/bin/kcadm.sh.
+          image: {{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}
+          command:
+            - bash
+            - -c
+            - |
+              set -euo pipefail
+              CFG=/tmp/kcadm.config
+              KCADM=/opt/keycloak/bin/kcadm.sh
+
+              # Keycloak may still be warming up when this post-upgrade hook
+              # runs (the Deployment is a regular resource, not gated to be
+              # Ready before hooks). Retry the master-realm login ~24×5s.
+              authok=0
+              for i in $(seq 1 24); do
+                if "$KCADM" config credentials \
+                    --server http://keycloak:8080 \
+                    --realm master \
+                    --user "$KC_ADMIN_USER" \
+                    --password "$KC_ADMIN_PASSWORD" \
+                    --config "$CFG"; then
+                  authok=1
+                  echo "Authenticated to Keycloak master realm (attempt $i)."
+                  break
+                fi
+                echo "Keycloak not ready yet (attempt $i/24); sleeping 5s..."
+                sleep 5
+              done
+              if [ "$authok" -ne 1 ]; then
+                echo "ERROR: could not authenticate to Keycloak after 24 attempts." >&2
+                exit 1
+              fi
+
+              # Idempotent: create the user only if it does not already exist.
+              if "$KCADM" get users -r MyProperty \
+                  -q exact=true -q username="$ADMIN_EMAIL" \
+                  --config "$CFG" | grep -q '"username"'; then
+                echo "Admin user $ADMIN_EMAIL already exists; skipping create."
+              else
+                echo "Creating admin user $ADMIN_EMAIL..."
+                "$KCADM" create users -r MyProperty \
+                  -s username="$ADMIN_EMAIL" \
+                  -s email="$ADMIN_EMAIL" \
+                  -s enabled=true \
+                  -s emailVerified=true \
+                  --config "$CFG"
+              fi
+
+              # Set the password and assign the Admin realm role. Both are
+              # idempotent — set-password overwrites, add-roles is a no-op when
+              # the role is already assigned. The portal admin holds ONLY the
+              # Admin role (the frontend's decodePayload rejects a JWT carrying
+              # more than one portal role).
+              "$KCADM" set-password -r MyProperty \
+                --username "$ADMIN_EMAIL" \
+                --new-password "$ADMIN_PASSWORD" \
+                --config "$CFG"
+              "$KCADM" add-roles -r MyProperty \
+                --uusername "$ADMIN_EMAIL" \
+                --rolename Admin \
+                --config "$CFG"
+
+              echo "SUCCESS: admin user $ADMIN_EMAIL provisioned with the Admin realm role."
+          env:
+            # Master-realm credentials to drive kcadm — same Secret the
+            # Keycloak Deployment consumes for KEYCLOAK_ADMIN.
+            - name: KC_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-keycloak-admin
+                  key: admin-user
+            - name: KC_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-keycloak-admin
+                  key: admin-password
+            # Portal-admin credentials to provision — created by secrets.sh.
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-admin-portal
+                  key: admin-email
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-admin-portal
+                  key: admin-password
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            # kcadm writes its token to --config; root FS is read-only, so
+            # point that at a writable emptyDir mounted at /tmp.
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: kcadm-config
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      volumes:
+        - name: kcadm-config
+          emptyDir: {}
+{{- end }}

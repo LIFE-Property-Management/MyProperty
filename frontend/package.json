@@ -14,7 +14,8 @@
     "test:coverage": "jest --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:install": "playwright install --with-deps chromium"
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "lhci": "lhci autorun"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -25,13 +26,16 @@
     "keycloak-js": "^26.2.4",
     "lucide-react": "^1.16.0",
     "next": "^16.2.3",
+    "posthog-js": "^1.381.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.72.1",
+    "recharts": "^3.8.1",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@lhci/cli": "^0.15.1",
     "@next/bundle-analyzer": "^16.2.6",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",

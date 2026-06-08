@@ -84,9 +84,11 @@ backend/obj/
 **/bin/
 **/obj/
 backend/artifacts/
-# MSBuild on Windows can emit dirs whose literal name contains a backslash ("bin\Debug");
-# **/bin/ does not match these. The backslash must be escaped to match the literal char.
-backend/**/bin\\Debug/
+# Literal-backslash dirs Rider/MSBuild on Linux writes as a single component
+# named "bin\Debug" (not bin/Debug); **/bin/ above does NOT match these, and
+# they break the backend Docker build (bogus MSB3552 **/*.resx). Escape the \.
+**/bin\\Debug/
+**/obj\\Debug/
 
 # User-specific VS / Rider files
 *.user
@@ -279,3 +281,13 @@ docs/operations/*-plan.md
 #  CLAUDE CODE — per-developer local settings
 # ───────────────────────────────────────────────────────────
 **/.claude/settings.local.json
+
+
+# ───────────────────────────────────────────────────────────
+#  ARCHITECTURE DIAGRAMS — tooling (PlantUML)
+# ───────────────────────────────────────────────────────────
+# plantuml.jar is ~28 MB and is downloaded on demand by
+# scripts/render-architecture-diagrams.ps1. The rendered .svg
+# outputs IN docs/architecture/diagrams/ ARE committed.
+tools/plantuml.jar
+tools/*.jar

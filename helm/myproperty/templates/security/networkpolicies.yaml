@@ -342,6 +342,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/component: frontend
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: keycloak-admin-seed
       ports:
         - protocol: TCP
           port: 8080
@@ -721,4 +724,32 @@ spec:
       ports:
         - protocol: TCP
           port: 3001
+{{- if .Values.adminSeed.enabled }}
+---
+# Keycloak admin seed Job: one-shot, drives kcadm against the Keycloak Admin
+# API to provision the portal Admin user on install/upgrade. Egress to
+# Keycloak only (the keycloak policy above grants the matching ingress from
+# the keycloak-admin-seed component). DNS egress is covered by the catch-all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-keycloak-admin-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: keycloak-admin-seed
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: keycloak
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end }}
 {{- end }}

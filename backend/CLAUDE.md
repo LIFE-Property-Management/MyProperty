@@ -142,6 +142,7 @@ public class PaymentsController(SubmitPaymentHandler submit) : ControllerBase
 - **Keycloak** runs in Docker. JWT bearer tokens validated by ASP.NET Core's JWT middleware against Keycloak's JWKS endpoint.
 - **Roles:** `Tenant`, `Landlord`, `Admin`. Mapped from Keycloak realm roles into the JWT `realm_access.roles` claim, then projected onto ASP.NET Core's role claims via `TokenValidationParameters.RoleClaimType` config.
 - **Authorization:** policy-based. Define policies in `Program.cs` (`RequireLandlord`, `RequireTenant`, `RequireAdmin`, plus resource-scoped policies like `LandlordOwnsProperty`).
+- **`RequireAdmin` endpoints:** beyond the Hangfire dashboard, `AdminController` (`/api/v1/admin/*`) is gated by `RequireAdmin` — it serves the system-wide stakeholder dashboard (`GET /api/v1/admin/dashboard`, cache-aside via `IStakeholderDashboardCache`, 5-min TTL). The live `Admin` user is provisioned by a Helm seed-Job; see `docs/operations/admin-dashboard.md`.
 - **OAuth2 SSO:** Google identity provider configured in Keycloak realm. Users sign in with Google through Keycloak; the API only ever sees Keycloak-issued JWTs.
 - **Tenants cannot self-register.** Account creation only via the invite flow (see `docs/portals.md`). API enforces this: there is no public registration endpoint.
 - **Invite flow:** invite tokens are signed, single-use, with `Expired` status after 7 days. Lease acceptance UI is presented before Keycloak account creation.
