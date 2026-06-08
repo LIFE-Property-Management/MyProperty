@@ -3,11 +3,12 @@
 // errors for fields in that step, while final submission validates the full schema.
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ANALYTICS_EVENTS, capture } from "@/lib/analytics";
 import type { InvitePreview } from "../_lib/invite";
 import { STEP_FIELDS, type StepIndex, type WizardValues, wizardSchema } from "../_lib/schema";
 import { useAcceptInvite } from "../_lib/useAcceptInvite";
@@ -41,10 +42,17 @@ export function InviteWizard({ invite }: InviteWizardProps) {
   const { handleSubmit, trigger } = methods;
   const { mutateAsync, isPending } = useAcceptInvite();
 
+  // Tenant onboarding funnel — step 1 (invite link opened).
+  useEffect(() => {
+    capture(ANALYTICS_EVENTS.inviteOpened);
+  }, []);
+
   async function handleNext(): Promise<void> {
     const fields = STEP_FIELDS[step];
     const valid = await trigger(fields, { shouldFocus: true });
     if (!valid) return;
+    // Tenant onboarding funnel — step 2 (advanced past the lease review step).
+    if (step === 0) capture(ANALYTICS_EVENTS.leaseReviewed);
     setStep((s) => (Math.min(s + 1, 2) as StepIndex));
   }
 

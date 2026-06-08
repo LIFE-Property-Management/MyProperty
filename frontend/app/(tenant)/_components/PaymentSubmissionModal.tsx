@@ -5,10 +5,12 @@
 // useSubmitReceipt/useSubmitManualRequest still invalidate queries on success.
 'use client';
 
+import { useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { ReceiptUploadForm } from './ReceiptUploadForm';
 import { ManualRequestForm } from './ManualRequestForm';
 import useTenantStore from '@/lib/store/useTenantStore';
+import { ANALYTICS_EVENTS, capture } from '@/lib/analytics';
 
 export function PaymentSubmissionModal() {
   const activeModal = useTenantStore((s) => s.activeModal);
@@ -16,6 +18,14 @@ export function PaymentSubmissionModal() {
   const closeModal = useTenantStore((s) => s.closeModal);
 
   const isOpen = activeModal !== null;
+
+  // Payment-collection funnel — submission started (modal opened). `activeModal`
+  // doubles as the chosen method (receiptUpload | manualRequest).
+  useEffect(() => {
+    if (activeModal !== null) {
+      capture(ANALYTICS_EVENTS.paymentSubmissionStarted, { method: activeModal });
+    }
+  }, [activeModal]);
 
   // Store contract: openModal sets both fields atomically, but TS needs the null guard.
   if (!isOpen || !activePaymentId) return null;
