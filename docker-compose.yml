@@ -222,17 +222,27 @@ services:
       - myproperty-net
     restart: "no"   # One-shot — exits 0 after seeding (or no-op on re-run).
 
-  # ── MailHog (dev SMTP catcher) ──────────────────────────────────────────────
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: myproperty-mailhog
+  # ── Mailpit (dev SMTP catcher) ──────────────────────────────────────────────
+  # Mailpit is the actively-maintained successor to MailHog (same ports: SMTP
+  # 1025, Web UI 8025). Locally it is a PURE CATCHER — captured mail stays in
+  # the Web UI at http://localhost:8025 and is never relayed out. The cluster
+  # deployment additionally relays to Resend for real delivery (see
+  # docs/operations/email-smtp.md); that relay is deliberately NOT set here so
+  # local dev mail never leaves the machine.
+  mailpit:
+    image: axllent/mailpit:v1.30.1
+    container_name: myproperty-mailpit
+    environment:
+      MP_MAX_MESSAGES: "5000"
     ports:
       - "1025:1025"   # SMTP
       - "8025:8025"   # Web UI →  http://localhost:8025
     networks:
       - myproperty-net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8025/"]
+      # Mailpit ships a built-in readiness subcommand (v1.15.1+) — no wget/curl
+      # needed. Mirrors Mailpit's own Dockerfile HEALTHCHECK.
+      test: ["CMD", "/mailpit", "readyz"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -272,7 +282,7 @@ services:
       Cache__InstancePrefix: "myproperty:dev:"
       SignalR__UseRedisBackplane: "true"
       Cors__AllowedOrigins__0: "${FRONTEND_PUBLIC_URL:-http://localhost:3000}"
-      Smtp__Host: "mailhog"
+      Smtp__Host: "mailpit"
       Smtp__Port: "1025"
       Smtp__UseStartTls: "false"
       Smtp__FromAddress: "no-reply@myproperty.local"
@@ -551,7 +561,7 @@ services:
   #   - Discord: only created if DISCORD_WEBHOOK_URL is set (Kuma renders
   #     Discord-native embeds). In K8s this is a separate channel from the
   #     aiops-webhook's #alerts; locally it's whatever you point it at.
-  #   - Email: posts to the MailHog SMTP catcher already in this stack —
+  #   - Email: posts to the Mailpit SMTP catcher already in this stack —
   #     visible at http://localhost:8025. Demo-friendly without an external
   #     SMTP account.
   uptime-kuma:
@@ -599,10 +609,10 @@ services:
       # Notification channels — both optional. Empty values short-circuit
       # the corresponding channel; the demo runs without external accounts.
       DISCORD_WEBHOOK_URL: "${DISCORD_UPTIME_WEBHOOK_URL:-}"
-      # MailHog runs in this stack on port 1025 — the email notification
-      # lands in the MailHog Web UI at http://localhost:8025, demoable
+      # Mailpit runs in this stack on port 1025 — the email notification
+      # lands in the Mailpit Web UI at http://localhost:8025, demoable
       # without configuring an external SMTP provider.
-      KUMA_SMTP_HOST: "${KUMA_SMTP_HOST:-mailhog}"
+      KUMA_SMTP_HOST: "${KUMA_SMTP_HOST:-mailpit}"
       KUMA_SMTP_PORT: "${KUMA_SMTP_PORT:-1025}"
       KUMA_SMTP_FROM: "${KUMA_SMTP_FROM:-uptime@myproperty.local}"
       KUMA_SMTP_TO: "${KUMA_SMTP_TO:-oncall@myproperty.local}"

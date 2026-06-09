@@ -111,8 +111,8 @@ spec:
 ---
 # Backend: ingress from the ingress controller (browser API calls) and
 # from Prometheus (/metrics scrape). Egress to all internal data-tier
-# services + external HTTPS (Anthropic for OCR, Google identity service,
-# SMTP via mailhog if deployed). Port 443 egress is allowed to any
+# services + external HTTPS (Anthropic for OCR, Google identity service) and
+# SMTP via Mailpit on mailpit:1025. Port 443 egress is allowed to any
 # non-cluster IP; rely on cloud-side egress controls for finer policy.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -184,6 +184,15 @@ spec:
       ports:
         - protocol: TCP
           port: 3100
+    {{- if .Values.mailpit.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mailpit
+      ports:
+        - protocol: TCP
+          port: 1025
+    {{- end }}
     # External HTTPS (Anthropic API, Google IdP, etc.). The ipBlock with
     # /0 + private-range excepts limits this to public destinations only.
     - to:
@@ -275,6 +284,51 @@ spec:
       ports:
         - protocol: TCP
           port: 5672
+{{- if .Values.mailpit.enabled }}
+---
+# Mailpit: ingress on SMTP 1025 from the only in-cluster senders (backend +
+# keycloak). Egress to external 587 for the outbound relay to Resend (active
+# only when mailpit.relay.enabled; inert otherwise). DNS egress via the
+# catch-all; Prometheus-scrape + Kuma-probe ingress via their catch-alls.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-mailpit
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: mailpit
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: keycloak
+      ports:
+        - protocol: TCP
+          port: 1025
+  egress:
+    # Outbound relay to Resend (smtp.resend.com:587, STARTTLS). Public
+    # destinations only — private ranges excepted. DNS is covered by the
+    # catch-all allow-dns-egress policy.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - protocol: TCP
+          port: 587
+{{- end }}
 {{- if .Values.unleash.enabled }}
 ---
 # Unleash: ingress from backend (flag fetch on 4242); egress to postgres (its
@@ -358,6 +412,16 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+    {{- if .Values.mailpit.enabled }}
+    # SMTP to Mailpit for password-reset / verification emails.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mailpit
+      ports:
+        - protocol: TCP
+          port: 1025
+    {{- end }}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -610,6 +674,17 @@ spec:
       ports:
         - protocol: TCP
           port: 9093
+    {{- if .Values.mailpit.metrics.enabled }}
+    # Scrape the Mailpit Prometheus exporter (metrics port). The matching
+    # ingress on mailpit is granted by the allow-prometheus-scrape catch-all.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: mailpit
+      ports:
+        - protocol: TCP
+          port: {{ .Values.mailpit.metrics.port }}
+    {{- end }}
 ---
 # Alertmanager: ingress from Prometheus (alert delivery) and Grafana (the
 # Alertmanager datasource), both on 9093. Egress to the AIOps webhook, which
@@ -653,7 +728,7 @@ spec:
 # Egress is broad to any in-namespace pod — Kuma black-box probes nearly every
 # service on many ports, so an allow-list per target would be brittle and break
 # silently as monitors change. External egress is locked to HTTPS:443 only
-# (Discord notifications). A future in-cluster Mailpit is covered by the
+# (Discord notifications). The in-cluster Mailpit is covered by the
 # in-namespace egress automatically.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -35,6 +35,13 @@ data:
         static_configs:
           - targets: ["loki:3100"]
         metrics_path: /metrics
+{{- if .Values.mailpit.metrics.enabled }}
+
+      - job_name: mailpit
+        static_configs:
+          - targets: ["mailpit:{{ .Values.mailpit.metrics.port }}"]
+        metrics_path: /metrics
+{{- end }}
 
       - job_name: alertmanager
         static_configs:

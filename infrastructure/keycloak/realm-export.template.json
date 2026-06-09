@@ -1699,7 +1699,7 @@
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
   "smtpServer": {
-    "host": "mailhog",
+    "host": "mailpit",
     "port": "1025",
     "from": "no-reply@myproperty.local",
     "fromDisplayName": "MyProperty (dev)",

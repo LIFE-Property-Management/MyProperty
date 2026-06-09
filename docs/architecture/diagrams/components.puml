@@ -14,7 +14,7 @@ ContainerQueue(mq, "RabbitMQ 3", "Event bus", "'myproperty.events' topic exchang
 Container(unleash, "Unleash OSS", "Feature flags", "Backend SDK polls a cached snapshot")
 
 Container_Ext(anthropic, "Anthropic API", "LLM SaaS", "Vision + chat completions")
-Container_Ext(smtp, "SMTP server", "External", "MailHog (dev) / TBD (prod)")
+Container_Ext(smtp, "SMTP server", "External", "Mailpit (dev) / Resend relay (prod)")
 
 ' ====== The API process - decomposed by Clean Architecture project ======
 Container_Boundary(apiproc, "API process (.NET 10, single OS process)") {

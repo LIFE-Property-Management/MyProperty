@@ -23,6 +23,8 @@
     <!-- Testcontainers: live Postgres + Keycloak per integration-test class -->
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.6.0" />
     <PackageReference Include="Testcontainers.Keycloak" Version="4.6.0" />
+    <!-- Generic container builder for Mailpit (no dedicated module exists) -->
+    <PackageReference Include="Testcontainers" Version="4.6.0" />
   </ItemGroup>
 
   <ItemGroup>

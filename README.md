@@ -67,7 +67,7 @@ docker-compose.yml  full local dev stack
    # optional local-HTTPS reverse proxy: cp .env.proxy.example .env  (see docs/operations/nginx-ssl.md)
    ```
 2. Bring up the full stack (Postgres, Keycloak + realm import, backend, frontend, Redis,
-   RabbitMQ, mailhog, and the monitoring services):
+   RabbitMQ, mailpit, and the monitoring services):
    ```bash
    docker compose up -d
    ```
@@ -90,7 +90,7 @@ Once the stack is up, the services are reachable at:
 | API + Hangfire dashboard | http://localhost:5042/swagger · http://localhost:5042/hangfire |
 | Keycloak admin console | http://localhost:8080 |
 | RabbitMQ management UI | http://localhost:15672 (guest / guest) |
-| MailHog (dev SMTP catcher) | http://localhost:8025 |
+| Mailpit (dev SMTP catcher) | http://localhost:8025 |
 | Prometheus | http://localhost:9090 |
 | Alertmanager | http://localhost:9093 |
 | Grafana | http://localhost:3001 |

@@ -74,4 +74,36 @@ data:
             annotations:
               summary: "Scrape target down"
               description: "Target {{ "{{" }} $labels.instance {{ "}}" }} has been unreachable for 5 minutes."
+{{- if .Values.mailpit.metrics.enabled }}
+
+  mailpit-alerts.yaml: |
+    groups:
+      - name: myproperty-mailpit
+        interval: 15s
+        rules:
+          - alert: MailpitDown
+            expr: up{job="mailpit"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              service: email
+            annotations:
+              summary: "Mailpit (cluster SMTP endpoint) is down"
+              description: "Prometheus cannot scrape Mailpit for 2m. The backend and Keycloak send all mail through it, so invites, password resets, and payment confirmations are very likely failing."
+              runbook_url: "https://github.com/life-property-management/MyProperty/blob/main/docs/operations/email-smtp.md"
+
+          # NOTE: Mailpit exposes no relay success/failure metric — relay errors
+          # (Mailpit → Resend) are visible only in its logs (Loki). This alert
+          # covers the metric we DO have: messages Mailpit rejects at its own
+          # SMTP door, which means a sender is producing mail it won't accept.
+          - alert: MailpitRejectingMail
+            expr: increase(mailpit_smtp_rejected_total[10m]) > 0
+            for: 0m
+            labels:
+              severity: warning
+              service: email
+            annotations:
+              summary: "Mailpit is rejecting inbound SMTP"
+              description: "Mailpit rejected {{ "{{" }} $value | printf \"%.0f\" {{ "}}" }} message(s) in the last 10m — a sender (backend/Keycloak) is producing mail Mailpit won't accept (malformed/oversized). Check Mailpit logs in Loki."
+{{- end }}
 {{- end }}
