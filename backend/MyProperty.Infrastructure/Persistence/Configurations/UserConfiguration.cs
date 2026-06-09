@@ -21,5 +21,9 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasIndex(u => u.KeycloakSubId).IsUnique();
         builder.HasIndex(u => u.Email).IsUnique();
+
+        // Supports the stakeholder dashboard's user-growth trend and
+        // new-users-this-month count (bucketing by CreatedAt month).
+        builder.HasIndex(u => u.CreatedAt);
     }
 }

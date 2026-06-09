@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import apiClient from "@/lib/api/client";
 import { ENDPOINTS } from "@/lib/api/endpoints";
+import { ANALYTICS_EVENTS, capture } from "@/lib/analytics";
 import type { SignupFormValues } from "@/lib/schemas/auth/signup";
 
 export function useSignupMutation() {
@@ -17,6 +18,8 @@ export function useSignupMutation() {
             });
         },
         onSuccess: () => {
+            // Landlord activation funnel — step 2.
+            capture(ANALYTICS_EVENTS.signupCompleted, { method: "email" });
             router.push("/login?registered=1");
         },
     });

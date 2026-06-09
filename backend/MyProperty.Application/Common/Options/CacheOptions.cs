@@ -28,4 +28,13 @@ public sealed class CacheOptions
     /// </summary>
     [Range(1, 3600)]
     public int LandlordDashboardTtlSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// TTL applied to stakeholder-dashboard cache entries. 5 min (300 s) —
+    /// longer than the 60 s landlord view because system-wide business KPIs
+    /// (totals, monthly trends) move slowly and tolerate more staleness, so a
+    /// longer TTL absorbs far more reads per DB recomputation.
+    /// </summary>
+    [Range(1, 3600)]
+    public int StakeholderDashboardTtlSeconds { get; set; } = 300;
 }

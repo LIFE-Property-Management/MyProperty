@@ -15,6 +15,7 @@ export const ENDPOINTS = {
   propertyById: (id: string) => `/properties/${encodeURIComponent(id)}`,
   landlordTenants: "/landlord/tenants",
   landlordTenantById: (id: string) => `/landlord/tenants/${encodeURIComponent(id)}`,
+  adminDashboard: "/admin/dashboard",
 } as const;
 
 export type EndpointKey = keyof typeof ENDPOINTS;

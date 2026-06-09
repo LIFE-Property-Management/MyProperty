@@ -33,7 +33,7 @@
   "verifyEmail": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
-  "resetPasswordAllowed": false,
+  "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": false,
   "permanentLockout": false,
@@ -960,6 +960,25 @@
       ]
     },
     {
+      "id": "f3a1c7e2-9b4d-4c8a-8e1f-2d6b5a0c9e44",
+      "username": "admin@dev.local",
+      "email": "admin@dev.local",
+      "firstName": "Admin",
+      "lastName": "Dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "Admin"
+      ]
+    },
+    {
       "username": "service-account-myproperty-api",
       "serviceAccountClientId": "myproperty-api",
       "enabled": true,
@@ -1679,7 +1698,15 @@
     "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
     "strictTransportSecurity": "max-age=31536000; includeSubDomains"
   },
-  "smtpServer": {},
+  "smtpServer": {
+    "host": "mailhog",
+    "port": "1025",
+    "from": "no-reply@myproperty.local",
+    "fromDisplayName": "MyProperty (dev)",
+    "ssl": "false",
+    "starttls": "false",
+    "auth": "false"
+  },
   "eventsEnabled": false,
   "eventsListeners": [
     "jboss-logging"

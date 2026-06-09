@@ -34,7 +34,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -114,6 +114,10 @@ jobs:
           NEXT_PUBLIC_KEYCLOAK_REALM: MyProperty
           NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: myproperty-frontend
           NEXT_PUBLIC_DEV_AUTH_BYPASS: "false"
+          # PostHog (M6.1) deliberately OFF for the security build: an empty key
+          # makes the analytics facade no-op, so ZAP/Lighthouse scan traffic never
+          # pollutes the product-analytics dataset.
+          NEXT_PUBLIC_POSTHOG_KEY: ""
 
       # Chrome is preinstalled on ubuntu-latest. lhci autorun starts `next start`,
       # runs Lighthouse against lighthouserc.json's URLs, asserts, and uploads.
