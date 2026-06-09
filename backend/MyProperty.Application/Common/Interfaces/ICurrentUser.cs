@@ -1,5 +1,3 @@
-using System.Security.Claims;
-
 namespace MyProperty.Application.Common.Interfaces;
 
 /// <summary>
@@ -22,6 +20,18 @@ public interface ICurrentUser
     /// </summary>
     string? UserName { get; }
 
+    /// <summary>Email address from the JWT <c>email</c> claim. Null when unauthenticated.</summary>
+    string? Email { get; }
+
+    /// <summary>Given name from the JWT <c>given_name</c> claim. Null when unauthenticated.</summary>
+    string? FirstName { get; }
+
+    /// <summary>Family name from the JWT <c>family_name</c> claim. Null when unauthenticated.</summary>
+    string? LastName { get; }
+
+    /// <summary>Phone number from the JWT <c>phone_number</c> claim. Null when absent.</summary>
+    string? Phone { get; }
+
     /// <summary>
     /// True when a user is authenticated. False for anonymous requests and for
     /// background-job contexts where no user identity exists.
@@ -36,10 +46,4 @@ public interface ICurrentUser
 
     /// <summary>True if the current user has the given role.</summary>
     bool IsInRole(string role);
-
-    // TODO post-M3: remove this leak. Handlers need ClaimsPrincipal only because
-    // IUserRepository.GetOrSyncFromClaimsAsync takes one. Once Keycloak admin
-    // client lands and role assignment moves server-side, sync can run from
-    // the user ID alone and this property goes away.
-    ClaimsPrincipal? Principal { get; }
 }

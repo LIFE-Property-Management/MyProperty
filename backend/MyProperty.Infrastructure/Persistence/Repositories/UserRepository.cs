@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Domain.Entities;
@@ -16,23 +15,14 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
     public Task<User?> GetByEmailAsync(string email, CancellationToken ct) =>
         db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
 
-    public async Task<User> GetOrSyncFromClaimsAsync(ClaimsPrincipal principal, CancellationToken ct)
+    public async Task<User> GetOrSyncAsync(
+        string sub,
+        string? email,
+        string? firstName,
+        string? lastName,
+        string? phone,
+        CancellationToken ct)
     {
-        if (principal.Identity?.IsAuthenticated != true)
-        {
-            throw new InvalidOperationException(
-                "GetOrSyncFromClaimsAsync called with an unauthenticated principal.");
-        }
-
-        var sub = principal.FindFirst("sub")?.Value
-            ?? throw new InvalidOperationException(
-                "Authenticated principal is missing the 'sub' claim.");
-
-        var email = principal.FindFirst("email")?.Value ?? string.Empty;
-        var firstName = principal.FindFirst("given_name")?.Value ?? string.Empty;
-        var lastName = principal.FindFirst("family_name")?.Value ?? string.Empty;
-        var phone = principal.FindFirst("phone_number")?.Value;
-
         var existing = await db.Users.FirstOrDefaultAsync(u => u.KeycloakSubId == sub, ct);
 
         if (existing is null)
@@ -40,9 +30,9 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
             var created = new User
             {
                 KeycloakSubId = sub,
-                Email = email,
-                FirstName = firstName,
-                LastName = lastName,
+                Email = email ?? string.Empty,
+                FirstName = firstName ?? string.Empty,
+                LastName = lastName ?? string.Empty,
                 Phone = phone,
             };
             await db.Users.AddAsync(created, ct);
@@ -66,7 +56,6 @@ internal sealed class UserRepository(AppDbContext db) : IUserRepository
             existing.LastName = lastName;
             changed = true;
         }
-
         if (phone is not null && existing.Phone != phone)
         {
             existing.Phone = phone;
