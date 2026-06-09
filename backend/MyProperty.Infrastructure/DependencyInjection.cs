@@ -225,6 +225,7 @@ public static class DependencyInjection
         services.AddScoped<ReceiptOcrJob>();
         services.AddScoped<MarkExpiredInvitesJob>();
         services.AddScoped<OrphanCleanupJob>();
+        services.AddScoped<LeaseExpiringSoonJob>();
         services.AddSingleton<EmailDeadLetterFilter>();
 
         services.AddHangfire((sp, config) =>

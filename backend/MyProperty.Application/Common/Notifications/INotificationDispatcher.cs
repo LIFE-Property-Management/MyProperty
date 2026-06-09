@@ -34,4 +34,10 @@ public interface INotificationDispatcher
 
     Task NotifyLandlordPaymentSubmittedAsync(
         Guid landlordId, PaymentSubmittedNotification payload, CancellationToken ct);
+
+    Task NotifyTenantLeaseExpiringAsync(
+        Guid tenantId, LeaseExpiringNotification payload, CancellationToken ct);
+
+    Task NotifyLandlordLeaseExpiringAsync(
+        Guid landlordId, LeaseExpiringNotification payload, CancellationToken ct);
 }

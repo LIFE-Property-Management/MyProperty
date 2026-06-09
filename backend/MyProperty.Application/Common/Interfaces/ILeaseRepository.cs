@@ -54,6 +54,15 @@ public interface ILeaseRepository
         Guid landlordId, int page, int pageSize, CancellationToken ct);
 
     /// <summary>
+    /// Returns active leases system-wide whose EndDate is between <paramref name="today"/>
+    /// and <paramref name="daysThreshold"/> days after it (inclusive), ordered by EndDate,
+    /// with Tenant, Landlord, and Property included (the job builds emails from them).
+    /// <paramref name="today"/> is supplied by the caller so the job's clock is the single
+    /// source of "today". Used exclusively by <c>LeaseExpiringSoonJob</c>.
+    /// </summary>
+    Task<IReadOnlyList<Lease>> ListAllExpiringSoonAsync(DateOnly today, int daysThreshold, CancellationToken ct);
+
+    /// <summary>
     /// True if the property has at least one Active lease. Used to block property deletion.
     /// </summary>
     Task<bool> HasActiveLeaseForPropertyAsync(Guid propertyId, CancellationToken ct);

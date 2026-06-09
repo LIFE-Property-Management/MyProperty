@@ -538,6 +538,8 @@ try
         "mark-expired-invites", j => j.ExecuteAsync(CancellationToken.None), "0 * * * *");   // hourly
     recurringJobs.AddOrUpdate<OrphanCleanupJob>(
         "orphan-cleanup", j => j.ExecuteAsync(CancellationToken.None), "0 3 * * *");          // 03:00 UTC daily
+    recurringJobs.AddOrUpdate<LeaseExpiringSoonJob>(
+        "lease-expiring-soon", j => j.ExecuteAsync(CancellationToken.None), "0 8 * * *");     // 08:00 UTC daily
 
     app.MapControllers();
     app.MapHub<NotificationsHub>(NotificationsHub.Path);
