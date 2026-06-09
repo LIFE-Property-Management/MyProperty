@@ -17,7 +17,7 @@
       "type": "smtp",
       "isDefault": true,
       "applyExisting": true,
-      "comment": "Posts to the MailHog SMTP catcher already in the compose stack. Visible at http://localhost:8025 — demoable without an external SMTP provider. In K8s the smtp.host points at an outbound mail relay (SendGrid/Mailgun/SES).",
+      "comment": "Posts to the Mailpit SMTP catcher (mailpit:1025). Captured in the Mailpit UI and, in the cluster, relayed out to a real inbox via Resend. Locally visible at http://localhost:8025.",
       "config": {
         "smtpSecure": false,
         "smtpIgnoreTLSError": true
@@ -175,6 +175,17 @@
       "retryInterval": 30,
       "accepted_statuscodes": ["200-299"],
       "comment": "Unleash built-in /health endpoint (returns {\"health\":\"GOOD\"}). Non-critical: the backend defaults flags ON when Unleash is unreachable, so an outage is otherwise silent — this monitor surfaces it (e.g. the missing-`unleash`-database crashloop) before a flag flip mysteriously has no effect. Kuma reaches it via the allow-uptime-kuma-probe catch-all NetworkPolicy."
+    },
+    {
+      "name": "Mailpit",
+      "type": "http",
+      "url": "http://mailpit:8025/livez",
+      "method": "GET",
+      "interval": 60,
+      "maxretries": 2,
+      "retryInterval": 30,
+      "accepted_statuscodes": ["200-299"],
+      "comment": "Mailpit liveness endpoint. DOWN means invite / password-reset / payment emails are dropping (the SMTP endpoint for backend + Keycloak). Kuma reaches it via the allow-uptime-kuma-probe catch-all NetworkPolicy."
     }
   ],
 
@@ -204,7 +215,8 @@
       "Alertmanager",
       "AIOps webhook",
       "Grafana",
-      "Unleash (feature flags)"
+      "Unleash (feature flags)",
+      "Mailpit"
     ]
   }
 }
