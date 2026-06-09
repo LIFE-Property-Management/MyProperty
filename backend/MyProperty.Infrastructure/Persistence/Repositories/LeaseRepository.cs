@@ -101,7 +101,11 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
 
         return await db.Leases
             .Include(l => l.Tenant)
-            .Where(l => l.Status == LeaseStatus.Active && l.EndDate <= threshold)
+            .Include(l => l.Landlord)
+            .Include(l => l.Property)
+            .Where(l => l.Status == LeaseStatus.Active
+                && l.EndDate >= today
+                && l.EndDate <= threshold)
             .OrderBy(l => l.EndDate)
             .ToListAsync(ct);
     }
