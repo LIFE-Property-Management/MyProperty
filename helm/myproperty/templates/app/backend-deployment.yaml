@@ -133,10 +133,11 @@ spec:
               value: "true"
             - name: Cors__AllowedOrigins__0
               value: "https://{{ .Values.hosts.app }}"
-            # MailHog not deployed in M4.4 — invite email flow degrades gracefully.
-            # Tracked as post-M4 follow-up (real SMTP or hosted MailDev).
+            # In-cluster SMTP via Mailpit — captures every message and relays to
+            # Resend (see docs/operations/email-smtp.md). Plain SMTP on the
+            # internal hop; NetworkPolicy restricts who can reach mailpit:1025.
             - name: Smtp__Host
-              value: "mailhog"
+              value: "mailpit"
             - name: Smtp__Port
               value: "1025"
             - name: Smtp__UseStartTls

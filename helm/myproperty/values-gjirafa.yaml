@@ -24,6 +24,17 @@ rabbitmq:
     storageClassName: longhorn
 keycloak:
   enabled: true
+mailpit:
+  enabled: true
+  storage:
+    storageClassName: longhorn
+  # Real outbound delivery via Resend (Batch 4). Creds come from the
+  # myproperty-mailpit-relay Secret (created by secrets.sh).
+  relay:
+    enabled: true
+    host: smtp.resend.com
+  metrics:
+    enabled: true
 backend:
   enabled: true
   image:
@@ -60,6 +71,14 @@ uptimeKuma:
     storageClassName: longhorn
   seedImage:
     tag: "54f096d"
+  # Kuma's own alert emails flow through the in-cluster Mailpit, which relays
+  # them out via Resend. From stays on the verified domain (DKIM); To is a real
+  # monitored inbox so alerts actually arrive (and don't bounce).
+  smtp:
+    host: mailpit
+    port: 1025
+    from: uptime@myproperty.works
+    to: erdisyla6@gmail.com
 
 aiopsWebhook:
   image:

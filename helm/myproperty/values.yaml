@@ -104,6 +104,41 @@ rabbitmq:
     limits:
       memory: 512Mi
 
+mailpit:
+  # Cluster SMTP endpoint: captures every message in a viewable UI and (when
+  # relay.enabled) forwards each to a real provider. Default off; the gjirafa
+  # overlay enables it. See docs/operations/email-smtp.md.
+  enabled: false
+  image:
+    repository: axllent/mailpit
+    tag: v1.30.1
+  storage:
+    size: 1Gi
+    storageClassName: longhorn
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  # Cap on retained messages; Mailpit prunes the oldest beyond this.
+  maxMessages: 5000
+  # Prometheus metrics exporter on a dedicated port. Port declared now so the
+  # Service shape is stable; the exporter is enabled in Batch 5 (monitoring).
+  metrics:
+    enabled: false
+    port: 9090
+  # Outbound relay (Mailpit → Resend on 587/STARTTLS). Enabled in Batch 4 via
+  # the gjirafa overlay; creds come from the myproperty-mailpit-relay Secret.
+  relay:
+    enabled: false
+    host: ""
+    port: 587
+    starttls: true
+    auth: plain        # none|plain|login|cram-md5 — Resend needs plain/login
+    relayAll: true
+
 keycloak:
   enabled: true
   image:

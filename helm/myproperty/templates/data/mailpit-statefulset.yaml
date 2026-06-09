@@ -1,0 +1,133 @@
+{{- if .Values.mailpit.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-mailpit
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mailpit
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-mailpit
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "myproperty.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mailpit
+spec:
+  serviceName: mailpit
+  # Single replica — Mailpit persists captured mail in a SQLite DB on the PVC
+  # and is not designed for multi-writer HA (same constraint as uptime-kuma).
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "myproperty.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mailpit
+  template:
+    metadata:
+      labels:
+        {{- include "myproperty.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mailpit
+    spec:
+      serviceAccountName: {{ .Release.Name }}-mailpit
+      automountServiceAccountToken: false
+      # Mailpit is a static Go binary that runs as any UID. Verified it starts
+      # non-root (uid 1000) and writes its SQLite DB to /data via fsGroup.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mailpit
+          image: {{ .Values.mailpit.image.repository }}:{{ .Values.mailpit.image.tag }}
+          ports:
+            - name: smtp
+              containerPort: 1025
+              protocol: TCP
+            - name: http
+              containerPort: 8025
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.mailpit.metrics.port }}
+              protocol: TCP
+          env:
+            - name: MP_DATABASE
+              value: /data/mailpit.db
+            - name: MP_MAX_MESSAGES
+              value: {{ .Values.mailpit.maxMessages | quote }}
+            {{- if .Values.mailpit.metrics.enabled }}
+            # Dedicated Prometheus exporter port (Batch 5). /metrics, no auth.
+            - name: MP_ENABLE_PROMETHEUS
+              value: "0.0.0.0:{{ .Values.mailpit.metrics.port }}"
+            {{- end }}
+            {{- if .Values.mailpit.relay.enabled }}
+            # Outbound relay to a real provider (Resend) — wired in Batch 4.
+            - name: MP_SMTP_RELAY_HOST
+              value: {{ .Values.mailpit.relay.host | quote }}
+            - name: MP_SMTP_RELAY_PORT
+              value: {{ .Values.mailpit.relay.port | quote }}
+            - name: MP_SMTP_RELAY_STARTTLS
+              value: {{ .Values.mailpit.relay.starttls | quote }}
+            # Auth mechanism — without this it defaults to "none" and Resend
+            # rejects the unauthenticated message. Resend accepts plain/login.
+            - name: MP_SMTP_RELAY_AUTH
+              value: {{ .Values.mailpit.relay.auth | quote }}
+            - name: MP_SMTP_RELAY_ALL
+              value: {{ .Values.mailpit.relay.relayAll | quote }}
+            - name: MP_SMTP_RELAY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-mailpit-relay
+                  key: relay-username
+            - name: MP_SMTP_RELAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myproperty-mailpit-relay
+                  key: relay-password
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ .Values.mailpit.resources.requests.cpu }}
+              memory: {{ .Values.mailpit.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.mailpit.resources.limits.cpu }}
+              memory: {{ .Values.mailpit.resources.limits.memory }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: mailpit-data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: mailpit-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.mailpit.storage.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.mailpit.storage.size }}
+{{- end }}
