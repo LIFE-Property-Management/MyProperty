@@ -2,7 +2,8 @@
 
 Single tracked source for deployment/infra work we have deliberately **deferred**. The
 current live state is documented in [k8s-deployment.md](./k8s-deployment.md),
-[ci-cd.md](./ci-cd.md), and [auth-flow.md](./auth-flow.md).
+[ci-cd.md](./ci-cd.md), and [auth-flow.md](./auth-flow.md). The admin/stakeholder dashboard's
+account provisioning + secret setup live in [admin-dashboard.md](./admin-dashboard.md).
 
 Context: MyProperty runs on a **shared Hetzner cluster** (namespace `project-02`) via
 `helm/myproperty` + the manual `infrastructure/gjirafa/deploy.sh` loop. An earlier

@@ -29,6 +29,7 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
 - Hover: brand-green hover (hover:bg-primary etc.) only on primary/confirming actions. Chrome (sidebars, menus, secondary buttons) uses hover:bg-neutral-light.
 - Focus rings: use focus-visible: not focus:.
 - No motion library. The only blessed motion class is transition-colors duration-150.
+- **Charting: recharts** is the standard charting library — do not add other charting libraries (added for the admin/stakeholder dashboard). Feed series the design-system color tokens as CSS vars (e.g. `stroke="var(--color-primary)"`) so charts auto-flip in dark mode. Chart components must be client components (`"use client"`) — recharts needs the DOM. Keep data fetching in TanStack Query hooks, never in the chart.
 - <body> sets font-family: var(--font-sans) and h1...h6 use var(--font-heading) automatically (in globals.css). Do not add redundant font classes to headings or body. DO add font-heading to spans that need the heading font (e.g. brand text in headers
 
 ## Color token semantics
@@ -52,7 +53,7 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
 ## Coding Rules
 - TypeScript strict — no `any` without justification.
 - All data fetching via **TanStack Query** — no raw `fetch` or `useEffect`-based fetching.
-- Keep Landlord and Tenant portal code **strictly separated** — do not mix concerns.
+- Keep Landlord, Tenant, and Admin portal code **strictly separated** — do not mix concerns. The three portals are separate route groups: landlord under `app/dashboard/`, tenant under `app/(tenant)/`, admin under `app/(admin)/` (route `/admin/dashboard`). Each has its own `KeycloakInit` gate; the admin gate additionally bounces any non-admin portal to `/login`.
 - Tenant names are **always a `<Link>`** to the Tenant Detail page, everywhere they appear (tables, cards, logs).
 
 ## Auth
@@ -77,6 +78,18 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
 - On every received event, the client calls `queryClient.invalidateQueries([...])` for the relevant query key. TanStack Query refetches authoritative data from the API.
 - **TanStack Query remains the source of truth.** Do not store SignalR payloads as canonical state. Do not bypass the API to read pushed payloads as data.
 - Connection management: one hub connection per authenticated session, lifecycle owned by a top-level provider (`SignalRProvider`). Auto-reconnect enabled with `withAutomaticReconnect()`.
+
+## Analytics (M6.1 — PostHog)
+- All product analytics go through the typed facade in `lib/analytics` — **never import `posthog-js` directly.** Use `capture(ANALYTICS_EVENTS.x, …)`; the payload shape is enforced per event by `AnalyticsEventProperties`.
+- Add new events in `lib/analytics/events.ts` (name + payload contract) — the facade won't compile if an event lacks a contract.
+- It's **env-driven and no-op without a key** (`NEXT_PUBLIC_POSTHOG_KEY`), like `WebVitalsReporter`. Don't add the key to `requirePublicEnv` (analytics must not be a required build var).
+- Identify/reset is handled centrally in `AnalyticsProvider` (root layout) by subscribing to `useAuthStore` — do not add `identify` calls in the portals.
+- See `docs/milestones/m6-product-analytics.md` for the event taxonomy + funnel definitions.
+- `autocapture` is **off** by design — we only send the explicit, typed events declared in `events.ts` (matches the `identified_only` privacy posture). Don't flip it back on without a deliberate decision.
+- **Status: plumbed but OFF everywhere — no key is provisioned yet.** `NEXT_PUBLIC_POSTHOG_KEY` is build-time-inlined (not a Helm/runtime env), so analytics is enabled per build:
+  - **Local:** put a `phc_…` project key in `frontend/.env.local`.
+  - **Cluster:** add the `NEXT_PUBLIC_POSTHOG_KEY` GitHub **repo secret** (Settings → Secrets), then rebuild the frontend image — `frontend-ci.yml` bakes it in. No manifest change needed.
+  - The key is a PostHog **project** API key (`phc_…`, publishable/write-only — safe to inline); NOT a personal API key.
 
 ## Key Omissions (intentional)
 - **v0.dev: opted out.** Do not suggest it.

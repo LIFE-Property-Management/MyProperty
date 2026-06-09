@@ -14,6 +14,10 @@ export const queryKeys = {
         [...queryKeys.tenant.payment.all(), "history", { page, pageSize }] as const,
     },
   },
+  admin: {
+    all: ["admin"] as const,
+    dashboard: () => [...queryKeys.admin.all, "dashboard"] as const,
+  },
   landlord: {
     all: ["landlord"] as const,
     dashboard: () => [...queryKeys.landlord.all, "dashboard"] as const,

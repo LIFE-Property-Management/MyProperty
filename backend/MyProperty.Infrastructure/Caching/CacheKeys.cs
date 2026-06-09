@@ -8,4 +8,6 @@ namespace MyProperty.Infrastructure.Caching;
 public static class CacheKeys
 {
     public static string LandlordDashboard(Guid landlordId) => $"landlord:{landlordId}:dashboard";
+
+    public static string StakeholderDashboard() => "admin:stakeholder:dashboard";
 }

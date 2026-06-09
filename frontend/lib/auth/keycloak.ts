@@ -104,6 +104,27 @@ export async function login(redirectUri?: string): Promise<void> {
   });
 }
 
+// Keycloak's hosted "Forgot password?" (reset-credentials) entry URL. We build
+// it from the same three public env vars getInstance() uses rather than going
+// through keycloak-js: the reset flow is unauthenticated, so there is no token
+// to init and nothing to track — it's a plain hand-off, mirroring how login()
+// redirects to Keycloak. Keycloak collects the email, mails a reset link, and
+// hosts the new-password form (the emailed link lands on Keycloak's own page —
+// there is no in-app /reset-password route). Requires the realm's
+// resetPasswordAllowed=true and a configured smtpServer; see
+// infrastructure/keycloak/realm-export.template.json.
+export function resetPasswordUrl(): string {
+  const base = requirePublicEnv("NEXT_PUBLIC_KEYCLOAK_URL").replace(/\/+$/, "");
+  const realm = requirePublicEnv("NEXT_PUBLIC_KEYCLOAK_REALM");
+  const clientId = requirePublicEnv("NEXT_PUBLIC_KEYCLOAK_CLIENT_ID");
+  const query = new URLSearchParams({ client_id: clientId });
+  return `${base}/realms/${encodeURIComponent(realm)}/login-actions/reset-credentials?${query}`;
+}
+
+export function resetPassword(): void {
+  window.location.assign(resetPasswordUrl());
+}
+
 export function initKeycloak(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {

@@ -168,11 +168,17 @@ jobs:
           # NEXT_PUBLIC_* are inlined at build time (Next.js bakes them into the JS bundle).
           # Single-environment simplification — no per-env workflow_dispatch parameterisation.
           # Multi-env would parameterise these via workflow_dispatch inputs; deferred per M4.4 Decision #7.
+          # NEXT_PUBLIC_POSTHOG_KEY (M6.1) is an OPTIONAL repo secret — when it is
+          # unset the expression resolves to "" and the analytics facade no-ops,
+          # so the pipeline stays green with analytics simply off. Add the secret
+          # to turn product analytics on for deployed builds (host is non-secret).
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=https://api.myproperty.works
             NEXT_PUBLIC_KEYCLOAK_URL=https://auth.myproperty.works
             NEXT_PUBLIC_KEYCLOAK_REALM=MyProperty
             NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=myproperty-frontend
+            NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+            NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
 
       # M4.8 — Trivy CI quality gate. See .trivyignore at repo root for the
       # triage workflow. Two-pass shape mirrors backend-ci.yml.

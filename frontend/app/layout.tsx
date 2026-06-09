@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Playfair_Display } from "next/font/google";
 import { Providers } from "@/components/Providers";
 import { WebVitalsReporter } from "@/components/WebVitalsReporter";
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -41,6 +42,7 @@ export default function RootLayout({
           Skip to main content
         </a>
         <WebVitalsReporter />
+        <AnalyticsProvider />
         <Providers>{children}</Providers>
       </body>
     </html>

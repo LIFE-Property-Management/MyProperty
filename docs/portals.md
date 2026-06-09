@@ -56,6 +56,29 @@
 
 ---
 
+## Admin Portal
+
+### Stakeholder Dashboard (`/admin/dashboard`)
+Admin-only, single page of platform-wide business KPIs for a non-technical (product-lead)
+audience. Shares the app host; gated by the Keycloak `Admin` role + the backend `RequireAdmin`
+policy + the `(admin)` route gate. The admin user holds **only** the `Admin` portal role.
+
+**Sections (KPI cards + recharts trends):**
+- **Growth & users** — total users, landlords, tenants, new users this month + 12-month trend.
+- **Adoption & occupancy** — properties, active leases, occupancy rate, leases expiring ≤30 days,
+  new leases this month + 12-month trend.
+- **Invite funnel** — sent / accepted / rejected / expired / pending, acceptance rate + 12-month
+  sent-vs-accepted trend.
+- **Financial & operations** — totals **per currency** (confirmed / pending / outstanding /
+  overdue, never summed across currencies), confirmation rate, avg time-to-confirm + 12-month
+  confirmed-revenue trend per currency.
+- **System health** — failed-email count (small line, not a headline KPI).
+
+Backed by `GET /api/v1/admin/dashboard` (cached, Redis, 5-min TTL). Operational details:
+[operations/admin-dashboard.md](operations/admin-dashboard.md).
+
+---
+
 ## Data & Access Rules
 
 - Tenants with any prior active lease are **never auto-deleted**. Post-lease accounts persist with **read-only access** — show as read-only, not inactive or deleted. "Read-only" means `tenantAccountStatus === 'ReadOnly'`, which is fetched from `GET /me` on each session — not derived from the JWT. The JWT carries only the portal role.
