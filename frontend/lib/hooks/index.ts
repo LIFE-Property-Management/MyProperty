@@ -6,6 +6,8 @@ export { useCurrentPayment } from "./useCurrentPayment";
 export { usePaymentHistory } from "./usePaymentHistory";
 export { useSubmitReceipt } from "./useSubmitReceipt";
 export { useSubmitManualRequest } from "./useSubmitManualRequest";
+export { useConfirmPayment } from "./useConfirmPayment";
+export { useRejectPayment, type RejectPaymentInput } from "./useRejectPayment";
 export { queryKeys } from "./queryKeys";
 export { useLandlordDashboard } from "./useLandlordDashboard";
 export { useLandlordUpcomingPayments } from "./useLandlordUpcomingPayments";

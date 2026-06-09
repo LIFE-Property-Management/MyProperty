@@ -11,6 +11,11 @@ export const ENDPOINTS = {
   acceptInvite: (token: string) => `/invites/${encodeURIComponent(token)}/accept`,
   landlordDashboard: "/landlord/dashboard",
   landlordUpcomingPayments: "/landlord/payments/upcoming",
+  // Landlord payment-confirmation actions. Mirror the backend routes
+  // POST /payments/{id}/confirm and POST /payments/{id}/reject (prefix-less
+  // here; client.ts prepends /api/v1 for real deploys).
+  confirmPayment: (id: string) => `/payments/${encodeURIComponent(id)}/confirm`,
+  rejectPayment: (id: string) => `/payments/${encodeURIComponent(id)}/reject`,
   properties: "/properties",
   propertyById: (id: string) => `/properties/${encodeURIComponent(id)}`,
   landlordTenants: "/landlord/tenants",
