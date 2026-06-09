@@ -123,4 +123,30 @@ export const handlers = [
         };
         return HttpResponse.json(currentPaymentState);
     }),
+
+    // Landlord confirms a Pending payment (Pending → Confirmed). The upcoming-
+    // payments list is rebuilt fresh per request, so there's no landlord-side
+    // state to mutate here — return a representative confirmed payload. The
+    // hooks ignore the body and refetch via cache invalidation.
+    http.post("/payments/:id/confirm", async ({ params }) => {
+        await delay(400);
+        return HttpResponse.json({
+            id: params.id as string,
+            status: "Confirmed",
+            confirmedAt: new Date().toISOString(),
+        });
+    }),
+
+    // Landlord rejects a Pending payment with a required reason
+    // (Pending → Rejected).
+    http.post("/payments/:id/reject", async ({ request, params }) => {
+        await delay(400);
+        const body = (await request.json()) as { reason?: string };
+        return HttpResponse.json({
+            id: params.id as string,
+            status: "Rejected",
+            rejectedAt: new Date().toISOString(),
+            rejectionReason: body.reason ?? null,
+        });
+    }),
 ];
