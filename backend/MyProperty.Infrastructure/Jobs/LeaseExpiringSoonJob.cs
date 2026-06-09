@@ -18,6 +18,8 @@ namespace MyProperty.Infrastructure.Jobs;
 /// <c>[AutomaticRetry(Attempts = 0)]</c> — each lease is handled inside its own
 /// try/catch (failures are logged and skipped), so a single bad row never aborts the
 /// batch, and a whole-job retry would re-notify everyone already handled this run.
+/// The tenant and landlord emails are enqueued independently (see <see cref="TryEnqueue"/>)
+/// so a failure on one never suppresses the other.
 /// </remarks>
 [AutomaticRetry(Attempts = 0)]
 public sealed class LeaseExpiringSoonJob(
@@ -36,7 +38,7 @@ public sealed class LeaseExpiringSoonJob(
     public async Task ExecuteAsync(CancellationToken ct)
     {
         var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
-        var expiring = await leases.ListAllExpiringSoonAsync(DaysThreshold, ct);
+        var expiring = await leases.ListAllExpiringSoonAsync(today, DaysThreshold, ct);
 
         int notified = 0, skipped = 0, failed = 0;
 
@@ -63,21 +65,29 @@ public sealed class LeaseExpiringSoonJob(
 
             try
             {
-                jobs.EnqueueEmail(BuildTenantEmail(tenant, property, lease.EndDate));
-                jobs.EnqueueEmail(BuildLandlordEmail(landlord, tenant, property, lease.EndDate));
+                // Each party's email is enqueued independently: a failure to enqueue one
+                // must never suppress the other (the two are separate durable deliveries).
+                var tenantQueued = TryEnqueue(BuildTenantEmail(tenant, property, lease.EndDate), lease.Id);
+                var landlordQueued = TryEnqueue(BuildLandlordEmail(landlord, tenant, property, lease.EndDate), lease.Id);
 
+                // Best-effort SignalR signal to each party. SignalRNotificationDispatcher
+                // catches and logs transport errors, so these never throw and a flaky
+                // backplane cannot affect the durable email path above.
                 var payload = new LeaseExpiringNotification(
                     lease.Id, lease.PropertyId, lease.TenantId, lease.EndDate);
                 await dispatcher.NotifyTenantLeaseExpiringAsync(lease.TenantId, payload, ct);
                 await dispatcher.NotifyLandlordLeaseExpiringAsync(lease.LandlordId, payload, ct);
 
-                notified++;
+                if (tenantQueued && landlordQueued)
+                    notified++;
+                else
+                    failed++;
             }
             catch (Exception ex)
             {
                 failed++;
                 logger.LogError(ex,
-                    "LeaseExpiringSoon: failed to notify for lease {LeaseId}; continuing with the rest.",
+                    "LeaseExpiringSoon: unexpected failure handling lease {LeaseId}; continuing with the rest.",
                     lease.Id);
             }
         }
@@ -85,6 +95,22 @@ public sealed class LeaseExpiringSoonJob(
         logger.LogInformation(
             "LeaseExpiringSoon: {Notified} lease(s) notified, {Skipped} skipped, {Failed} failed (scan window {Days} days).",
             notified, skipped, failed, DaysThreshold);
+    }
+
+    private bool TryEnqueue(EmailMessage email, Guid leaseId)
+    {
+        try
+        {
+            jobs.EnqueueEmail(email);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "LeaseExpiringSoon: failed to enqueue an expiry email for lease {LeaseId}; continuing.",
+                leaseId);
+            return false;
+        }
     }
 
     private static EmailMessage BuildTenantEmail(User tenant, Property property, DateOnly endDate)

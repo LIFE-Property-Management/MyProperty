@@ -83,7 +83,7 @@ public sealed class LeaseExpiringSoonRepositoryTests(ApiFixture fixture)
             await db.SaveChangesAsync();
 
             var repo = new LeaseRepository(db);
-            var result = await repo.ListAllExpiringSoonAsync(30, CancellationToken.None);
+            var result = await repo.ListAllExpiringSoonAsync(today, 30, CancellationToken.None);
 
             var ids = result.Select(l => l.Id).ToHashSet();
             Assert.Contains(soon.Id, ids);              // Active + within [today, +30] → included

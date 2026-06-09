@@ -224,15 +224,17 @@ Each technology has a distinct role; do not blur them.
 **To tenant connections (`tenant:{tenantId}`):**
 - `PaymentConfirmed` — `{ paymentId, confirmedAt }`
 - `PaymentRejected` — `{ paymentId, reason, rejectedAt }`
-- `LeaseExpiringSoon` — `{ leaseId, expiresAt }` (fired by the recurring Hangfire scan)
+- `LeaseExpiringSoon` — `{ leaseId, propertyId, tenantId, expiresAt }` (fired by the recurring Hangfire scan; see note below)
 
 **To landlord connections (`landlord:{landlordId}`):**
 - `PaymentSubmitted` — `{ paymentId, tenantId, leaseId, amount, submittedAt }`
+- `LeaseExpiringSoon` — `{ leaseId, propertyId, tenantId, expiresAt }` (same payload as the tenant event; lets a landlord with many leases render a useful signal without a refetch)
 - `InviteAccepted` — `{ inviteId, tenantId, tenantName }`
 - `InviteRejected` — `{ inviteId }`
 
 ### Push mechanics
 - Notifications are pushed from RabbitMQ consumers, **not** directly from command handlers. Handlers publish events to RabbitMQ; consumers translate events into SignalR pushes. This keeps the API request path fast and decouples push delivery from the synchronous request lifecycle.
+- **Exception — `LeaseExpiringSoon`:** this push is fired **directly from the recurring `LeaseExpiringSoonJob`**, not via a consumer, because a scheduled scan has no originating RabbitMQ event. The durable email remains the authoritative channel; the push is best-effort (the dispatcher swallows transport errors).
 - Consumers depend on the **`INotificationDispatcher` abstraction** (in `Application/Common/Notifications/`), not directly on `IHubContext<NotificationsHub>`. The Api layer registers a `SignalRNotificationDispatcher` that wraps `IHubContext`; this keeps Infrastructure's consumers free of an Api project reference and lets unit tests fake out push delivery.
 - Payloads are minimal — IDs and a few key fields. Clients use the payload as a signal to invalidate their TanStack Query cache and refetch authoritative data from the API.
 
@@ -290,6 +292,7 @@ Each technology has a distinct role; do not blur them.
 - SignalR push to landlord on accept/reject (M3.6).
 - **Per-IP rate limiting on anonymous invite endpoints** (`GET /by-token/{token}`, `POST /{token}/reject`). Without it, an attacker can enumerate token validity via the 404-vs-200/204 distinction. Owned by **M3.12** — limit per IP, not per user.
 - ~~`AnthropicOcrOptions` defined in `Application/Common/Ocr/`.~~ **DONE.** Moved to `Application/Common/Options/` (not `Api/Options/` — Infrastructure consumes it, so the type must live in a layer Infrastructure can reference). Binding + `ValidateDataAnnotations().ValidateOnStart()` now in `Program.cs` alongside the other options; `AddAiServices` only wires `IReceiptOcrService` + its `HttpClient`.
+- **Generic notification-dedup table — planned long-term solution for job idempotency.** Each recurring job currently handles "did we already do this?" ad hoc (`MarkExpiredInvites` query-filter, `ReceiptOcr`'s `OcrProcessedAt` flag, `OrphanCleanup` physical delete, `SendEmail`'s Hangfire queue, and `LeaseExpiringSoon`'s in-memory `NotifyOnDaysBefore` day-marks). The intended consolidation is a generic `SentNotification(EntityType, EntityId, Kind, Key, SentAt)` table with a **unique index on the key** and an **atomic try-insert** helper (insert first, send only if the constraint didn't reject), keyed by a stable convention (e.g. `lease:{id}:expiry:{tier}`, `payment:{id}:confirmed`). This is what will properly close the two gaps **deliberately left open in `LeaseExpiringSoonJob`**: a same-day re-run re-notifies everyone, and a missed daily run permanently skips that day's milestone. It would also back the existing payment SignalR pushes. Foundation is moderate; the long pole is retrofitting the existing notifications onto it.
 
 
 ## (For Later) Single active lease per tenant — enforce as domain invariant

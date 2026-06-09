@@ -67,7 +67,7 @@ public sealed class LeaseExpiringSoonJobTests
     [Fact]
     public async Task Does_nothing_when_no_leases_are_expiring()
     {
-        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<DateOnly>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync([]);
 
         await BuildSut().ExecuteAsync(CancellationToken.None);
@@ -80,8 +80,8 @@ public sealed class LeaseExpiringSoonJobTests
     public async Task Queries_the_repository_with_the_30_day_window()
     {
         int captured = -1;
-        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-               .Callback<int, CancellationToken>((days, _) => captured = days)
+        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<DateOnly>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+               .Callback<DateOnly, int, CancellationToken>((_, days, _) => captured = days)
                .ReturnsAsync([]);
 
         await BuildSut().ExecuteAsync(CancellationToken.None);
@@ -93,7 +93,7 @@ public sealed class LeaseExpiringSoonJobTests
     public async Task Emails_and_pushes_both_parties_for_a_milestone_lease()
     {
         var lease = SeedLease(Today.AddDays(7));   // 7 days out → a milestone
-        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<DateOnly>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync([lease]);
 
         var emails = new List<EmailMessage>();
@@ -131,7 +131,7 @@ public sealed class LeaseExpiringSoonJobTests
     public async Task Skips_a_lease_that_is_not_on_a_milestone_day()
     {
         var lease = SeedLease(Today.AddDays(10));  // 10 days out → not a milestone
-        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<DateOnly>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync([lease]);
 
         await BuildSut().ExecuteAsync(CancellationToken.None);
@@ -145,7 +145,7 @@ public sealed class LeaseExpiringSoonJobTests
     {
         var bad = SeedLease(Today.AddDays(7), "bad");
         var good = SeedLease(Today.AddDays(7), "good");
-        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<DateOnly>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
                .ReturnsAsync([bad, good]);
 
         // The bad lease's first email enqueue throws; the good lease must still be processed.
@@ -170,6 +170,39 @@ public sealed class LeaseExpiringSoonJobTests
             Times.Once);
         _dispatcher.Verify(d => d.NotifyLandlordLeaseExpiringAsync(
                 good.LandlordId, It.IsAny<LeaseExpiringNotification>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task A_failed_tenant_email_does_not_suppress_the_landlord_email_or_the_pushes()
+    {
+        var lease = SeedLease(Today.AddDays(7));   // 7 days out → a milestone
+        _leases.Setup(r => r.ListAllExpiringSoonAsync(It.IsAny<DateOnly>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+               .ReturnsAsync([lease]);
+
+        // The tenant email enqueue throws; the landlord email (a separate durable
+        // delivery) must still be enqueued, and both best-effort pushes must still fire.
+        _jobs.Setup(j => j.EnqueueEmail(It.Is<EmailMessage>(e => e.To.StartsWith("tenant"))))
+             .Throws(new InvalidOperationException("queue down"));
+        var landlordEmails = new List<EmailMessage>();
+        _jobs.Setup(j => j.EnqueueEmail(It.Is<EmailMessage>(e => e.To.StartsWith("landlord"))))
+             .Callback<EmailMessage>(landlordEmails.Add)
+             .Returns("job-id");
+        _dispatcher.Setup(d => d.NotifyTenantLeaseExpiringAsync(
+                lease.TenantId, It.IsAny<LeaseExpiringNotification>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        _dispatcher.Setup(d => d.NotifyLandlordLeaseExpiringAsync(
+                lease.LandlordId, It.IsAny<LeaseExpiringNotification>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        await BuildSut().ExecuteAsync(CancellationToken.None);
+
+        Assert.Single(landlordEmails);   // landlord email enqueued despite the tenant failure
+        _dispatcher.Verify(d => d.NotifyTenantLeaseExpiringAsync(
+                lease.TenantId, It.IsAny<LeaseExpiringNotification>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+        _dispatcher.Verify(d => d.NotifyLandlordLeaseExpiringAsync(
+                lease.LandlordId, It.IsAny<LeaseExpiringNotification>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

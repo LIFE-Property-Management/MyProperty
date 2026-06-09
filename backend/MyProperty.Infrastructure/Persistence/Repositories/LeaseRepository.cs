@@ -94,9 +94,8 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
         return (items, totalCount);
     }
 
-    public async Task<IReadOnlyList<Lease>> ListAllExpiringSoonAsync(int daysThreshold, CancellationToken ct)
+    public async Task<IReadOnlyList<Lease>> ListAllExpiringSoonAsync(DateOnly today, int daysThreshold, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var threshold = today.AddDays(daysThreshold);
 
         return await db.Leases
