@@ -136,6 +136,12 @@ spec:
             # In-cluster SMTP via Mailpit — captures every message and relays to
             # Resend (see docs/operations/email-smtp.md). Plain SMTP on the
             # internal hop; NetworkPolicy restricts who can reach mailpit:1025.
+            # NOTE: Smtp__Host (here) and the realm smtpServer.host
+            # (files/realm-export.template.json) are hardcoded to "mailpit". The
+            # mailpit.enabled flag does not gate them, so an env deployed with
+            # mailpit off would point the backend/Keycloak at a missing host.
+            # Wire these to .Values.mailpit.enabled before deploying such an env
+            # (verify Keycloak tolerates an empty smtpServer.host on import).
             - name: Smtp__Host
               value: "mailpit"
             - name: Smtp__Port
