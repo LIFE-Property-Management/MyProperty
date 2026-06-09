@@ -505,22 +505,11 @@ try
     app.UseRateLimiter();
     app.UseAuthorization();
 
-    if (app.Environment.IsDevelopment())
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
     {
-        app.MapHangfireDashboard("/hangfire", new DashboardOptions
-        {
-            Authorization = [],
-            DashboardTitle = "MyProperty — Background Jobs",
-        }).AllowAnonymous();
-    }
-    else
-    {
-        app.UseHangfireDashboard("/hangfire", new DashboardOptions
-        {
-            Authorization = [new AdminOnlyDashboardFilter()],
-            DashboardTitle = "MyProperty — Background Jobs",
-        });
-    }
+        Authorization = [new AdminOnlyDashboardFilter()],
+        DashboardTitle = "MyProperty — Background Jobs",
+    });
 
     // ── Recurring background jobs ───────────────────────────────────────────────
     // Registered against the already-configured Hangfire (Postgres) storage.
