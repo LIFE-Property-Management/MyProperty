@@ -14,7 +14,7 @@ channels. Lands with M4.6 (2026-05-24).
 | `uptime-kuma-init` | One-shot seed — admin + monitors + status page + notifications | one-shot service, exits 0 | post-install Helm Job |
 | `uptime_kuma_data` / PVC | SQLite DB + uploaded files | named volume | `volumeClaimTemplate` (RWO) |
 | Slack notification | Incident alerts to `#alerts` | reuses `SLACK_WEBHOOK_URL` | secret `myproperty-discord/webhook-url` |
-| Email notification | Incident alerts via SMTP | reuses MailHog at `mailhog:1025` | per-env SMTP relay |
+| Email notification | Incident alerts via SMTP | reuses Mailpit at `mailpit:1025` | per-env SMTP relay |
 
 The seed runs on a fresh volume only — on re-run it detects the
 existing admin and short-circuits to a no-op. Re-running is safe at
@@ -45,7 +45,7 @@ docker compose up -d
 | http://localhost:3002 | Admin UI (login as the configured admin user) |
 | http://localhost:3002/status/myproperty | Public status page |
 | http://localhost:3002/dashboard | Live monitor heartbeats (admin only) |
-| http://localhost:8025 | MailHog — incoming notification emails for dev |
+| http://localhost:8025 | Mailpit — incoming notification emails for dev |
 
 ### Local development behind the nginx proxy (M4.9 + M4.6)
 
@@ -108,7 +108,7 @@ Alertmanager, AIOps webhook, Grafana).
   Same webhook the M4.11 AIOps service posts to, so all alerts land
   in one channel.
 - *Email (oncall)* — only created when `KUMA_SMTP_HOST` is set. Compose
-  default points at the in-stack MailHog catcher so the demo is
+  default points at the in-stack Mailpit catcher so the demo is
   visible without an external SMTP account; K8s overrides to a real
   relay.
 
@@ -153,7 +153,7 @@ its env var empty.
 | Channel | Compose env | K8s | Demo path |
 |---|---|---|---|
 | Slack | `SLACK_WEBHOOK_URL` | secret `myproperty-discord/webhook-url` | message in the configured webhook URL |
-| Email | `KUMA_SMTP_*` | values `uptimeKuma.smtp.*` | MailHog Web UI at http://localhost:8025 |
+| Email | `KUMA_SMTP_*` | values `uptimeKuma.smtp.*` | Mailpit Web UI at http://localhost:8025 |
 
 Operators can add more channels (Discord, Telegram, Pushover, PagerDuty,
 generic webhooks, etc.) through the UI at any time. Kuma supports ~80
@@ -171,7 +171,7 @@ need first-run secret wiring.
   │              │                                   └──────────────┘
   │              │
   │              │ ─── slack webhook ──▶ Slack #alerts
-  │              │ ─── smtp ───────────▶ mailhog (dev) / SES (prod)
+  │              │ ─── smtp ───────────▶ mailpit (dev) / Resend (prod)
   └──────────────┘
          ▲
          │ socket.io (live UI + status page heartbeats)
@@ -238,7 +238,7 @@ End-to-end smoke (intentionally trip a probe):
 docker compose stop backend
 # Wait ~90 s — the backend monitors transition to DOWN.
 # Slack message lands (if SLACK_WEBHOOK_URL is set) and an email lands
-# in MailHog (http://localhost:8025).
+# in Mailpit (http://localhost:8025).
 
 docker compose start backend
 # Monitors recover within one probe interval; resolution notifications

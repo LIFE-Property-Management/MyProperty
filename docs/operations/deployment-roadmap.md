@@ -118,9 +118,11 @@ documented in [ci-cd.md](./ci-cd.md).
   nodes change.
 
 ### Mailer
-- Invite emails don't send (`Smtp__Host=mailhog`, not deployed). Plan: Mailpit
-  (axllent/mailpit) for capture and/or a transactional relay (SES/SendGrid/Mailgun/Resend).
-  Config + secret only — the MailKit client already exists.
+- ✅ **Done.** Mailpit (`axllent/mailpit`) is deployed in `project-02` as the SMTP endpoint:
+  backend + Keycloak send to `mailpit:1025`, it captures a viewable copy, and relays every
+  message to **Resend** (587/STARTTLS) for real delivery with SPF/DKIM/DMARC passing on
+  `myproperty.works`. The live realm's `smtpServer` + `resetPasswordAllowed` were also wired
+  via `kcadm`. See [`email-smtp.md`](./email-smtp.md).
 
 ---
 

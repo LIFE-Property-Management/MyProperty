@@ -8,7 +8,7 @@ The local development stack. One `docker compose up` brings up 21 services on a 
 
 ## What you get from `docker compose up`
 
-A complete, production-shaped stack on the local machine — every dependency the API talks to in production runs here as the same image (Postgres, Redis, RabbitMQ, Keycloak, Unleash, Loki/Promtail/Prometheus/Grafana/Alertmanager) or a drop-in dev substitute (MailHog for SMTP). Receipt storage uses the local-volume `LocalFileStorage` in dev *and* prod.
+A complete, production-shaped stack on the local machine — every dependency the API talks to in production runs here as the same image (Postgres, Redis, RabbitMQ, Keycloak, Unleash, Loki/Promtail/Prometheus/Grafana/Alertmanager) or a drop-in dev substitute (Mailpit for SMTP). Receipt storage uses the local-volume `LocalFileStorage` in dev *and* prod.
 
 ## Service inventory
 
@@ -24,7 +24,7 @@ A complete, production-shaped stack on the local machine — every dependency th
 | 4 | `backend-storage-init` | `alpine:3.20` (one-shot, UID 0) | — | `backend_storage` (RW) | `chown` to UID 1654 for non-root backend |
 | 5 | `redis` | `redis:7-alpine` | 6379 | — | Cache + SignalR backplane (no persistence) |
 | 6 | `rabbitmq` | `rabbitmq:3-management` | 5672 (AMQP), 15672 (UI) | `rabbitmq_data` | Event bus |
-| 7 | `mailhog` | `mailhog/mailhog:latest` | 1025 (SMTP), 8025 (UI) | — | **Dev-only** SMTP catcher |
+| 7 | `mailpit` | `axllent/mailpit:v1.30.1` | 1025 (SMTP), 8025 (UI) | — | SMTP catcher (cluster relays to Resend) |
 | 8 | `backend` | `myproperty-api:dev` (chiseled .NET 10) | 5042 → 8080 | `backend_storage` | API + Hub + Hangfire (UID 1654) |
 | 9 | `frontend` | `myproperty-frontend:dev` (distroless `nodejs20-debian12:nonroot`) | 3000 | — | Next.js standalone (UID 65532) |
 | 10 | `loki` | `grafana/loki:3.2.0` | 3100 | `loki_data` | Log store |
@@ -90,7 +90,7 @@ These deltas are intentional — they're justified in [`deployment-prod.md`](./d
 
 | Concern | Dev | Prod |
 |---|---|---|
-| SMTP | `mailhog` (catcher; emails visible at `:8025`) | TBD external provider |
+| SMTP | `mailpit` (catcher; emails visible at `:8025`) | `mailpit` → Resend relay |
 | Object storage | `backend_storage` volume (`LocalFileStorage`) | **Same** — `LocalFileStorage` on a Longhorn PVC (a Spaces/S3 adapter is a follow-up) |
 | Edge / TLS | Nginx + Certbot in `proxy` profile (opt-in) | ingress-nginx + namespaced cert-manager `Issuer` + Let's Encrypt (always-on) |
 | Postgres | Local container | Self-hosted StatefulSet on Longhorn (same `postgres:16` image) |
@@ -119,7 +119,7 @@ External UIs at a glance:
 | API + Hangfire dashboard | http://localhost:5042/swagger · http://localhost:5042/hangfire |
 | Keycloak admin console | http://localhost:8080 |
 | RabbitMQ management | http://localhost:15672 (guest / guest) |
-| MailHog | http://localhost:8025 |
+| Mailpit | http://localhost:8025 |
 | Prometheus | http://localhost:9090 |
 | Alertmanager | http://localhost:9093 |
 | Grafana | http://localhost:3001 |

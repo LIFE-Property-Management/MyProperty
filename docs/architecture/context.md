@@ -45,5 +45,5 @@ Every box visible in the L1 diagram appears in this table. Internal-only technol
 
 - **Internal services** (PostgreSQL, Redis, RabbitMQ, the SignalR hub, the AIOps webhook, the observability stack) — they live *inside* MyProperty Platform and appear at [L2 Container](./containers.md).
 - **CI / CD** (GitHub Actions, GHCR, Discord notifications, Trivy) — those are build-time, not run-time. They appear in [`cicd.md`](./cicd.md).
-- **Dev-only services** (MailHog) — they have no counterpart in production and are documented in [`deployment-dev.md`](./deployment-dev.md).
+- **SMTP / email delivery** (Mailpit, with Resend as the cluster relay) — supporting infrastructure, not a top-level actor at this level; documented in [`deployment-dev.md`](./deployment-dev.md) (local catcher) and [`../operations/email-smtp.md`](../operations/email-smtp.md) (cluster catcher + Resend relay).
 - **RAG / pgvector** — the M3.10 AI requirement was satisfied by *receipt OCR via Anthropic vision* rather than by a RAG endpoint. The reasoning is captured in [`technology-decisions.md`](./technology-decisions.md) and [ADR-0005](./adr/0005-anthropic-over-openai.md).

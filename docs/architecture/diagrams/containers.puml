@@ -46,7 +46,7 @@ System_Boundary(mp, "MyProperty Platform") {
 System_Ext(anthropic,   "Anthropic API",  "Claude vision + chat")
 System_Ext(discord,     "Discord",        "Webhooks (#alerts / #uptime / #deployments)")
 System_Ext(letsencrypt, "Let's Encrypt",  "ACME CA")
-System_Ext(smtp,        "SMTP server",    "MailHog (dev) / TBD (prod)")
+System_Ext(smtp,        "SMTP server",    "Mailpit (dev) / Resend relay (prod)")
 
 ' ====== Edges: users ======
 Rel(tenant,   edge, "Uses web app", "HTTPS")

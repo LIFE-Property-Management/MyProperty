@@ -254,9 +254,11 @@ support ship in the chart's `security/` templates.
 
 ## Operational notes
 
-- **Mailer not deployed.** Backend is configured with `Smtp__Host=mailhog`, which isn't in
-  the cluster — invite emails don't send (the rest of the app is unaffected). Fix is a
-  mailer batch (Mailpit / transactional relay) in the roadmap.
+- **Email via Mailpit + Resend.** Backend and Keycloak send to the in-cluster `mailpit`
+  service (`Smtp__Host=mailpit`, port 1025), which captures every message and relays it to
+  **Resend** (587/STARTTLS) for real delivery. Relay creds live in the
+  `myproperty-mailpit-relay` Secret; UI via `kubectl -n project-02 port-forward svc/mailpit 8025:8025`.
+  See [`email-smtp.md`](./email-smtp.md).
 - **Backend capped at 1 replica** by the RWO `longhorn` PVC; horizontal scaling needs
   object storage (roadmap). Same RWO constraint is why backend + Grafana use
   `strategy: Recreate` (a rolling update would deadlock on the single-attach volume).

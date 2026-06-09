@@ -8,7 +8,7 @@ Decomposes *MyProperty Platform* (the single box at [L1](./context.md)) into the
 
 ## Reading the diagram
 
-The diagram describes the **production-realistic** runtime. Environment-specific deltas (MailHog, the `proxy` compose profile, init containers) live in [`deployment-dev.md`](./deployment-dev.md) and [`deployment-prod.md`](./deployment-prod.md). The C4 inner boundary *Observability sub-cluster* is a visual grouping, not a separate process boundary — those six containers are independent services that happen to share a concern.
+The diagram describes the **production-realistic** runtime. Environment-specific deltas (Mailpit, the `proxy` compose profile, init containers) live in [`deployment-dev.md`](./deployment-dev.md) and [`deployment-prod.md`](./deployment-prod.md). The C4 inner boundary *Observability sub-cluster* is a visual grouping, not a separate process boundary — those six containers are independent services that happen to share a concern.
 
 **Four things worth flagging:**
 
@@ -52,7 +52,7 @@ The diagram describes the **production-realistic** runtime. Environment-specific
 
 | Concern | Where it's documented |
 |---|---|
-| Local dev SMTP (MailHog) | [`deployment-dev.md`](./deployment-dev.md) |
+| Local dev SMTP (Mailpit) | [`deployment-dev.md`](./deployment-dev.md) |
 | One-shot init containers (keycloak-realm-init, backend-storage-init, uptime-kuma-init) | [`deployment-dev.md`](./deployment-dev.md) / [`deployment-prod.md`](./deployment-prod.md) |
 | Backend Clean Architecture (Api / Application / Domain / Infrastructure layering inside the API container) | [`components.md`](./components.md) |
 | K8s primitives (Deployments, StatefulSets, Services, Ingress, ConfigMaps, namespaced cert-manager `Issuer`, NetworkPolicies) | [`deployment-prod.md`](./deployment-prod.md) |
@@ -68,6 +68,6 @@ Shown at L2 for completeness but already justified at L1:
 | Anthropic API | API (receipt OCR), AIOps Webhook (alert triage) | HTTPS |
 | Discord | AIOps Webhook (`#alerts`), Uptime Kuma (`#uptime`), CD pipeline (`#deployments`) | HTTPS webhook |
 | Let's Encrypt | Edge (cert renewal) | HTTPS / ACME |
-| SMTP server (MailHog dev / TBD prod) | API (Hangfire `SendEmailJob` via MailKit) | SMTP |
+| SMTP server (Mailpit dev / Mailpit→Resend prod) | API (Hangfire `SendEmailJob` via MailKit) | SMTP |
 
 > **No object store.** Receipts are written by `LocalFileStorage` to a PVC, in dev *and* prod. The DigitalOcean Spaces / S3 path described in earlier revisions never shipped (it went away with DOKS, [ADR-0009](./adr/0009-hetzner-project-02-over-doks.md)); a Spaces/S3 adapter on `IFileStorage` remains a follow-up.
