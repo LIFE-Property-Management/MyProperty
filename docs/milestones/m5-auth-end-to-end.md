@@ -138,7 +138,13 @@ Grant required), proving the production login path.
   sensitive tenant action depends on a proven email.
 - **Tenant read-only enforcement** (no active lease → ReadOnly). Data model + UI
   exist; missing the Hangfire flag job + authorization handler.
-- **Forgot password** (enable `resetPasswordAllowed` on the realm when wanted).
+- ~~**Forgot password** (enable `resetPasswordAllowed` on the realm when wanted).~~
+  **DELIVERED.** `/forgot-password` hands off to Keycloak's hosted reset-credentials
+  flow via `resetPassword()` (`frontend/lib/auth/keycloak.ts`) — same pattern as the
+  login redirect, no in-app `/reset-password` page. Both realm templates now set
+  `resetPasswordAllowed: true` and wire `smtpServer` to MailHog (dev reset mail lands
+  in the MailHog UI at `http://localhost:8025`; prod mirrors the backend's `mailhog`
+  placeholder, degrading gracefully until a real relay is wired).
 - **Existing-user accepts invite** (account exists): currently rejected with a clear
   409; full UX is a follow-up.
 - **Invite audit fields** (`AcceptedByUserId`, `ResultingLeaseId`).
