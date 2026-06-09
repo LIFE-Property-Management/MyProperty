@@ -26,6 +26,9 @@ RABBITMQ_USER="${RABBITMQ_USER:-myproperty}"
 KEYCLOAK_ADMIN_USER="${KEYCLOAK_ADMIN_USER:-admin}"
 GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER:-admin}"
 KUMA_ADMIN_USERNAME="${KUMA_ADMIN_USERNAME:-admin}"
+# Mailpit relay SMTP username is a fixed literal for Resend ("resend"); only the
+# password (the Resend API key) is operator-supplied.
+MAILPIT_RELAY_USERNAME="${MAILPIT_RELAY_USERNAME:-resend}"
 
 # 3. Generate passwords once; persist for stable re-runs. Hex = no special chars,
 #    safe inside the ADO.NET connection string the backend/migration build.
@@ -50,7 +53,7 @@ ADMIN_PORTAL_PASSWORD="${ADMIN_PORTAL_PASSWORD:-$(gen)}";                 persis
 UNLEASH_CLIENT_API_TOKEN="${UNLEASH_CLIENT_API_TOKEN:-default:production.$(gen)}"; persist UNLEASH_CLIENT_API_TOKEN "$UNLEASH_CLIENT_API_TOKEN"
 
 # 4. Refuse to run with unreplaced placeholders.
-for v in GHCR_USERNAME GHCR_PAT GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ANTHROPIC_API_KEY DISCORD_WEBHOOK_URL ADMIN_PORTAL_EMAIL; do
+for v in GHCR_USERNAME GHCR_PAT GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET ANTHROPIC_API_KEY DISCORD_WEBHOOK_URL ADMIN_PORTAL_EMAIL MAILPIT_RELAY_PASSWORD; do
   val="${!v:-}"
   if [[ -z "$val" || "$val" == *replace* || "$val" == your-* ]]; then
     echo "ERROR: $v is unset or still a placeholder in .secrets.env." >&2
@@ -94,6 +97,12 @@ apply secret generic myproperty-google-oauth \
 
 apply secret generic myproperty-anthropic \
   --from-literal=api-key="$ANTHROPIC_API_KEY"
+
+# Mailpit → Resend relay credentials, consumed by the mailpit StatefulSet
+# (secretKeyRefs relay-username / relay-password) when mailpit.relay.enabled.
+apply secret generic myproperty-mailpit-relay \
+  --from-literal=relay-username="$MAILPIT_RELAY_USERNAME" \
+  --from-literal=relay-password="$MAILPIT_RELAY_PASSWORD"
 
 apply secret generic myproperty-redis \
   --from-literal=redis-password="$REDIS_PASSWORD"
