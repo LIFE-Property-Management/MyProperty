@@ -131,3 +131,41 @@ describe("keycloak", () => {
     expect(getToken()).toBeNull();
   });
 });
+
+describe("resetPasswordUrl", () => {
+  const ENV_KEYS = [
+    "NEXT_PUBLIC_KEYCLOAK_URL",
+    "NEXT_PUBLIC_KEYCLOAK_REALM",
+    "NEXT_PUBLIC_KEYCLOAK_CLIENT_ID",
+  ] as const;
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const k of ENV_KEYS) saved[k] = process.env[k];
+    process.env.NEXT_PUBLIC_KEYCLOAK_URL = "http://localhost:8080";
+    process.env.NEXT_PUBLIC_KEYCLOAK_REALM = "MyProperty";
+    process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID = "myproperty-frontend";
+  });
+
+  afterEach(() => {
+    for (const k of ENV_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it("builds Keycloak's reset-credentials URL from the public env", async () => {
+    const { resetPasswordUrl } = await import("../keycloak");
+    expect(resetPasswordUrl()).toBe(
+      "http://localhost:8080/realms/MyProperty/login-actions/reset-credentials?client_id=myproperty-frontend",
+    );
+  });
+
+  it("strips a trailing slash from the Keycloak base URL", async () => {
+    process.env.NEXT_PUBLIC_KEYCLOAK_URL = "http://localhost:8080/";
+    const { resetPasswordUrl } = await import("../keycloak");
+    expect(resetPasswordUrl()).toBe(
+      "http://localhost:8080/realms/MyProperty/login-actions/reset-credentials?client_id=myproperty-frontend",
+    );
+  });
+});
