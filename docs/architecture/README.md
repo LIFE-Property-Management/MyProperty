@@ -11,6 +11,8 @@ This is the **M5.1 deliverable**: a complete view of the system, every technolog
 | What is MyProperty and who uses it? | [**L1 — System Context**](./context.md) |
 | What runs where, and using what tech? | [**L2 — Containers**](./containers.md) |
 | What's inside the .NET API process? | [**L3 — Components (backend)**](./components.md) |
+| How does data actually flow at runtime & build time? | [**Process flows (behavioural)**](./process-flows.md) — the canonical behavioural view, companion to [`data-flow.md`](./data-flow.md) |
+| What's the data model / database schema? | [**Data model**](../database/) |
 | The full story behind the major choices | [**Technology decisions (narrative)**](./technology-decisions.md) |
 | The reasoning for a specific call | [ADRs](./adr/) (see below) |
 
@@ -30,7 +32,7 @@ The C4 hierarchy + 6 supplemental diagrams. All sources live in [`diagrams/`](./
 
 | # | Diagram | View | Companion doc |
 |---|---|---|---|
-| 4 | [`deployment-dev.svg`](./diagrams/deployment-dev.svg) | Dev deployment — 21 docker-compose services + 12 named volumes | [`deployment-dev.md`](./deployment-dev.md) |
+| 4 | [`deployment-dev.svg`](./diagrams/deployment-dev.svg) | Dev deployment — 23 docker-compose services (21 default + 2 proxy) + 13 named volumes | [`deployment-dev.md`](./deployment-dev.md) |
 | 5 | [`deployment-prod.svg`](./diagrams/deployment-prod.svg) | Prod deployment — shared Hetzner cluster (namespace `project-02`) + Helm + Longhorn + Calico + cert-manager | [`deployment-prod.md`](./deployment-prod.md) |
 
 ### Specialized supplements
@@ -38,9 +40,20 @@ The C4 hierarchy + 6 supplemental diagrams. All sources live in [`diagrams/`](./
 | # | Diagram | View | Companion doc |
 |---|---|---|---|
 | 6 | [`data-flow-rest.svg`](./diagrams/data-flow-rest.svg) + [`data-flow-signalr.svg`](./diagrams/data-flow-signalr.svg) + [`data-flow-ocr.svg`](./diagrams/data-flow-ocr.svg) | Three runtime sequences — REST request, SignalR push, receipt OCR pipeline | [`data-flow.md`](./data-flow.md) |
-| 7 | [`cicd.svg`](./diagrams/cicd.svg) | CI/CD pipeline — 6 GitHub Actions workflows → GHCR → Hetzner `project-02` | [`cicd.md`](./cicd.md) |
+| 7 | [`cicd.svg`](./diagrams/cicd.svg) | CI/CD pipeline — 8 GitHub Actions workflows → GHCR → Hetzner `project-02` | [`cicd.md`](./cicd.md) |
 | 8 | [`observability.svg`](./diagrams/observability.svg) | Observability stack — metrics, logs, alerts, external probes | [`observability.md`](./observability.md) |
 | 9 | [`events.svg`](./diagrams/events.svg) | RabbitMQ event topology — exchange + 5 queues + 5 consumers | [`events.md`](./events.md) |
+
+### Domain state machines
+
+The two server-enforced lifecycles at the heart of the domain. Both are described in prose in [`process-flows.md`](./process-flows.md) (Flows 5–7); these diagrams render the legal transitions, their guards, and who triggers each.
+
+| # | Diagram | View | Companion |
+|---|---|---|---|
+| 10 | [`state-payment.svg`](./diagrams/state-payment.svg) | Payment lifecycle — Outstanding → Pending → Confirmed/Rejected (+ resubmit loop) | [`process-flows.md`](./process-flows.md) Flow 5 |
+| 11 | [`state-invite.svg`](./diagrams/state-invite.svg) | Invite lifecycle — Pending → Accepted/Rejected/Expired (→ cleanup) | [`process-flows.md`](./process-flows.md) Flow 7 |
+
+> **Behavioural companion:** [`process-flows.md`](./process-flows.md) enumerates *every* runtime & build-time flow end-to-end with code-level detail — the prose counterpart to the three rendered sequences in [`data-flow.md`](./data-flow.md).
 
 ## Architectural Decision Records (ADRs)
 

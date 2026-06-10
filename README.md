@@ -22,6 +22,9 @@ Start at [`docs/architecture/README.md`](./docs/architecture/README.md) — the 
 | The CI/CD pipeline | [`docs/architecture/cicd.md`](./docs/architecture/cicd.md) |
 | The observability stack | [`docs/architecture/observability.md`](./docs/architecture/observability.md) |
 | The RabbitMQ event topology | [`docs/architecture/events.md`](./docs/architecture/events.md) |
+| The REST API surface (every v1 endpoint) | [`docs/api-reference.md`](./docs/api-reference.md) |
+| The domain state machines (payment + invite) | [`docs/architecture/process-flows.md`](./docs/architecture/process-flows.md) (Flows 5–7) |
+| The security posture / threat model | [`docs/security/threat-model.md`](./docs/security/threat-model.md) |
 | The reasoning behind a specific call | [`docs/architecture/adr/`](./docs/architecture/adr/) (10 ADRs) |
 
 ## Stack
@@ -51,7 +54,7 @@ infrastructure/
   keycloak/         realm export template + production notes (compose realm source)
   nginx/            docker-compose `proxy` profile (local HTTPS reverse proxy + certbot)
   prometheus/ grafana/ alertmanager/ promtail/ postgres/   local monitoring config
-docs/               operations/, decisions/, milestones/, audits/, … (see Documentation below)
+docs/               architecture/, api-reference.md, operations/, security/, database/, milestones/, audits/, performance/ (see Documentation below)
 scripts/            reset-dev-stack.sh
 docker-compose.yml  full local dev stack
 ```
@@ -145,6 +148,8 @@ deployed from the `helm/myproperty` chart with the `values-gjirafa.yaml` overlay
 | Doc | What |
 |---|---|
 | [docs/architecture/README.md](docs/architecture/README.md) | Architecture (C4 diagrams, ADRs, dev + prod deployment views) — the M5.1 deliverable |
+| [docs/api-reference.md](docs/api-reference.md) | REST API reference — every v1 endpoint, auth, errors, rate limits |
+| [docs/security/README.md](docs/security/README.md) | Security audit (M5.5) + [threat model](docs/security/threat-model.md) — posture, STRIDE, residual risks |
 | [docs/operations/k8s-deployment.md](docs/operations/k8s-deployment.md) | Cluster deploy runbook (the source of truth for live ops) |
 | [docs/operations/ci-cd.md](docs/operations/ci-cd.md) | CI workflows + the CD pipeline |
 | [docs/operations/auth-flow.md](docs/operations/auth-flow.md) | Keycloak / OIDC auth flow |

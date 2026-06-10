@@ -5,6 +5,10 @@ Full report: **[`audit-m5.5.md`](./audit-m5.5.md)**. Four pillars, all scanned f
 stack. Every report in this folder is checked in as an artefact and reproducible via the
 commands in [Appendix A](./audit-m5.5.md#a-reproduction).
 
+> **Security model:** [`threat-model.md`](./threat-model.md) — trust boundaries, authN/authZ, data
+> classification, a STRIDE summary, and the residual-risk register. This folder is the *evidence*
+> (scan outputs); the threat model is the *posture* that explains them.
+
 ## Headline
 
 | Pillar | Tool | Result |

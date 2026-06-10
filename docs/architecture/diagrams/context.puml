@@ -9,7 +9,7 @@ title MyProperty Platform — System Context (C4 Level 1)
 ' ====== Actors ======
 Person(tenant,   "Tenant",   "End user with the Tenant role. Pays rent, uploads receipts, reads notifications.")
 Person(landlord, "Landlord", "End user with the Landlord role. Manages properties, leases, payments, dashboards.")
-Person(admin,    "Admin",    "Internal admin with the Admin role. Operates the Hangfire dashboard and the Keycloak realm.")
+Person(admin,    "Admin",    "Internal admin with the Admin role. Operates the Hangfire dashboard and the Keycloak realm, and views the stakeholder analytics portal (/admin/dashboard).")
 
 ' ====== System under design ======
 System(myproperty, "MyProperty Platform", "Multi-tenant property-management SaaS. Web app, REST API, real-time notifications, background jobs, AI-assisted receipt OCR.")

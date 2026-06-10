@@ -1,0 +1,39 @@
+@startuml
+title Payment lifecycle — server-enforced state machine (PaymentStatus)
+
+skinparam BackgroundColor #FAFAFA
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #1168bd
+  ArrowColor #555
+}
+
+[*] --> Outstanding : CreatePaymentHandler\n(landlord — RequireLandlord;\nrent due, no submission yet)
+
+Outstanding --> Pending : SubmitPaymentHandler\n(tenant — RequireTenant;\nReceiptUpload or ManualRequest)
+Rejected --> Pending : SubmitPaymentHandler\n(tenant resubmits;\nclears RejectedAt + RejectionReason)
+
+Pending --> Confirmed : ConfirmPaymentHandler\n(landlord — RequireLandlord)
+Pending --> Rejected : RejectPaymentHandler\n(landlord; sets RejectionReason)
+
+Confirmed --> [*] : terminal
+
+note right of Pending
+  The Payment entity is **anemic** — every guard lives in the
+  Application-layer command handler, never on the entity.
+  Illegal transitions return **409 ConflictException**:
+   - Submit  requires Outstanding **or** Rejected
+   - Confirm requires Pending
+   - Reject  requires Pending
+  Each successful transition publishes an integration event
+  (payment.created / submitted / confirmed / rejected) — see events.puml.
+end note
+
+note bottom of Rejected
+  **Rejected is NOT terminal** (rejection "Model 1"): the tenant can
+  resubmit, looping back to Pending. **Confirmed** is the only terminal
+  business state. (Model 2 — Rejected becomes terminal with a superseding
+  Outstanding row — is a documented follow-up.)
+end note
+
+@enduml

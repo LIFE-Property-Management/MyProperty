@@ -34,12 +34,12 @@ Deployment_Node(hetzner, "Shared Hetzner Kubernetes cluster", "operated by Gjira
         }
 
         Deployment_Node(obs, "Observability (self-contained manifests - no operator, no CRDs)") {
-            Container(prom,  "prometheus",    "Deployment + PVC (longhorn)", "Scrape config + alert rules wired directly")
-            Container(am,    "alertmanager",  "Deployment + PVC (longhorn)", "Routes -> aiops-webhook ClusterIP")
+            Container(prom,  "prometheus",    "StatefulSet + PVC (longhorn)", "Scrape config + alert rules wired directly")
+            Container(am,    "alertmanager",  "StatefulSet + PVC (longhorn)", "Routes -> aiops-webhook ClusterIP")
             Container(graf,  "grafana",       "Deployment + PVC (longhorn)", "Secret-backed admin; metrics + log dashboards; grafana.X")
             Container(loki,  "loki",          "StatefulSet + PVC (longhorn)","Single-binary log store")
             Container(ptail, "promtail",      "DaemonSet + namespaced Role", "Tails project-02 pods only")
-            Container(uk,    "uptime-kuma",   "StatefulSet + PVC (longhorn) + seed hook", "HTTPS probes + status.X; 13 monitors")
+            Container(uk,    "uptime-kuma",   "StatefulSet + PVC (longhorn) + seed hook", "HTTPS probes + status.X; 15 monitors")
         }
 
         Deployment_Node(crd, "Namespaced K8s objects (chart-rendered)") {

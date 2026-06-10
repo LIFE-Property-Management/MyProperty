@@ -21,7 +21,7 @@ Container_Boundary(apiproc, "API process (.NET 10, single OS process)") {
 
     ' ---- Api project ----
     Container_Boundary(apiProj, "MyProperty.Api") {
-        Component(controllers,    "Controllers (v1)",   "ASP.NET Core MVC", "Invites, Properties, Tenants, Leases, Payments, Landlord, Me")
+        Component(controllers,    "Controllers (v1)",   "ASP.NET Core MVC", "Auth, Invites, Properties, Leases, Payments, Landlord, Admin, Me (no Tenants controller)")
         Component(hub,            "NotificationsHub",    "SignalR + Redis backplane", "Server-push; groups tenant:{id} / landlord:{id}")
         Component(middleware,     "Middleware pipeline", "ASP.NET Core", "CorrelationId -> Serilog -> Forwarded -> CORS -> Auth -> RateLimiter -> Authz")
         Component(hangfireDash,   "Hangfire dashboard",  "Hangfire UI", "/hangfire, RequireAdmin policy")
