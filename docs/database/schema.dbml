@@ -32,6 +32,17 @@ Project myproperty {
   '''
 }
 
+// ── Enum catalogue ────────────────────────────────────────────────────
+//  Documented for reference only. These are .NET enums persisted as
+//  `varchar(16)` via `HasConversion<string>()` — NOT native PG enum types,
+//  so the columns above are typed `varchar(16)`, not a DBML `Enum` type.
+//    PropertyType        { House, Apartment, Commercial, Other }  // properties.PropertyType (DB default 'Other')
+//    TenantAccountStatus { Active, ReadOnly }                     // users.AccountStatus (NULL for landlords)
+//    LeaseStatus         { Active, Expired, Terminated }          // leases.Status
+//    PaymentStatus       { Outstanding, Pending, Confirmed, Rejected }  // payments.Status
+//    PaymentMethod       { ReceiptUpload, ManualRequest }         // payments.Method (NULL until submit)
+//    InviteStatus        { Pending, Accepted, Rejected, Expired }  // invites.Status
+
 // ── Core identity ─────────────────────────────────────────────────────
 Table users {
   Id            uuid         [pk, note: 'app-generated GUID']
@@ -48,15 +59,19 @@ Table users {
   CreatedBy text
   UpdatedBy text
 
+  indexes {
+    CreatedAt [note: 'stakeholder dashboard — user-growth time series']
+  }
   Note: 'One row per human. Role (Tenant/Landlord/Admin) is NOT stored here — it lives in Keycloak. The same user can be a landlord (properties.LandlordId, leases.LandlordId) AND a tenant (leases.TenantId).'
 }
 
 Table properties {
-  Id         uuid         [pk]
-  LandlordId uuid         [not null, note: 'owning landlord (users.Id)']
-  Name       varchar(256) [not null]
-  Address    varchar(512) [not null]
-  UnitNumber varchar(32)
+  Id           uuid         [pk]
+  LandlordId   uuid         [not null, note: 'owning landlord (users.Id)']
+  Name         varchar(256) [not null]
+  Address      varchar(512) [not null]
+  UnitNumber   varchar(32)
+  PropertyType varchar(16)  [not null, note: "PropertyType {House|Apartment|Commercial|Other}; HasConversion<string>(), DB default 'Other'"]
   // --- audit (BaseEntity) ---
   CreatedAt timestamptz [not null]
   UpdatedAt timestamptz [not null]
@@ -91,6 +106,8 @@ Table leases {
     (TenantId, Status)   [note: 'tenant dashboard / active-lease lookup']
     (PropertyId, Status) [note: 'per-property lease list']
     EndDate              [note: 'expiring-soon recurring scan']
+    Status               [note: 'stakeholder dashboard — lease status breakdown']
+    CreatedAt            [note: 'stakeholder dashboard — time-series / recent leases']
   }
   Note: 'Created at invite ACCEPTANCE, not at invite creation. Multiple active leases per tenant are currently permitted; a single-active-lease invariant + partial unique index is a documented follow-up.'
 }
@@ -129,6 +146,8 @@ Table payments {
   indexes {
     (LeaseId, Status)
     DueDate [name: 'IX_payments_DueDate_Outstanding', note: "PARTIAL: WHERE Status='Outstanding' AND DeletedAt IS NULL — sized to the overdue-scan job (M3.4)"]
+    Status      [note: 'stakeholder dashboard — payment status breakdown']
+    ConfirmedAt [note: 'stakeholder dashboard — confirmed-payment time series']
   }
   Note: 'The 4 Receipt* and 5 Ocr* columns are two OPTIONAL 1:1 sub-entities embedded inline. 3NF-compliant (single-valued, functionally dependent on Id) but a candidate for extraction to a payment_receipts table — see review §5.'
 }
@@ -160,6 +179,7 @@ Table invites {
     ExpiresAt            [note: 'expiry / orphan cleanup job']
     (LandlordId, Status) [note: 'landlord invite list']
     PropertyId           [note: 'FK index (EF auto-created)']
+    CreatedAt            [note: 'stakeholder dashboard — recent-invites time series']
   }
   Note: 'Carries PROPOSED lease terms + invitee identity. These mirror leases/users columns but are NOT redundant: an invite precedes both the User account and the Lease (both created on accept). See review §5.'
 }
