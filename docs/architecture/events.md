@@ -1,6 +1,6 @@
 # RabbitMQ event topology
 
-Single **topic exchange** (`myproperty.events`), four event types, five queues, five consumers. Routing keys are derived from the C# event type name (`IntegrationEventNaming.RoutingKey`) — change the class name, the binding follows automatically.
+Single **topic exchange** (`myproperty.events`), six event types, seven queues, seven consumers. Routing keys are derived from the C# event type name (`IntegrationEventNaming.RoutingKey`) — change the class name, the binding follows automatically.
 
 ![RabbitMQ event topology](./diagrams/events.svg)
 
@@ -15,6 +15,8 @@ Single **topic exchange** (`myproperty.events`), four event types, five queues, 
 | `PaymentConfirmedEvent` | `ConfirmPaymentHandler` | `payment.confirmed` | `myproperty.payment.confirmed.email` | `PaymentConfirmedConsumer` | Email Hangfire job + SignalR push to tenant |
 | `PaymentRejectedEvent` | `RejectPaymentHandler` | `payment.rejected` | `myproperty.payment.rejected.signalr` | `PaymentRejectedConsumer` | Email Hangfire job + SignalR push to tenant |
 | `PaymentCreatedEvent` | `CreatePaymentHandler` | `payment.created` | `myproperty.payment.created.signalr` | `PaymentCreatedConsumer` | SignalR push |
+| `InviteAcceptedEvent` | `AcceptInviteHandler` / `ClaimInviteHandler` | `invite.accepted` | `myproperty.invite.accepted.landlord` | `InviteAcceptedConsumer` | Email Hangfire job + SignalR push to landlord |
+| `InviteRejectedEvent` | `RejectInviteHandler` | `invite.rejected` | `myproperty.invite.rejected.landlord` | `InviteRejectedConsumer` | SignalR push to landlord |
 
 **Two queues bound to one routing key** is the fan-out pattern for `payment.submitted`: a single publish dispatches to *both* the SignalR push and the OCR job, with independent ack semantics. If the OCR consumer is down, the SignalR push still happens; when OCR comes back up, RabbitMQ replays the queued messages.
 
@@ -37,6 +39,5 @@ See [ADR-0002](./adr/0002-rabbitmq-over-kafka.md) for the broader RabbitMQ-vs-Ka
 
 Per [`backend/CLAUDE.md`](../../backend/CLAUDE.md) → Post-M3 follow-ups:
 
-- **`InviteAccepted` / `InviteRejected` events.** Invite acceptance and rejection are handled synchronously by the API today; no event is published, so no SignalR push to landlords happens on accept/reject. Planned for M3.8 / M3.6 follow-up.
 - **`LeaseExpiringSoon` events + recurring scan.** Neither is wired yet. The query `GetLeasesExpiringSoonQuery` returns the candidate leases on demand (landlord endpoint); a Hangfire recurring scan that would push `LeaseExpiringSoonEvent` to a SignalR group is documented as a follow-up. (Two *other* recurring scans **are** now scheduled — `MarkExpiredInvitesJob` hourly and `OrphanCleanupJob` daily 03:00 UTC — but they mutate invite state directly and publish **no** integration event, so they don't appear in the topology above; see [`components.md`](./components.md) → Infrastructure.)
 - **No dead-letter exchange topology** for failed event handling. Consumer-side failures rely on Hangfire's `FailedEmails` DLQ for email jobs; OCR failures rely on Hangfire's job-retry policy. A queue-level DLX is a follow-up if non-job side effects start to need replay.

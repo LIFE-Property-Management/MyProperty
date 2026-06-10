@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Properties.Queries.GetPropertyById;
 using MyProperty.Domain.Entities;
+using MyProperty.Domain.Enums;
 
 namespace MyProperty.Infrastructure.Persistence.Repositories;
 
@@ -41,8 +42,19 @@ internal sealed class PropertyRepository(AppDbContext db) : IPropertyRepository
             l.Currency,
             l.Status.ToString())).ToList();
 
+        // Per-property occupancy (D7). HasActiveLease reuses the already-loaded
+        // leases; HasPendingInvite is a single existence check (effective-pending:
+        // Pending and not past ExpiresAt, matching the preview's expiry semantics).
+        var hasActiveLease = leases.Any(l => l.Status == LeaseStatus.Active);
+        var hasPendingInvite = await db.Invites.AnyAsync(
+            i => i.PropertyId == propertyId
+                && i.Status == InviteStatus.Pending
+                && i.ExpiresAt > DateTime.UtcNow,
+            ct);
+
         return new PropertyDetailDto(property.Id, property.Name, property.Address,
-            property.UnitNumber, property.PropertyType, property.CreatedAt, tenants);
+            property.UnitNumber, property.PropertyType, property.CreatedAt,
+            hasActiveLease, hasPendingInvite, tenants);
     }
 
     public async Task<(IReadOnlyList<Property> Items, int TotalCount)> ListByLandlordAsync(

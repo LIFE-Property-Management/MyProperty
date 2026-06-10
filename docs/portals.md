@@ -15,8 +15,13 @@
 
 ### Tenants Page
 - Tenant List table
-- Collapsible **Invitation Log** — shows `Pending`, `Rejected`, `Expired` only (not Accepted)
-- Banner alert when pending invites exist — clicking scrolls to and expands the Invitation Log
+
+### Invites Page (`/dashboard/invites`)
+- Dedicated invite-management page (replaces the Tenants-page "Invitation Log"). Lists the landlord's
+  invites with status (`Pending`/`Accepted`/`Rejected`/`Expired`/`Revoked`), filterable by status.
+- **Revoke** a `Pending`/`Expired` invite (→ `Revoked`) and **resend** one (fresh token, expiry reset,
+  email re-sent). Backed by `GET /api/v1/invites`, `POST /api/v1/invites/{id}/revoke`,
+  `POST /api/v1/invites/{id}/resend`.
 
 ### Tenant Detail Page
 - Tenant summary card
@@ -98,8 +103,8 @@ Three cases the invite flow must handle:
    (no Keycloak provisioning); the JWT email must match the invite email (else `403`). **Implemented**
    (returning-tenant accept).
 
-Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired` (landlord-cancelled `Revoked` is
-added in the invite-management work).
+Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired` · `Revoked` (landlord-cancelled,
+distinct from a naturally `Expired` invite).
 
 **Preview is status-aware.** `GET /invites/by-token/{token}` returns `200` with a `status` field for
 any *resolved* invite (so the accept page can show a specific Accepted/Rejected/Expired view); `404`

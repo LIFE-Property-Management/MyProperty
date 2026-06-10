@@ -36,6 +36,15 @@ internal sealed class LeaseConfiguration : IEntityTypeConfiguration<Lease>
         builder.HasIndex(l => new { l.PropertyId, l.Status });
         builder.HasIndex(l => l.EndDate);
 
+        // Single-active-lease-per-property invariant. Partial unique index: a
+        // property can have at most one Active, non-soft-deleted lease at a time
+        // (Terminated/Expired leases don't count, so re-letting a vacated property
+        // works). Backs the application-level guard in the invite-accept handlers
+        // against the accept/accept race. Status is stored as the string "Active".
+        builder.HasIndex(l => l.PropertyId)
+            .IsUnique()
+            .HasFilter("\"Status\" = 'Active' AND \"DeletedAt\" IS NULL");
+
         // Stakeholder dashboard: system-wide active-lease/occupancy counts
         // (Status) and the lease-growth trend (CreatedAt month buckets).
         builder.HasIndex(l => l.Status);

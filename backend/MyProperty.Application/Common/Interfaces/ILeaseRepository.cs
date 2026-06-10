@@ -66,4 +66,12 @@ public interface ILeaseRepository
     /// True if the property has at least one Active lease. Used to block property deletion.
     /// </summary>
     Task<bool> HasActiveLeaseForPropertyAsync(Guid propertyId, CancellationToken ct);
+
+    /// <summary>
+    /// Of the given property ids, returns the subset that have at least one Active
+    /// lease. Single set-based query — used to compute per-property occupancy on
+    /// the landlord property list without an N+1 of per-property existence checks.
+    /// </summary>
+    Task<IReadOnlySet<Guid>> GetPropertyIdsWithActiveLeaseAsync(
+        IReadOnlyCollection<Guid> propertyIds, CancellationToken ct);
 }

@@ -1,8 +1,10 @@
 using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Validation;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
+using MyProperty.Application.Invites.Events;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 
@@ -19,7 +21,8 @@ public sealed class ClaimInviteHandler(
     IInviteRepository invites,
     ILeaseRepository leases,
     ICurrentUserContext currentUserContext,
-    ILandlordDashboardCache dashboardCache)
+    ILandlordDashboardCache dashboardCache,
+    IEventPublisher events)
 {
     public async Task<InviteAcceptedDto> Handle(ClaimInviteCommand cmd, CancellationToken ct)
     {
@@ -44,6 +47,11 @@ public sealed class ClaimInviteHandler(
         if (!string.Equals(tenant.Email, invite.Email, StringComparison.OrdinalIgnoreCase))
             throw new ForbiddenException("This invite was sent to a different email address.");
 
+        // Single-active-lease-per-property invariant: never materialize a second
+        // active lease on an already-occupied property.
+        if (await leases.HasActiveLeaseForPropertyAsync(invite.PropertyId, ct))
+            throw new ConflictException("This property already has an active lease.");
+
         var lease = new Lease
         {
             LandlordId = invite.LandlordId,
@@ -62,6 +70,18 @@ public sealed class ClaimInviteHandler(
         await invites.SaveChangesAsync(ct);
 
         await dashboardCache.InvalidateAsync(invite.LandlordId, ct);
+
+        // After commit: notify the landlord (SignalR + email) via the bus.
+        // Property is eagerly loaded by GetByTokenHashAsync.
+        await events.PublishAsync(
+            new InviteAcceptedEvent(
+                invite.Id,
+                invite.LandlordId,
+                invite.PropertyId,
+                invite.Property!.Name,
+                tenant.Id,
+                $"{tenant.FirstName} {tenant.LastName}"),
+            ct);
 
         return new InviteAcceptedDto(invite.Id, lease.Id);
     }

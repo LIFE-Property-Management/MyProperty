@@ -40,4 +40,10 @@ public interface INotificationDispatcher
 
     Task NotifyLandlordLeaseExpiringAsync(
         Guid landlordId, LeaseExpiringNotification payload, CancellationToken ct);
+
+    Task NotifyLandlordInviteAcceptedAsync(
+        Guid landlordId, InviteAcceptedNotification payload, CancellationToken ct);
+
+    Task NotifyLandlordInviteRejectedAsync(
+        Guid landlordId, InviteRejectedNotification payload, CancellationToken ct);
 }

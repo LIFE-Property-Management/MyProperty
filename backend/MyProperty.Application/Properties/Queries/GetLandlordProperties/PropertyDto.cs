@@ -8,4 +8,6 @@ public sealed record PropertyDto(
     string Address,
     string? UnitNumber,
     PropertyType PropertyType,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool HasActiveLease,
+    bool HasPendingInvite);

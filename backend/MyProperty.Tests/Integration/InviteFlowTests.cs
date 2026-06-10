@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
+using MyProperty.Application.Invites.Events;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
@@ -111,6 +112,14 @@ public sealed class InviteFlowTests(ApiFixture fixture)
             var user = await db.Users.FirstAsync(u => u.Email == freshEmail);
             Assert.Equal(TenantAccountStatus.Active, user.AccountStatus);
         });
+
+        // ── 6b. InviteAccepted event was published after commit (drives the
+        //       landlord's SignalR push + notification email via the consumer).
+        var acceptedEvent = Assert.Single(
+            fixture.Events.Events.OfType<InviteAcceptedEvent>(), e => e.InviteId == accepted.InviteId);
+        Assert.Equal(landlordUserId, acceptedEvent.LandlordId);
+        Assert.Equal("Sunset Apt 12B", acceptedEvent.PropertyName);
+        Assert.Equal("Fresh Tenant", acceptedEvent.TenantName);
 
         // ── 7. Replaying the same token returns 404 (invite is no longer Pending).
         var replayResp = await anonClient.PostAsJsonAsync(

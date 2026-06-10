@@ -2,11 +2,16 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using MyProperty.Application.Common;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Application.Invites.Commands.ClaimInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
+using MyProperty.Application.Invites.Commands.ResendInvite;
+using MyProperty.Application.Invites.Commands.RevokeInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
+using MyProperty.Application.Invites.Queries.GetLandlordInvites;
+using MyProperty.Domain.Enums;
 
 namespace MyProperty.Api.Controllers.V1;
 
@@ -19,8 +24,30 @@ public sealed class InvitesController(
     GetInviteByTokenHandler getByToken,
     AcceptInviteHandler accept,
     ClaimInviteHandler claim,
-    RejectInviteHandler reject) : ControllerBase
+    RejectInviteHandler reject,
+    GetLandlordInvitesHandler getLandlordInvites,
+    RevokeInviteHandler revoke,
+    ResendInviteHandler resend) : ControllerBase
 {
+    /// <summary>
+    /// Lists the authenticated landlord's invites (newest first), optionally
+    /// filtered by status. Drives the dedicated <c>/dashboard/invites</c> page.
+    /// </summary>
+    [HttpGet]
+    [Authorize(Policy = "RequireLandlord")]
+    [EnableRateLimiting("authenticated")]
+    [ProducesResponseType(typeof(PagedResult<InviteListItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResult<InviteListItemDto>>> List(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] InviteStatus? status = null,
+        CancellationToken ct = default)
+        => Ok(await getLandlordInvites.Handle(
+            new GetLandlordInvitesQuery(page, pageSize, status), ct));
+
     /// <summary>Creates an invite for a tenant. Email/FirstName/LastName are the invitee's fields.</summary>
     [HttpPost]
     [Authorize(Policy = "RequireLandlord")]
@@ -93,4 +120,42 @@ public sealed class InvitesController(
         await reject.Handle(new RejectInviteCommand(token), ct);
         return NoContent();
     }
+
+    /// <summary>
+    /// Revokes one of the landlord's own invites (cancels it). Only Pending or
+    /// Expired invites can be revoked; the invite transitions to Revoked.
+    /// </summary>
+    [HttpPost("{id:guid}/revoke")]
+    [Authorize(Policy = "RequireLandlord")]
+    [EnableRateLimiting("authenticated")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> Revoke(Guid id, CancellationToken ct)
+    {
+        await revoke.Handle(new RevokeInviteCommand(id), ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Re-issues one of the landlord's own Pending or Expired invites: a fresh
+    /// token is generated (the old link stops working), the expiry resets, and
+    /// the invite email is re-sent.
+    /// </summary>
+    [HttpPost("{id:guid}/resend")]
+    [Authorize(Policy = "RequireLandlord")]
+    [EnableRateLimiting("authenticated")]
+    [ProducesResponseType(typeof(InviteResentDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<InviteResentDto>> Resend(Guid id, CancellationToken ct)
+        => Ok(await resend.Handle(new ResendInviteCommand(id), ct));
 }

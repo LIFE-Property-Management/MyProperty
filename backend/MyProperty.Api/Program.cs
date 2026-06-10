@@ -26,7 +26,10 @@ using MyProperty.Application.Invites.Commands.AcceptInvite;
 using MyProperty.Application.Invites.Commands.ClaimInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
+using MyProperty.Application.Invites.Commands.ResendInvite;
+using MyProperty.Application.Invites.Commands.RevokeInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
+using MyProperty.Application.Invites.Queries.GetLandlordInvites;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Application.Landlord.Queries.GetLandlordTenants;
 using MyProperty.Application.Landlord.Queries.GetTenantDetail;
@@ -176,6 +179,9 @@ try
     builder.Services.AddScoped<AcceptInviteHandler>();
     builder.Services.AddScoped<ClaimInviteHandler>();
     builder.Services.AddScoped<RejectInviteHandler>();
+    builder.Services.AddScoped<GetLandlordInvitesHandler>();
+    builder.Services.AddScoped<RevokeInviteHandler>();
+    builder.Services.AddScoped<ResendInviteHandler>();
 
     // Admin handlers
     builder.Services.AddScoped<GetStakeholderDashboardHandler>();

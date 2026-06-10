@@ -1,10 +1,35 @@
 using MyProperty.Domain.Entities;
+using MyProperty.Domain.Enums;
 
 namespace MyProperty.Application.Common.Interfaces;
 
 public interface IInviteRepository
 {
     Task AddAsync(Invite invite, CancellationToken ct);
+
+    /// <summary>
+    /// Loads a single invite by id with Property included. Returns null if not
+    /// found. Does NOT filter by status — the caller (revoke/resend) decides.
+    /// </summary>
+    Task<Invite?> GetByIdAsync(Guid id, CancellationToken ct);
+
+    /// <summary>
+    /// Paginated list of the landlord's invites with Property included, ordered
+    /// by CreatedAt descending. Optionally filtered to a single
+    /// <paramref name="statusFilter"/>. Landlord-scoped — only the landlord's own
+    /// invites are returned. Returns the page plus the total (filtered) count.
+    /// </summary>
+    Task<(IReadOnlyList<Invite> Items, int TotalCount)> ListByLandlordAsync(
+        Guid landlordId, int page, int pageSize, InviteStatus? statusFilter, CancellationToken ct);
+
+    /// <summary>
+    /// Of the given property ids, returns the subset that have at least one
+    /// <c>Pending</c> invite that has not yet passed <c>ExpiresAt</c> (an expired-
+    /// but-not-yet-swept invite is not "pending"). Single set-based query — used to
+    /// compute per-property occupancy without an N+1 of per-property checks.
+    /// </summary>
+    Task<IReadOnlySet<Guid>> GetPropertyIdsWithPendingInviteAsync(
+        IReadOnlyCollection<Guid> propertyIds, CancellationToken ct);
 
     /// <summary>
     /// Loads invite with Property and Landlord eagerly included.
