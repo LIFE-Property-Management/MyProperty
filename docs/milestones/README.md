@@ -6,11 +6,12 @@ Index of milestone records. Each milestone has its own file: completed milestone
 
 | Milestone | Window | Status | File |
 |---|---|---|---|
+| M1 — Research, Planning & Foundation | Late Mar – mid-Apr 2026 | ✅ Complete | [`m1-planning-foundation.md`](./m1-planning-foundation.md) |
 | M2 — Frontend MVP | through April 17, 2026 | ✅ Complete (with documented debt) | [`m2-frontend-mvp.md`](./m2-frontend-mvp.md) |
 | M3 — Backend MVP | April 23 – May 8, 2026 | ✅ Complete | [`m3-backend-mvp.md`](./m3-backend-mvp.md) |
 | M4 — Deployment & Operations | May 13 – May 25, 2026 | ✅ Complete | [`m4-deployment-ops.md`](./m4-deployment-ops.md) |
 | M5 — End-to-end Auth & Authorization | May 2026 – | 🟡 In progress (local complete; cluster deploy deferred) | [`m5-auth-end-to-end.md`](./m5-auth-end-to-end.md) |
-| M6 — Product Analytics & Experimentation | June 2026 – | 🟡 In progress (M6.1 analytics done) | [`m6-product-analytics.md`](./m6-product-analytics.md) |
+| M6 — Product Analytics & Experimentation | June 2026 – | 🟡 In progress (M6.1 analytics + M6.2 North Star done) | [`m6-product-analytics.md`](./m6-product-analytics.md) |
 
 ## Conventions
 
