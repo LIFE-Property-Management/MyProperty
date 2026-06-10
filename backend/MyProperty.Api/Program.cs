@@ -44,6 +44,7 @@ using MyProperty.Application.Properties.Commands.DeleteProperty;
 using MyProperty.Application.Properties.Commands.UpdateProperty;
 using MyProperty.Application.Properties.Queries.GetLandlordProperties;
 using MyProperty.Application.Properties.Queries.GetPropertyById;
+using MyProperty.Application.Stats.Queries.GetPublicStats;
 using MyProperty.Infrastructure;
 using MyProperty.Infrastructure.Identity;
 using MyProperty.Infrastructure.Jobs;
@@ -174,6 +175,9 @@ try
     builder.Services.AddScoped<GetInviteByTokenHandler>();
     builder.Services.AddScoped<AcceptInviteHandler>();
     builder.Services.AddScoped<RejectInviteHandler>();
+
+    // Public handlers
+    builder.Services.AddScoped<GetPublicStatsHandler>();
 
     // Admin handlers
     builder.Services.AddScoped<GetStakeholderDashboardHandler>();

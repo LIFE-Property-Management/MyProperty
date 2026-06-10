@@ -1,14 +1,34 @@
-// TODO(landing): wire to /api/v1/stats/public once that endpoint exists.
-// See backend M4+ planning. Until then, placeholder zeros are used deliberately
-// — do not substitute fake inflated numbers before real data is available.
+"use client";
 
-const stats = [
-    { value: "$0", label: "Rent collected", testId: "stat-rent" },
-    { value: "0", label: "Properties managed", testId: "stat-properties" },
-    { value: "0", label: "Landlords onboarded", testId: "stat-landlords" },
-];
+import { usePublicStats } from "@/lib/hooks/usePublicStats";
+
+function formatRent(amount: number): string {
+    if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+    if (amount >= 1_000) return `$${Math.round(amount / 1_000)}K`;
+    return `$${amount.toLocaleString()}`;
+}
 
 export default function StatsStrip() {
+    const { data } = usePublicStats();
+
+    const stats = [
+        {
+            value: formatRent(data?.rentCollected ?? 0),
+            label: "Rent collected",
+            testId: "stat-rent",
+        },
+        {
+            value: String(data?.propertiesManaged ?? 0),
+            label: "Properties managed",
+            testId: "stat-properties",
+        },
+        {
+            value: String(data?.landlordsOnboarded ?? 0),
+            label: "Landlords onboarded",
+            testId: "stat-landlords",
+        },
+    ];
+
     return (
         <section className="px-6 py-14 md:py-20 bg-background border-t border-border">
             <div className="max-w-5xl mx-auto">
@@ -17,7 +37,6 @@ export default function StatsStrip() {
                         <div key={label}>
                             <p
                                 className="font-heading text-4xl md:text-5xl text-primary font-semibold mb-2"
-                                data-todo="real-stats"
                                 data-testid={testId}
                             >
                                 {value}
