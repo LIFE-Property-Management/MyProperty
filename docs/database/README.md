@@ -43,6 +43,22 @@ failed_emails   (standalone — no relationships)
 
 There is **no `Role` column** on `users`: a user's role (Tenant / Landlord / Admin) is owned by Keycloak and carried in the JWT, not stored relationally (it was deliberately dropped — see the migration history in [§8](#8-schema-evolution)). The same `users` row can act as a **landlord** (`properties.LandlordId`, `leases.LandlordId`) and as a **tenant** (`leases.TenantId`).
 
+### 1.1 Database engine & topology (the "why")
+
+**Why PostgreSQL.** The domain is inherently relational — users, properties, leases, payments, and invites are connected by mandatory foreign keys and benefit from referential integrity enforced in the engine, not just the app. PostgreSQL gives us: strong FK integrity and full ACID transactions (the invite-accept flow creates a `users` row and a `leases` row in one unit of work — it must be atomic); a mature, first-class .NET story via **Npgsql + EF Core 10**; `jsonb`/JSON support on hand if a future column needs semi-structured data (e.g. the opaque OCR response) without a second datastore; and the operational simplicity of **one engine the whole stack already speaks** — the API, Hangfire, Keycloak, and Unleash all persist to the same PostgreSQL server, so there is a single thing to run, back up, and reason about. (This is a genuine fit for the workload, independent of any milestone that scheduled the work.)
+
+**Instance / database topology.** A single PostgreSQL **instance** hosts several **logical databases**:
+
+| Database | Owner | Schema modelled here? |
+|---|---|---|
+| `myproperty` (application) | `AppDbContext` (EF Core) + Hangfire | **Yes** — this README + `schema.dbml` document it. Hangfire's own tables/schema live **alongside** the app tables in this database but are **not** modelled by `AppDbContext`. |
+| `keycloak` | Keycloak | No — Keycloak manages its own schema. |
+| `unleash` | Unleash (feature flags) | No — Unleash manages its own schema. |
+
+The `keycloak` and `unleash` databases are created on the same instance by [`infrastructure/postgres/init.sql`](../../infrastructure/postgres/init.sql). **This document describes the application database only** (the tables owned by `AppDbContext`). Keycloak and Unleash own and migrate their own schemas in their own databases; Hangfire's job-storage tables sit in the application database but outside the EF model, so they don't appear in the ERD.
+
+**How the schema reaches deployed environments.** The EF migration bundle runs **forward-only** as a Helm **pre-upgrade `Job`**, once per deploy, before new API pods roll out — see [§7](#7-migration-strategy) and the operations runbook in [`docs/operations/migrations.md`](../operations/migrations.md) (not duplicated here).
+
 ---
 
 ## 2. Entity-Relationship Diagram
@@ -109,6 +125,7 @@ Only table-specific columns are listed (the five `BaseEntity` columns from §3 a
 | `Name` | `varchar(256)` | no | | |
 | `Address` | `varchar(512)` | no | | |
 | `UnitNumber` | `varchar(32)` | yes | | |
+| `PropertyType` | `varchar(16)` | no | | `PropertyType {House, Apartment, Commercial, Other}`; stored via `HasConversion<string>()`, DB default `'Other'` |
 
 ### `leases`
 | Column | Type | Null | Key | Notes |
@@ -241,19 +258,27 @@ All indexes are declared explicitly in the entity configurations. Indexes that e
 |---|---|---|---|
 | `users` | `Email` | unique | identity lookup / dedupe |
 | `users` | `KeycloakSubId` | unique | JWT `sub` → user resolution on every authenticated request |
+| `users` | `CreatedAt` | b-tree | stakeholder dashboard — user-growth time series |
 | `properties` | `LandlordId` | b-tree | FK + landlord property list |
 | `leases` | `(LandlordId, Status)` | b-tree | landlord dashboard (covers `LandlordId` FK) |
 | `leases` | `(TenantId, Status)` | b-tree | tenant dashboard / active-lease lookup (covers `TenantId` FK) |
 | `leases` | `(PropertyId, Status)` | b-tree | per-property lease list (covers `PropertyId` FK) |
 | `leases` | `EndDate` | b-tree | expiring-soon recurring scan |
+| `leases` | `Status` | b-tree | stakeholder dashboard — lease status breakdown |
+| `leases` | `CreatedAt` | b-tree | stakeholder dashboard — time-series / recent leases |
 | `payments` | `(LeaseId, Status)` | b-tree | payment history / dashboard (covers `LeaseId` FK) |
 | `payments` | `IX_payments_DueDate_Outstanding` | **partial** | overdue-scan job — `WHERE Status='Outstanding' AND DeletedAt IS NULL` |
+| `payments` | `Status` | b-tree | stakeholder dashboard — payment status breakdown |
+| `payments` | `ConfirmedAt` | b-tree | stakeholder dashboard — confirmed-payment time series |
 | `invites` | `TokenHash` | unique | anonymous invite preview/accept by token |
 | `invites` | `ExpiresAt` | b-tree | expiry / orphan-cleanup job |
 | `invites` | `(LandlordId, Status)` | b-tree | landlord invite list (covers `LandlordId` FK) |
 | `invites` | `PropertyId` | b-tree | FK index (EF auto-created) |
+| `invites` | `CreatedAt` | b-tree | stakeholder dashboard — recent-invites time series |
 | `failed_emails` | `FailedAt` | b-tree | operator triage ordering |
 | `failed_emails` | `HangfireJobId` | b-tree | correlate a DLQ row to its job |
+
+The six single-column `CreatedAt`/`Status`/`ConfirmedAt` indexes (added in `AddStakeholderDashboardIndexes`, [§8](#8-schema-evolution)) back the admin system-wide stakeholder dashboard's status breakdowns and time-series rollups.
 
 The partial index on `payments.DueDate` is the one tuned result from the M3.4 SQL-optimization work: an unfiltered index on `DueDate` was *slower* than no index (~74 % of rows match `DueDate < today`, so the planner walked nearly the whole table), whereas the partial form covers only `Outstanding`/non-deleted rows (~4 % the size) and answers the job's filter from the index alone. Full analysis: [`docs/performance/m3-sql-optimization/`](../performance/m3-sql-optimization/).
 
@@ -287,7 +312,7 @@ dotnet ef database update -p backend/MyProperty.Infrastructure -s backend/MyProp
 
 ## 8. Schema evolution
 
-The current schema is the result of seven migrations. The names alone document the most consequential design decisions (role externalised to Keycloak; invite token stored only as a hash).
+The current schema is the result of nine migrations. The names alone document the most consequential design decisions (role externalised to Keycloak; invite token stored only as a hash).
 
 | # | Migration | What it did |
 |---|---|---|
@@ -298,6 +323,8 @@ The current schema is the result of seven migrations. The names alone document t
 | 5 | `20260504170924_RenameInviteTokenToTokenHash` | Renamed invite `Token` → `TokenHash` — store the SHA-256 hash, never the plaintext token (security hardening). |
 | 6 | `20260508202452_AddReceiptContentTypeAndSize` | Added `ReceiptContentType` + `ReceiptSizeBytes` to `payments` (M3.9 file upload). |
 | 7 | `20260508221203_AddPaymentOcrColumns` | Added the `Ocr*` columns to `payments` (M3.10 receipt OCR). |
+| 8 | `20260603220140_AddPropertyType` | Added the `PropertyType` column to `properties` (`varchar(16)`, NOT NULL, DB default `'Other'`). |
+| 9 | `20260607165329_AddStakeholderDashboardIndexes` | Added six single-column indexes backing the admin stakeholder dashboard: `users.CreatedAt`; `leases.Status`, `leases.CreatedAt`; `payments.Status`, `payments.ConfirmedAt`; `invites.CreatedAt`. |
 
 ---
 

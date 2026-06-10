@@ -28,8 +28,8 @@ The five prior logs are the source material for Parts 2 and 3:
 # Part 1 — Milestone 6 entries
 
 > ⚠️ **Verification note.** Entries 1–4 below are **drafts reconstructed from the
-> committed M6 deliverables** (`docs/milestones/m6-product-analytics.md`,
-> `docs/milestones/m6-north-star-metric.md`, `docs/operations/admin-dashboard.md`) and
+> committed M6 deliverables** (`docs/milestones/m6-product-analytics.md` — which now also
+> contains the North Star section — and `docs/operations/admin-dashboard.md`) and
 > the PR history. The *decisions* they describe are real and shipped; the **prompt
 > wording, exact dates, and time-saved figures are placeholders** — replace them with
 > the details from your actual conversations before this log is considered final.
@@ -115,7 +115,7 @@ as M5.6's `IFeatureFlags` and M3's `IEventPublisher`._
 
 ### Entry 3 — North Star Metric: definition & defence (M6.2)
 
-**Date:** 2026-06-07 _(per `m6-north-star-metric.md`)_
+**Date:** 2026-06-07 _(per the North Star section of `m6-product-analytics.md`)_
 
 **Tool used:** Claude — pressure-tested the North Star candidate and argued down the
 alternatives instead of just declaring one.

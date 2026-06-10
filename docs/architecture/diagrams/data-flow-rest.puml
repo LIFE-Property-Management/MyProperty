@@ -31,7 +31,7 @@ handler -> repo: GetByIdAsync(id)
 repo -> pg: SELECT ... WHERE Id=@id AND DeletedAt IS NULL
 pg --> repo: row
 repo --> handler: Payment entity
-handler -> handler: Payment.Confirm()\n(state: Pending -> Confirmed)
+handler -> handler: Guard Status==Pending, then set Confirmed\n(handler-enforced; Payment is anemic - no Payment.Confirm())
 handler -> repo: SaveChangesAsync(ct)
 repo -> repo: Interceptor stamps UpdatedAt + UpdatedBy from JWT sub
 repo -> pg: UPDATE Payment SET Status='Confirmed', ...

@@ -51,8 +51,8 @@ Authentication is enforced at three levels with distinct jobs:
 5. The page subscribes to the store and routes by role:
    - `landlord` → `/dashboard`
    - `tenant` → `/tenant/dashboard`
-   - `admin` → **no portal yet**: renders a "no portal for this role" message (handled
-     explicitly; not an error). A loading state shows while init runs.
+   - `admin` → `/admin/dashboard` (the platform-wide stakeholder analytics portal; the admin
+     `KeycloakInit` gate additionally bounces any non-admin role back to `/login`).
 
 On a portal route, `KeycloakInit` runs the same `initKeycloak()` (the promise is cached),
 confirms the session, and renders the portal — or redirects to `/login` if unauthenticated.

@@ -19,17 +19,17 @@ Four independent paths share a Grafana UI: **metrics** (Prometheus), **logs** (L
 
 ## Logs path
 
-Two ingestion routes, one store.
+One uniform ingestion path: every container writes structured logs to stdout, and Promtail ships all of it to Loki.
 
-| Source | How logs reach Loki | Why two routes |
-|---|---|---|
-| **API process** | Direct via `Serilog.Sinks.Grafana.Loki` (`LokiUrl` env var) | Sends rich structured JSON with `CorrelationId`, scopes, exception chains — no parsing required on the Loki side |
-| **All other containers** (Postgres, Redis, RabbitMQ, Keycloak, Frontend, AIOps webhook, Loki, Prometheus, …) | Promtail reads container stdout, ships to Loki | Without Promtail every non-API container would be a `docker logs` debug session |
+| Source | How logs reach Loki |
+|---|---|
+| **API process** | Writes CLEF JSON to stdout via Serilog's console sink (`WriteTo.Console(new CompactJsonFormatter())`), enriched with `CorrelationId`, scopes, and exception chains. It **deliberately does NOT push to Loki directly** — no `Serilog.Sinks.Grafana.Loki`, no `LokiUrl`. Promtail tails its stdout exactly like every other container. |
+| **All other containers** (Postgres, Redis, RabbitMQ, Keycloak, Frontend, AIOps webhook, Loki, Prometheus, …) | Promtail reads container stdout, ships to Loki |
 
-Promtail discovery differs by environment:
+A single ingestion path, uniform across every service, means Promtail is the one shipper and crash output is still captured. Promtail discovery differs by environment:
 
 - **Dev:** Docker SD via `/var/run/docker.sock` (Docker socket SD). The compose service / project labels become Loki labels.
-- **Prod:** Kubernetes DaemonSet with a ServiceAccount + **namespaced `Role`** (read `pods` + `pods/log` **within `project-02` only** — no cluster-wide log access). One pod per node, tailing the namespace's pod logs.
+- **Prod:** Kubernetes DaemonSet with a ServiceAccount + **namespaced `Role`** (read `pods` **within `project-02` only** — no cluster-wide log access). One pod per node, tailing the namespace's pod logs.
 
 Loki itself: **10 Gi** PVC, label-indexed (no full-text indexing → much lower resource footprint than Elasticsearch). See [ADR-0007](./adr/0007-loki-over-elk.md).
 
@@ -48,6 +48,9 @@ route:
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 12h
+  routes:
+    - matchers: [severity = critical]   # explicit critical sub-route (same receiver)
+      receiver: 'aiops-webhook'
 inhibit_rules:
   - source_matchers: [severity = critical]
     target_matchers: [severity = warning]
@@ -76,10 +79,10 @@ Self-hosted lightweight uptime monitor with a public status page.
 
 | Aspect | Detail |
 |---|---|
-| Probes | Recurring HTTPS GET against the public hosts (`app.X`, `api.X`, `auth.X`); 60 s default interval |
+| Probes | **15** internal service probes over http(s) (`frontend`, backend health endpoints (live/ready/diagnostics), `keycloak`, `postgres`, `redis`, `rabbitmq`, `loki`, `prometheus`, `alertmanager`, `aiops-webhook`, `grafana`, `unleash`, `mailpit`); 60 s default interval. Most are HTTP GET, but two — `postgres` and `redis` — are non-HTTP probe types (Postgres `SELECT 1` and a Redis PING) |
 | Storage | SQLite on a **2 Gi** PVC (`uptime_kuma_data`) |
 | UI | Internal admin UI (port 3001) + **public status page** at `status.X` (separate Ingress) |
-| Notifications | Discord (`#uptime` — a **separate** channel from AIOps's `#alerts`), email (configurable SMTP — defaults to dev placeholders) |
+| Notifications | One Discord channel (`#uptime` — a **separate** channel from AIOps's `#alerts`) + one email channel (configurable SMTP — defaults to dev placeholders) |
 | Seeding | First-run Helm `Job` (`uptime-kuma-seed-job`) creates the admin user + monitors + notification channels + status page via Kuma's socket.io API |
 
 ## Grafana
@@ -87,7 +90,7 @@ Self-hosted lightweight uptime monitor with a public status page.
 | Surface | Provisioning |
 |---|---|
 | Datasources | Chart-provisioned ConfigMaps for Loki + Prometheus + Alertmanager (no `kube-prometheus-stack` — that dependency was dropped, [ADR-0009](./adr/0009-hetzner-project-02-over-doks.md)) |
-| Dashboards | API metrics + API logs, plus per-component **log dashboards** (Postgres, Redis, RabbitMQ, Keycloak, Frontend) and a logs-overview (M5.4, #132) — provisioned as ConfigMaps the sidecar picks up via label `grafana_dashboard` |
+| Dashboards | 9 dashboards: API metrics + API logs, plus per-component **log dashboards** (Postgres, Redis, RabbitMQ, Keycloak, Frontend, Mailpit) and a logs-overview (M5.4, #132). Bundled into a single ConfigMap that globs `files/dashboard-*.json`, mounted as a directory into Grafana and loaded by its file-based dashboard provider — no `grafana_dashboard` label |
 | Auth | **Dev:** anonymous Admin (compose-only convenience). **Prod:** admin credentials from the `myproperty-grafana` Secret. |
 | Persistence | 2 Gi PVC for state |
 

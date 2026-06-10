@@ -40,6 +40,13 @@ hub -> browser: WebSocket frame: PaymentConfirmed
 browser -> tq: queryClient.invalidateQueries(['tenant','payments','current'])
 tq -> browser: refetch -> UI updates with authoritative state
 
+note over hub, tq #FFE0E0
+**Browser leg not yet wired:** the server path (consumer -> dispatcher ->
+hub -> Redis) is live, but @microsoft/signalr is not in the frontend.
+Steps 39-41 are the *planned* client behaviour; today the tenant sees the
+update on the next TanStack Query refetch (focus / navigation), not via push.
+end note
+
 note over consumer, hub #LightGreen
 **Why two side effects:** at-least-once email via Hangfire DLQ
 gives durable delivery; SignalR push gives instant UX

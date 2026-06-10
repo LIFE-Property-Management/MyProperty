@@ -27,7 +27,7 @@ The substitution is allowed by the milestones doc; the substitution itself is th
 
 ### Use Anthropic Claude — both tiers, single SDK
 
-- **Receipt OCR:** `claude-sonnet-4-5-20250929` (Anthropic SDK, vision input). Configured via `Anthropic:Model` / `Anthropic:TimeoutSeconds` (default 30 s) — see [`appsettings.json`](../../../backend/MyProperty.Api/appsettings.json).
+- **Receipt OCR:** `claude-sonnet-4-5-20250929` (no .NET SDK — a hand-rolled `HttpClient` calls the Anthropic Messages API directly with raw `x-api-key` / `anthropic-version: 2023-06-01` headers; vision input). Configured via `Anthropic:Model` / `Anthropic:TimeoutSeconds` (default 30 s) — see [`appsettings.json`](../../../backend/MyProperty.Api/appsettings.json).
 - **AIOps triage:** `claude-haiku-4-5-20251001` (Python `anthropic` SDK). Configured via `AIOPS_ANTHROPIC_MODEL` — see [`aiops-webhook`](../../../infrastructure/aiops-webhook/).
 
 **One vendor, one API key surface** (one for each environment, but the same vendor account). The receipt-OCR wrapper (`AnthropicReceiptOcrService`) and the AIOps webhook each implement their own retry + timeout — graceful degradation differs by surface (the AIOps webhook falls back to raw labels in Slack; receipt OCR falls back to "no OCR result" and the user fills the form manually).
@@ -38,7 +38,7 @@ The substitution is allowed by the milestones doc; the substitution itself is th
 
 - **Sonnet's vision quality on structured documents (receipts) is high** in our sample tests; the JSON output it returns parses cleanly.
 - **Haiku's cost-per-token is low enough to triage chatty alerts** without budget concern. The AIOps webhook calls Haiku once per *firing* alert (Alertmanager's `repeat_interval: 12h` caps re-prompting), so a noisy day is ~50 calls, not 50 000.
-- **One SDK per language** (.NET — `Anthropic.SDK`; Python — `anthropic`) — single auth model, single billing dashboard.
+- **Only the Python side takes an SDK dependency** (`anthropic`); the .NET side calls the Messages API over a hand-rolled `HttpClient` with raw headers (no .NET Anthropic SDK package exists in our build). Both still share a single auth model and a single billing dashboard.
 - **`claude-sonnet-4-5` and `claude-haiku-4-5-20251001` are both currently available** as of 2026-05.
 
 ### Negative
@@ -64,7 +64,7 @@ The substitution is allowed by the milestones doc; the substitution itself is th
 
 - Comparable vision quality on receipts.
 - Authentication requires a Service Account JSON, which is more friction than an API key for the demo (and one more secret to manage in External Secrets).
-- The .NET SDK is less mature than Anthropic's official `Anthropic.SDK` or OpenAI's official SDK.
+- Google's official .NET client for Vertex is less mature than OpenAI's official SDK; and since our Anthropic integration is a thin hand-rolled `HttpClient` call anyway, Vertex's heavier auth + client surface buys us nothing here.
 
 ### pgvector + RAG (original BE-17) — rejected (substituted)
 

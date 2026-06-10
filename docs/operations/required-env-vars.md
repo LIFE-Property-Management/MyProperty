@@ -30,11 +30,11 @@ updating this doc are incomplete.
 | Config key | Env var form | Required | Default | Source (dev) | Source (prod) | Notes |
 |---|---|---|---|---|---|---|
 | `Keycloak:Authority` | `Keycloak__Authority` | Yes | (none) | user-secrets | K8s ConfigMap | JWT issuer URL. e.g. `http://localhost:8080/realms/MyProperty` in dev. |
-| `Keycloak:Audience` *(future)* | `Keycloak__Audience` | Yes (post-A1) | `myproperty-api` | appsettings.json | K8s ConfigMap | The audience string the API validates against. Wired in when A1 backend half lands. |
+| `Keycloak:Audience` | `Keycloak__Audience` | Yes | `myproperty-api` | appsettings.json | K8s ConfigMap | The audience string the API validates against (`ValidAudience`). Wired — the API rejects tokens whose `aud` does not contain `myproperty-api`. |
 | `ConnectionStrings:Postgres` | `ConnectionStrings__Postgres` | Yes | (none) | user-secrets | K8s secret | Includes password — secret, not configmap. |
 | `Cache:RedisConnection` | `Cache__RedisConnection` | Yes | (none) | user-secrets | K8s ConfigMap | No password in dev; prod may include `password=...`. |
 | `SignalR:UseRedisBackplane` | `SignalR__UseRedisBackplane` | No | `true` | appsettings.json | K8s ConfigMap | Tests set this to `false` to skip Redis backplane. |
-| `LokiUrl` | `LokiUrl` | No | (none) | appsettings.Development.json | K8s ConfigMap | When unset, logs go to console only. |
+| `LokiUrl` | `LokiUrl` | No | (none) | — | — | **Not consumed by the current backend.** Logging is **stdout-only** (Serilog console / CLEF `CompactJsonFormatter`); Promtail tails stdout → Loki. There is no direct `Serilog.Sinks.Grafana.Loki` sink, so this key is vestigial — remove when confirmed. |
 | `Invites:PortalBaseUrl` | `Invites__PortalBaseUrl` | Yes | (none) | appsettings.Development.json | K8s ConfigMap | Frontend URL used in invite emails. |
 | `Invites:ExpiryDays` | `Invites__ExpiryDays` | No | `7` | appsettings.json | K8s ConfigMap | |
 | `FileStorage:LocalRoot` | `FileStorage__LocalRoot` | Yes | (none) | appsettings.Development.json | K8s ConfigMap + PV mount | **Audit E2 / D4**: must be a mounted persistent volume path in prod, e.g. `/app/storage`. Receipts are lost on container restart otherwise. |
@@ -42,7 +42,9 @@ updating this doc are incomplete.
 | `Anthropic:Model` | `Anthropic__Model` | No | `claude-sonnet-4-5-20250929` | appsettings.json | K8s ConfigMap | |
 | `Anthropic:TimeoutSeconds` | `Anthropic__TimeoutSeconds` | No | `30` | appsettings.json | K8s ConfigMap | |
 | `Smtp:Host` / `Smtp:Port` / `Smtp:UseStartTls` / `Smtp:Username` / `Smtp:Password` | `Smtp__*` | Yes | (none) | user-secrets / appsettings.Development.json | K8s secret (username/password); ConfigMap (host/port/tls) | **Audit E1**: `UseStartTls` MUST be `true` in any deployed environment. Cleartext SMTP otherwise. |
-| `Cors:AllowedOrigins` *(future)* | `Cors__AllowedOrigins` | Yes (post-C1) | (none) | appsettings.Development.json | K8s ConfigMap | Comma-separated list of allowed origins. Added in C1. |
+| `Cors:AllowedOrigins` | `Cors__AllowedOrigins` | Yes | (none) | appsettings.Development.json | K8s ConfigMap | Allowed origins for the `MyPropertyDefault` CORS policy (`AllowCredentials`, no wildcard). |
+| `Anthropic:Model` (note) | `Anthropic__Model` | No | `claude-sonnet-4-5-20250929` | appsettings.json | K8s ConfigMap | The .NET OCR service calls the Anthropic Messages API over `HttpClient` (no SDK). |
+| `Unleash:ApiToken` | `Unleash__ApiToken` | No | (none) | user-secrets | K8s secret | When absent, `NullFeatureFlags` is registered (flags inert, defaults returned). When set, `UnleashFeatureFlags` polls a background snapshot. |
 
 ## Frontend (Next.js)
 
@@ -53,6 +55,10 @@ requires a rebuild + redeploy of the frontend container.
 |---|---|---|---|---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | Yes (prod), No (dev) | (empty in dev) | `.env.local` (commented out) | Docker build arg | **Audit F1**: must be set at Docker build time for prod. Leave unset in dev so MSW intercepts relative URLs. |
 | `NEXT_PUBLIC_KEYCLOAK_URL` | Yes | `http://localhost:8080` (dev) | `.env.local` | Docker build arg | **Audit F2**: must be browser-resolvable, not `localhost:8080`, in prod. |
+| `NEXT_PUBLIC_KEYCLOAK_REALM` | Yes | `MyProperty` | `.env.local` | Docker build arg | Realm name; part of the keycloak-js init config. |
+| `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID` | Yes | `myproperty-frontend` | `.env.local` | Docker build arg | Public OIDC client id (authorization-code + PKCE). |
+| `NEXT_PUBLIC_POSTHOG_KEY` | No | (empty ⇒ analytics off) | `.env` (optional) | repo secret (optional) | PostHog project API key; analytics is a no-op without it (not added to `requirePublicEnv`). |
+| `NEXT_PUBLIC_POSTHOG_HOST` | No | `https://eu.i.posthog.com` | `.env` (optional) | build arg (non-secret) | EU cloud by default (tenant-PII residency). |
 | `NEXT_PUBLIC_DEV_AUTH_BYPASS` | No | `false` | `.env.local` (dev only) | (must not be set) | **Audit A2**: requires `.dockerignore` to exclude `.env.local` from prod build context. |
 
 ## Keycloak
@@ -67,7 +73,7 @@ requires a rebuild + redeploy of the frontend container.
 | `KEYCLOAK_ADMIN` | Yes | (none) | `admin` (compose, hardcoded) | K8s secret | **Audit S2**: must not be hardcoded in prod. |
 | `KEYCLOAK_ADMIN_PASSWORD` | Yes | (none) | `admin123` (compose, hardcoded) | K8s secret | **Audit S2**: must not be hardcoded in prod. |
 | `KC_DB_URL` / `KC_DB_USERNAME` / `KC_DB_PASSWORD` | Yes | (none) | compose | K8s secret | **Audit S1**: dev uses `postgres/postgres`; prod uses K8s secret. |
-| Google IdP `clientSecret` | (deferred M4) | redacted in realm-export.json | user-secrets (dev) | (none in M4) | **Decision in `docs/decisions/keycloak-prod-config.md`**: Google SSO non-functional in prod for M4; addressed in M5. |
+| Google IdP `clientSecret` | (deferred M4) | redacted in realm-export.json | user-secrets (dev) | (none in M4) | **Decision in `docs/operations/keycloak-prod-config.md`**: Google SSO non-functional in prod for M4; addressed in M5. |
 
 ### Database (Keycloak's own state)
 

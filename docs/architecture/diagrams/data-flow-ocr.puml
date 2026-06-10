@@ -61,7 +61,7 @@ else flag ON (default; fail-open if Unleash unreachable)
   anth -> claude: POST /v1/messages\n(vision, model=claude-sonnet-4-5, timeout=30s)
   claude --> anth: { amount, date, merchant }
   anth --> ocrjob: parsed result
-  ocrjob -> repo: Update(Payment.OcrResults = json)\nSaveChangesAsync
+  ocrjob -> repo: Set Ocr{Amount,Date,Merchant,RawResponse,ProcessedAt}\nSaveChangesAsync (discrete columns - no Payment.OcrResults)
   repo -> pg: UPDATE
   pg --> repo: ok
 end

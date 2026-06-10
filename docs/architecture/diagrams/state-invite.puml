@@ -1,0 +1,36 @@
+@startuml
+title Invite lifecycle — state machine (InviteStatus)
+
+skinparam BackgroundColor #FAFAFA
+skinparam state {
+  BackgroundColor #FFFFFF
+  BorderColor #1168bd
+  ArrowColor #555
+}
+
+[*] --> Pending : CreateInviteHandler\n(landlord — RequireLandlord;\n7-day expiry, email sent via Hangfire)
+
+Pending --> Accepted : AcceptInviteHandler\n(authenticated tenant; provisions the\nKeycloak user + creates the Lease — single tx)
+Pending --> Rejected : RejectInviteHandler\n(anonymous)
+Pending --> Expired : MarkExpiredInvitesJob\n(Hangfire, hourly; ExpiresAt < now)
+
+Accepted --> [*] : terminal
+Rejected --> [*] : terminal
+Expired  --> [*] : OrphanCleanupJob\n(Hangfire, daily 03:00 UTC;\nhard-delete after 30 days if no lease)
+
+note right of Pending
+  Accept and Reject both require **Status == Pending AND not expired**,
+  otherwise **404** (NotFoundException — there is deliberately no 410).
+  The invite token is a 32-byte secret in the email link; the DB stores
+  only its **SHA-256 hash**. Accept additionally requires:
+   - the JWT **email to match** the invite email → else **403**
+   - **no existing account** for that email → else **409** ("log in instead")
+end note
+
+note bottom of Expired
+  Expired rows are kept ~30 days for audit, then hard-deleted by the
+  orphan-cleanup scan **only** if no Lease was ever created from them.
+  An accepted invite is retained as an immutable record of what was offered.
+end note
+
+@enduml
