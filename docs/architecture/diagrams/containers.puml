@@ -9,7 +9,7 @@ title MyProperty Platform - Container Diagram (C4 Level 2)
 ' ====== Actors ======
 Person(tenant,   "Tenant",   "Pays rent, uploads receipts")
 Person(landlord, "Landlord", "Manages properties, leases, payments")
-Person(admin,    "Admin",    "Operates Hangfire dashboard + Keycloak realm")
+Person(admin,    "Admin",    "Operates Hangfire + Keycloak realm; views stakeholder dashboard (/admin/dashboard)")
 
 ' ====== System boundary ======
 System_Boundary(mp, "MyProperty Platform") {
@@ -18,7 +18,7 @@ System_Boundary(mp, "MyProperty Platform") {
 
     Container(fe, "Frontend", "Next.js 16 standalone (Node 20), React 19, TypeScript, Tailwind 4", "TanStack Query v5, Zustand, RHF + Zod, keycloak-js, Framer Motion, MSW (dev), Jest + Playwright (test)")
 
-    Container(api, "API + Hub + Workers", ".NET 10 ASP.NET Core (single process)", "REST controllers (v1), NotificationsHub (SignalR), Hangfire server, FluentValidation, Asp.Versioning, Serilog → Loki, prometheus-net, MailKit, Anthropic SDK, Unleash.Client (feature flags)")
+    Container(api, "API + Hub + Workers", ".NET 10 ASP.NET Core (single process)", "REST controllers (v1), NotificationsHub (SignalR), Hangfire server, FluentValidation, Asp.Versioning, Serilog → stdout (CLEF, scraped by Promtail), prometheus-net, MailKit, Anthropic Messages API (HttpClient, no SDK), Unleash.Client (feature flags)")
 
     Container(aiops, "AIOps Webhook", "Python 3.14, FastAPI, httpx", "Alertmanager webhook receiver → Claude Haiku triage → Discord (#alerts)")
 
@@ -30,7 +30,7 @@ System_Boundary(mp, "MyProperty Platform") {
 
     ContainerDb(pg,    "PostgreSQL",  "PostgreSQL 16", "App + Hangfire + Keycloak realm + Unleash flag data")
     ContainerDb(redis, "Redis",       "Redis 7",       "Cache-aside (dashboard) + SignalR Redis backplane (myproperty.signalr)")
-    ContainerQueue(mq, "RabbitMQ",    "RabbitMQ 3 (AMQP topic)", "Exchange 'myproperty.events' + 5 consumer queues (payment.*, invite.*, lease.*)")
+    ContainerQueue(mq, "RabbitMQ",    "RabbitMQ 3 (AMQP topic)", "Exchange 'myproperty.events' + 5 payment.* consumer queues (invite/lease events not yet wired)")
 
     System_Boundary(obs, "Observability sub-cluster") {
         Container(prom,     "Prometheus",   "Prometheus 2.55",    "Scrapes /metrics every 15s")

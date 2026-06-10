@@ -27,7 +27,7 @@ package "Consumers (hosted services in API process)" #E6FFE6 {
   component "PaymentSubmittedConsumer\n** -> SignalR push to landlord**" as c_submit_sig
   component "PaymentSubmittedOcrConsumer\n** -> enqueue Hangfire ReceiptOcrJob**" as c_submit_ocr
   component "PaymentConfirmedConsumer\n** -> email job + SignalR to tenant**" as c_confirmed
-  component "PaymentRejectedConsumer\n** -> email job + SignalR to tenant**" as c_rejected
+  component "PaymentRejectedConsumer\n** -> SignalR push to tenant**" as c_rejected
   component "PaymentCreatedConsumer\n** -> SignalR push**" as c_created
 }
 

@@ -35,7 +35,7 @@ package "External probes" #FFF0E0 {
     database  "Kuma SQLite\n(2Gi PVC)" as kumadb
 }
 
-component "Grafana\n(chart-provisioned\ndashboards + datasources\nvia sidecar)" as grafana
+component "Grafana\n(chart-provisioned\ndashboards + datasources\nvia file provider)" as grafana
 
 ' ====== Metrics path ======
 api      --> prom    : GET /metrics
@@ -43,7 +43,7 @@ prom     --> tsdb    : write
 prom     --> am      : fire alerts (chart rule files)
 
 ' ====== Logs path ======
-api      --> loki    : Serilog -> Loki sink\n(structured, direct)
+api      --> promtail: stdout (CLEF JSON)\nno direct Loki sink
 others   --> promtail: stdout
 promtail --> loki    : HTTP push
 

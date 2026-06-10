@@ -24,7 +24,7 @@ fork
     :setup-dotnet; restore;
     :format --verify-no-changes;
     :build -c Release -warnaserror;
-    :xUnit **unit** suite\n(Testcontainers integration tests run\nlocally, not in CI);
+    :full dotnet test suite\n(unit + Testcontainers integration —\nreal Postgres + Keycloak, no skip gate);
     :buildx + login (GHCR);
     :build myproperty-api:{sha}+:{branch}\n(chiseled .NET 10);
     :build myproperty-migrations:{sha}\n(EF Core migration bundle);
@@ -91,7 +91,7 @@ if (image-CI succeeded on push to develop/main?) then (yes)
     :Bump matching tags in values-gjirafa.yaml\n(bump_image_tags.py, ruamel - byte-perfect);
     :App-token commit + push the bump\n(retry pull --rebase on contention);
     :Write kubeconfig from\nKUBECONFIG_PROJECT_02 secret;
-    :deploy.sh --atomic --cleanup-on-fail --timeout 10m\n(helm 3.20.0, kubectl 1.31.x);
+    :deploy.sh --atomic --cleanup-on-fail --timeout 10m\n(helm 3.20.0, kubectl 1.31.14);
     note right
       Same script as a manual deploy.
       --atomic -> --wait + auto-rollback of
