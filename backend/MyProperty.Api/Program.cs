@@ -23,6 +23,7 @@ using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Notifications;
 using MyProperty.Application.Common.Options;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
+using MyProperty.Application.Invites.Commands.ClaimInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
@@ -173,6 +174,7 @@ try
     builder.Services.AddScoped<CreateInviteHandler>();
     builder.Services.AddScoped<GetInviteByTokenHandler>();
     builder.Services.AddScoped<AcceptInviteHandler>();
+    builder.Services.AddScoped<ClaimInviteHandler>();
     builder.Services.AddScoped<RejectInviteHandler>();
 
     // Admin handlers

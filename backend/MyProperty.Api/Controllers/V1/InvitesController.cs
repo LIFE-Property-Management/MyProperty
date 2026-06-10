@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
+using MyProperty.Application.Invites.Commands.ClaimInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
@@ -17,6 +18,7 @@ public sealed class InvitesController(
     CreateInviteHandler create,
     GetInviteByTokenHandler getByToken,
     AcceptInviteHandler accept,
+    ClaimInviteHandler claim,
     RejectInviteHandler reject) : ControllerBase
 {
     /// <summary>Creates an invite for a tenant. Email/FirstName/LastName are the invitee's fields.</summary>
@@ -58,6 +60,24 @@ public sealed class InvitesController(
         string token, AcceptInviteBody body, CancellationToken ct)
         => Ok(await accept.Handle(
             new AcceptInviteCommand(token, body.FirstName, body.LastName, body.Phone, body.Password), ct));
+
+    /// <summary>
+    /// Claims an invite as an authenticated returning tenant. The JWT email must
+    /// match the invite email (else 403). Reuses the existing account — no Keycloak
+    /// provisioning — and creates the Lease while marking the invite Accepted.
+    /// </summary>
+    [HttpPost("{token}/claim")]
+    [Authorize(Policy = "RequireTenant")]
+    [EnableRateLimiting("authenticated")]
+    [ProducesResponseType(typeof(InviteAcceptedDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<InviteAcceptedDto>> Claim(
+        string token, CancellationToken ct)
+        => Ok(await claim.Handle(new ClaimInviteCommand(token), ct));
 
     /// <summary>Rejects an invite. Anonymous — no authentication required.</summary>
     [HttpPost("{token}/reject")]

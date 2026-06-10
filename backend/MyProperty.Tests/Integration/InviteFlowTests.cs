@@ -76,7 +76,7 @@ public sealed class InviteFlowTests(ApiFixture fixture)
         var anonClient = fixture.CreateClient();
         var previewResp = await anonClient.GetAsync($"/api/v1/invites/by-token/{plainToken}");
         Assert.Equal(HttpStatusCode.OK, previewResp.StatusCode);
-        var preview = await previewResp.Content.ReadFromJsonAsync<InvitePreviewDto>();
+        var preview = await previewResp.Content.ReadFromJsonAsync<InvitePreviewDto>(ApiFixture.JsonOptions);
         Assert.NotNull(preview);
         Assert.Equal("Sunset Apt 12B", preview!.PropertyName);
         Assert.Equal(freshEmail, preview.TenantEmail);

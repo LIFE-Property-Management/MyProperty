@@ -90,11 +90,21 @@ Backed by `GET /api/v1/admin/dashboard` (cached, Redis, 5-min TTL). Operational 
 ## Auth / Invite Flow
 
 Three cases the invite flow must handle:
-1. New user (no existing account)
-2. Existing user, not logged in
-3. Existing user, already logged in
+1. New user (no existing account) → anonymous `POST /invites/{token}/accept` provisions a Keycloak
+   account + `User` row and creates the lease.
+2. Existing user, not logged in → the accept page detects the existing account (the anonymous accept
+   returns `409` with "Please log in instead.") and routes them to sign in, then case 3.
+3. Existing user, already logged in → authenticated `POST /invites/{token}/claim` reuses the account
+   (no Keycloak provisioning); the JWT email must match the invite email (else `403`). **Implemented**
+   (returning-tenant accept).
 
-Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired`
+Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired` (landlord-cancelled `Revoked` is
+added in the invite-management work).
+
+**Preview is status-aware.** `GET /invites/by-token/{token}` returns `200` with a `status` field for
+any *resolved* invite (so the accept page can show a specific Accepted/Rejected/Expired view); `404`
+is returned only for a **truly unknown** token (the token is a secret bearer — we don't confirm
+existence). A `Pending` invite past its `ExpiresAt` is reported as `Expired`.
 
 **Lease acceptance screen comes before account creation or password setup.**
 

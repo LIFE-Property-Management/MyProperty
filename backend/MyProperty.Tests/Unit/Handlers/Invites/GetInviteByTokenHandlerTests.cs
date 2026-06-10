@@ -71,6 +71,7 @@ public sealed class GetInviteByTokenHandlerTests
         Assert.Equal(invite.ProposedMonthlyRent, dto.ProposedMonthlyRent);
         Assert.Equal("USD", dto.Currency);
         Assert.Equal(invite.ExpiresAt, dto.ExpiresAt);
+        Assert.Equal(InviteStatus.Pending, dto.Status);
     }
 
     [Fact]
@@ -89,28 +90,30 @@ public sealed class GetInviteByTokenHandlerTests
     [InlineData(InviteStatus.Accepted)]
     [InlineData(InviteStatus.Rejected)]
     [InlineData(InviteStatus.Expired)]
-    public async Task NotFound_for_non_pending(InviteStatus status)
+    public async Task Returns_status_for_non_pending(InviteStatus status)
     {
         var invite = SeedInvite(status: status);
         _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(invite);
 
         var sut = BuildSut();
+        var dto = await sut.Handle(new GetInviteByTokenQuery(PlainToken), CancellationToken.None);
 
-        await Assert.ThrowsAsync<NotFoundException>(
-            () => sut.Handle(new GetInviteByTokenQuery(PlainToken), CancellationToken.None));
+        Assert.Equal(status, dto.Status);
     }
 
     [Fact]
-    public async Task NotFound_for_expired()
+    public async Task Reports_Expired_for_pending_but_past_expiry()
     {
+        // Pending in DB but ExpiresAt elapsed (the hourly sweep hasn't run yet)
+        // — the handler reports the effective Expired status, not Pending.
         var invite = SeedInvite(expiresAt: DateTime.UtcNow.AddSeconds(-1));
         _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(invite);
 
         var sut = BuildSut();
+        var dto = await sut.Handle(new GetInviteByTokenQuery(PlainToken), CancellationToken.None);
 
-        await Assert.ThrowsAsync<NotFoundException>(
-            () => sut.Handle(new GetInviteByTokenQuery(PlainToken), CancellationToken.None));
+        Assert.Equal(InviteStatus.Expired, dto.Status);
     }
 }
