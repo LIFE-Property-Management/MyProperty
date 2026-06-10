@@ -34,6 +34,7 @@ using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Application.Landlord.Queries.GetLandlordTenants;
 using MyProperty.Application.Landlord.Queries.GetTenantDetail;
 using MyProperty.Application.Landlord.Queries.GetUpcomingPayments;
+using MyProperty.Application.Leases.Commands.CancelOwnLease;
 using MyProperty.Application.Leases.Commands.TerminateLease;
 using MyProperty.Application.Leases.Queries.GetLandlordLeases;
 using MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
@@ -204,6 +205,7 @@ try
     builder.Services.AddScoped<GetLeasesExpiringSoonHandler>();
     builder.Services.AddScoped<GetTenantLeaseHandler>();
     builder.Services.AddScoped<TerminateLeaseHandler>();
+    builder.Services.AddScoped<CancelOwnLeaseHandler>();
 
     // Payment handlers
     builder.Services.AddScoped<CreatePaymentHandler>();

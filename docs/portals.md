@@ -33,7 +33,15 @@
 ## Tenant Portal
 
 ### Dashboard
-**Lease Summary card**
+**Lease Summary card** — reads the tenant's active lease from `GET /api/v1/tenant/lease`
+(`200` `TenantLeaseDto`, or `204` when the tenant has no active lease).
+
+**Cancel lease.** A tenant may end their own active lease immediately via
+`POST /api/v1/tenant/lease/cancel` (shown only while the lease is `Active`). This
+terminates the lease on the spot (`Lease.Terminate()`) and emails the landlord
+that their tenant cancelled. `404` if there is no active lease. Notice period /
+early-termination penalty / deposit handling are deferred (see decision D2) — the
+real-world levers don't exist in the domain yet.
 
 **Payment Section — four states:**
 | State | Meaning |
