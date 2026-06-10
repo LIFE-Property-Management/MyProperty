@@ -9,7 +9,7 @@
 **Status:** Accepted; awaiting confirmation of items in "Open questions"
 **Applies to:** M4 (Infrastructure & DevOps)
 **Audience:** DevOps teammate writing Helm values / production Docker Compose
-**Linked items:** dev→prod gaps audit § E5, A1, A6; todo-inventory.md M4 blockers
+**Linked items:** dev→prod gaps audit § E5, A1, A6
 
 ---
 

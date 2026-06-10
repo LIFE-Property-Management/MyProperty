@@ -136,7 +136,7 @@ is to fully rewrite/retire the rest so the docs tree matches reality end to end:
   Terraform tree is deleted).
 - ❌ `docs/operations/nginx-ssl.md` — **KEPT** (documents the still-live docker-compose `proxy`
   profile; not retired — see the scope correction in Batch 9 above).
-- `docs/decisions/keycloak-prod-config.md` — reconcile with what M5 actually shipped. *(open)*
+- `docs/operations/keycloak-prod-config.md` — reconcile with what M5 actually shipped. *(open)*
 - `docs/milestones/m4-deployment-ops.md` — historical; annotate the DOKS-vs-Hetzner pivot. *(open)*
 - ❌ `infrastructure/keycloak/PRODUCTION.md`, `infrastructure/nginx/PRODUCTION.md` — **KEPT**
   (both document features still in use locally; keycloak banner's stale "duplicate/dedup" line
