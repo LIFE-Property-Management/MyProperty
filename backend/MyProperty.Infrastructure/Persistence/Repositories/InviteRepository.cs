@@ -29,8 +29,8 @@ internal sealed class InviteRepository(AppDbContext db) : IInviteRepository
             .Include(i => i.Property)
             .Where(i => i.LandlordId == landlordId);
 
-        if (statusFilter.HasValue)
-            query = query.Where(i => i.Status == statusFilter.Value);
+        if (statusFilter is { } status)
+            query = query.Where(i => i.Status == status);
 
         var ordered = query.OrderByDescending(i => i.CreatedAt);
 
