@@ -1,8 +1,6 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import apiClient from "@/lib/api/client";
-import { ENDPOINTS } from "@/lib/api/endpoints";
 import { queryKeys } from "./queryKeys";
 import { z } from "zod";
 
@@ -25,10 +23,10 @@ export function usePublicStats() {
     queryKey: queryKeys.landing.stats(),
     queryFn: async () => {
       try {
-        const r = await apiClient.get(ENDPOINTS.publicStats);
-        const result = publicStatsSchema.safeParse(r.data);
+        const r = await fetch("/api/public-stats");
+        if (!r.ok) return EMPTY_STATS;
+        const result = publicStatsSchema.safeParse(await r.json());
         if (result.success) return result.data;
-        console.warn("Public stats schema mismatch:", result.error);
         return EMPTY_STATS;
       } catch {
         return EMPTY_STATS;
