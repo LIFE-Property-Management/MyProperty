@@ -1,6 +1,6 @@
 "use client";
 
-import { usePublicStats } from "@/lib/hooks/usePublicStats";
+import { usePublicStats } from "@/lib/hooks";
 
 function formatRent(amount: number): string {
     if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;

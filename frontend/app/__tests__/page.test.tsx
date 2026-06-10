@@ -1,6 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import HomePage from "../page";
 
+jest.mock("@/lib/hooks", () => ({
+    usePublicStats: () => ({
+        data: { rentCollected: 0, propertiesManaged: 0, landlordsOnboarded: 0 },
+    }),
+}));
+
 describe("<HomePage />", () => {
     it("renders the hero heading", () => {
         render(<HomePage />);
