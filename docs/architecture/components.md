@@ -33,7 +33,7 @@ Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `I
 
 | Component | Tech | What it does |
 |---|---|---|
-| Controllers (v1) | ASP.NET Core MVC, `Asp.Versioning` | InvitesController, PropertiesController, TenantsController, LeasesController, PaymentsController, LandlordController, MeController — thin: deserialise → call handler → return result. No business logic. |
+| Controllers (v1) | ASP.NET Core MVC, `Asp.Versioning` | AuthController, InvitesController, PropertiesController, LeasesController, PaymentsController, LandlordController, AdminController, MeController — thin: deserialise → call handler → return result. No business logic. (There is **no** `TenantsController` — landlord-facing tenant views are served by `LandlordController`; `AdminController` backs the stakeholder dashboard; `AuthController` exposes landlord self-registration.) |
 | `NotificationsHub` | SignalR + Redis backplane | Server-push only. Auto-groups connections into `tenant:{userId}` or `landlord:{userId}` on connect. JWT-authenticated via `?access_token=` for the WebSocket handshake. |
 | Middleware pipeline | ASP.NET Core | CorrelationId → Serilog request logging → ForwardedHeaders → CORS allowlist → JwtBearer auth → RateLimiter (`anon-invite` per-IP 30/min + `authenticated` per-user 120/min) → Authorization policies. |
 | Hangfire dashboard | Hangfire UI | Mounted at `/hangfire`, gated by `RequireAdmin` policy. |
@@ -44,9 +44,9 @@ Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `I
 | Component | Tech | What it does |
 |---|---|---|
 | CQRS handlers | Scoped services | One handler per command/query. SubmitPaymentHandler, ConfirmPaymentHandler, RejectPaymentHandler, CreateInviteHandler, AcceptInviteHandler, RejectInviteHandler, CreatePropertyHandler, GetLandlordDashboardQuery handler, etc. Controllers call handlers directly — no MediatR. |
-| FluentValidation validators | FluentValidation 12 | One validator per command/query. Runs via a pipeline filter that converts `ValidationException` → 400 `ValidationProblemDetails`. |
+| FluentValidation validators | FluentValidation 12 | One validator per command/query. Handlers call `validator.EnsureValidAsync(...)`, which throws the app `ValidationException`; the global `IExceptionHandler` (`GlobalExceptionHandler`) maps it to 400 `ValidationProblemDetails`. |
 | Entity ↔ DTO mapping | Hand-rolled in handlers today | Each handler constructs its return DTO inline. **No AutoMapper.** A Mapperly source-generator retrofit is documented in `backend/CLAUDE.md` as a post-M3 follow-up. |
-| `I*Repository` interfaces | Abstractions | `IPaymentRepository`, `ILeaseRepository`, `ITenantRepository`, `IInviteRepository`, `ILandlordRepository`, `IUserRepository`. Methods are use-case-named (`GetPendingForLandlord`, `GetOverdueAsOf`), not CRUD primitives. Return materialised results, never `IQueryable`. |
+| `I*Repository` interfaces | Abstractions | `IPaymentRepository`, `ILeaseRepository`, `IInviteRepository`, `IUserRepository`, `IPropertyRepository`. Methods are use-case-named, not CRUD primitives. Return materialised results, never `IQueryable`. |
 | `INotificationDispatcher` | Abstraction | Push to SignalR groups without depending on `IHubContext`. |
 | `IEmailSender` | Abstraction | Send email. |
 | `IReceiptOcrService` | Abstraction | OCR a receipt image → {amount, date, merchant}. |
@@ -60,19 +60,19 @@ Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `I
 | Component | Tech | What it does |
 |---|---|---|
 | `BaseEntity` | Abstract class | `Id`, `CreatedAt`, `UpdatedAt`, `DeletedAt`, `CreatedBy`, `UpdatedBy`. Audit fields are populated by the `AuditingInterceptor`, never by handlers. Soft-deleted rows are filtered out by a global EF Core query filter. |
-| Aggregate roots | Pure C# entities | Tenant, Landlord, Property, Lease, Invite, Payment, FailedEmail. State-machine logic lives on the entities (e.g., `Payment.Confirm()` enforces `Outstanding → Pending → Confirmed/Rejected`). |
+| Aggregate roots | Pure C# entities | User, Property, Lease, Invite, Payment, FailedEmail. (Single `User` aggregate — there is no Tenant/Landlord entity; the Tenant-vs-Landlord distinction is the Keycloak realm role.) `Payment` is anemic (public setters); its `Outstanding → Pending → Confirmed/Rejected` transitions are enforced in the command handlers (e.g., `ConfirmPaymentHandler` requires status `Pending` before setting `Confirmed`), not on the entity. `Lease.Terminate()` is the one genuine entity-level state method. |
 | Integration events | Pure C# records | `PaymentSubmittedEvent`, `PaymentConfirmedEvent`, `PaymentRejectedEvent`, `PaymentCreatedEvent`. Carry minimal payloads (IDs + a few timestamps). *Invite + Lease events are planned (see [`events.md`](./events.md) → "What's not yet wired") but not yet emitted.* |
 
 ### `MyProperty.Infrastructure` — adapters
 
 | Component | Tech | What it does |
 |---|---|---|
-| `AppDbContext` + `AuditingInterceptor` | EF Core 10, Npgsql | The only DbContext. Configurations live in `Configurations/<Entity>Configuration.cs` using `IEntityTypeConfiguration<T>`. Interceptor reads `IHttpContextAccessor` to set audit fields. |
-| Repositories | EF Core 10 | One per aggregate. `PaymentRepository`, `LeaseRepository`, `TenantRepository`, `InviteRepository`, `LandlordRepository`, `UserRepository`. **No** generic `IRepository<T>` base. |
+| `AppDbContext` + `AuditingInterceptor` | EF Core 10, Npgsql | The only DbContext. Configurations live in `Configurations/<Entity>Configuration.cs` using `IEntityTypeConfiguration<T>`. Interceptor reads the current user via `ICurrentUser` (sourced from the HTTP context upstream) to set audit fields. |
+| Repositories | EF Core 10 | One per aggregate. `PaymentRepository`, `LeaseRepository`, `InviteRepository`, `UserRepository`, `PropertyRepository`. **No** generic `IRepository<T>` base. |
 | `RabbitMqEventPublisher` | RabbitMQ.Client 7 | Publishes any `IIntegrationEvent` to the `myproperty.events` topic exchange. Routing key derived from event type name (`PaymentConfirmedEvent` → `payment.confirmed`). |
 | 5 RabbitMQ consumers | Hosted services | `PaymentSubmittedConsumer`, `PaymentSubmittedOcrConsumer`, `PaymentConfirmedConsumer`, `PaymentRejectedConsumer`, `PaymentCreatedConsumer`. Translate events into side effects (Hangfire enqueue + SignalR push). No business logic. The OCR consumer checks the `payments.ocr-autoextract` feature flag before enqueueing `ReceiptOcrJob`. |
-| Hangfire jobs | Scoped services | Two ad-hoc jobs (`SendEmailJob` — 5 retries, exponential backoff, DLQ to `FailedEmails` on exhaustion — and `ReceiptOcrJob`) plus **two recurring scans now scheduled** in `Program.cs` via `RecurringJob.AddOrUpdate`: `MarkExpiredInvitesJob` (hourly, `0 * * * *`) and `OrphanCleanupJob` (daily 03:00 UTC, `0 3 * * *`, hard-deletes Expired invites older than 30 days). Two further scans (mark overdue payments, lease-expiring) remain `backend/CLAUDE.md` follow-ups. |
-| `AnthropicReceiptOcrService` | anthropic SDK | Sends receipt image to Claude vision → parses JSON response → writes back to `Payment.OcrResults`. |
+| Hangfire jobs | Scoped services | Two ad-hoc jobs (`SendEmailJob` — 5 retries, exponential backoff, DLQ to `FailedEmails` on exhaustion — and `ReceiptOcrJob`) plus **three recurring scans now scheduled** in `Program.cs` via `RecurringJob.AddOrUpdate`: `MarkExpiredInvitesJob` (hourly, `0 * * * *`), `OrphanCleanupJob` (daily 03:00 UTC, `0 3 * * *`, hard-deletes Expired invites older than 30 days), and `LeaseExpiringSoonJob` (daily 08:00 UTC, `0 8 * * *` — publishes no integration event / SignalR push). One further scan (mark overdue payments) remains a `backend/CLAUDE.md` follow-up. |
+| `AnthropicReceiptOcrService` | Anthropic Messages API over a hand-rolled `HttpClient` (no .NET SDK), model pinned via `Anthropic:Model` (default `claude-sonnet-4-5-20250929`) | Sends receipt image to Claude vision → parses JSON response. The `ReceiptOcrJob` then writes the results to discrete columns `OcrAmount` / `OcrDate` / `OcrMerchant` / `OcrRawResponse` / `OcrProcessedAt` (there is no `Payment.OcrResults` property). |
 | `MailKitEmailSender` | MailKit 4 | SMTP send. |
 | `LocalFileStorage` | Filesystem | Stores at `{LocalRoot}/receipts/{yyyy}/{MM}/{guid}{ext}` on a PVC (dev + prod). Path-traversal rejected at resolve time. A cloud impl (`SpacesFileStorage`) remains a follow-up — it was tied to the now-retired DO Spaces ([ADR-0009](./adr/0009-hetzner-project-02-over-doks.md)); same interface when it lands. |
 | `RedisLandlordDashboardCache` | `IDistributedCache` over StackExchange.Redis | Cache-aside on `GetLandlordDashboardQuery`. 60s TTL. Invalidated on writes (payment submitted / confirmed / rejected). |

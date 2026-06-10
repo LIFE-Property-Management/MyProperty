@@ -36,7 +36,7 @@ Chart [`helm/myproperty/`](../../helm/myproperty/). The `kube-prometheus-stack` 
 | K8s object | Image | Replicas / storage | Notes |
 |---|---|---|---|
 | `backend-deployment` | `ghcr.io/life-property-management/myproperty-api:{sha}` (chiseled .NET 10, UID 1654) | 1 replica, PVC (`longhorn`) | Single replica — `ReadWriteOnce` PVC backs `LocalFileStorage` for receipts. Spaces swap is a follow-up. |
-| `frontend-deployment` | `ghcr.io/.../myproperty-frontend:{sha}` (distroless Node 20, UID 65532) | 2 replicas, no PVC | |
+| `frontend-deployment` | `ghcr.io/.../myproperty-frontend:{sha}` (distroless Node 20; image default `nonroot` UID 65532, pod `securityContext` overrides to UID 1000) | 2 replicas, no PVC | |
 | `aiops-webhook-deployment` | `ghcr.io/.../myproperty-aiops-webhook:{sha}` (Python 3.14-slim) | 1 replica | Alertmanager → Claude Haiku triage → **Discord** `#alerts`. |
 | `migration-job` | `ghcr.io/.../myproperty-migrations:{sha}` | pre-upgrade Helm Hook | EF Core migration bundle; runs before `backend-deployment` rolls. **Forward-only** — see the rollback caveat below. |
 
@@ -56,12 +56,12 @@ There is no managed-service path anymore — every stateful service runs in `pro
 
 | K8s object | Storage | Notes |
 |---|---|---|
-| `prometheus` | PVC (`longhorn`) | Plain Deployment. Scrape config + alert rules wired directly in the chart — **no `ServiceMonitor`/`PrometheusRule` CRDs, no Prometheus Operator** (the SA can't install CRDs). |
+| `prometheus` | PVC (`longhorn`) | StatefulSet (PVC-backed). Scrape config + alert rules wired directly in the chart — **no `ServiceMonitor`/`PrometheusRule` CRDs, no Prometheus Operator** (the SA can't install CRDs). |
 | `alertmanager` | PVC (`longhorn`) | Routes all alerts to the `aiops-webhook` ClusterIP. |
 | `grafana` | PVC (`longhorn`) | Admin secret-backed; dashboards + datasources provisioned from chart ConfigMaps (metrics + per-component log dashboards). Exposed at `grafana.myproperty.works`. |
 | `loki` | PVC (`longhorn`) | Single-binary mode. |
 | `promtail` (+ ServiceAccount + **`Role`**/RoleBinding) | none | One pod per node, but scoped by a **namespaced `Role`** to `project-02` pods only — no cluster-wide log access. |
-| `uptime-kuma-statefulset` + post-upgrade seed hook | PVC (`longhorn`) | Status page at `status.myproperty.works`, seeded with 13 monitors by the `myproperty-uptime-kuma-init` image (built in CI). |
+| `uptime-kuma-statefulset` + post-upgrade seed hook | PVC (`longhorn`) | Status page at `status.myproperty.works`, seeded with 15 monitors by the `myproperty-uptime-kuma-init` image (built in CI). |
 
 ### Edge / routing
 
@@ -69,11 +69,11 @@ Five Ingress objects map subdomain → Service; all share the TLS host list so o
 
 | Ingress | Host | Backend |
 |---|---|---|
-| `frontend-ingress` | `app.myproperty.works` | `frontend-service:3000` |
-| `api-ingress` | `api.myproperty.works` | `backend-service:8080` |
-| `keycloak-ingress` | `auth.myproperty.works` | `keycloak-service:8080` |
-| `grafana-ingress` | `grafana.myproperty.works` | `grafana:3000` |
-| `uptime-kuma-ingress` | `status.myproperty.works` | `uptime-kuma-service:3001` |
+| `frontend-ingress` | `app.myproperty.works` | `frontend` (port `http`) |
+| `api-ingress` | `api.myproperty.works` | `backend` (port `http`) |
+| `keycloak-ingress` | `auth.myproperty.works` | `keycloak` (port `http`) |
+| `grafana-ingress` | `grafana.myproperty.works` | `grafana` (port `http`) |
+| `uptime-kuma-ingress` | `status.myproperty.works` | `uptime-kuma` (port `http`) |
 
 TLS certs are issued by the cluster's shared **cert-manager** via a **namespaced `Issuer`** (`letsencrypt-prod`, with a `letsencrypt-staging` issuer alongside) that the chart renders when `ingress.tls.createIssuers: true`. HTTP-01 challenge over the same ingress-nginx. We create only namespaced `Issuer`/`Certificate` resources — the cert-manager controller itself is cluster-scoped and operated by Gjirafa.
 
@@ -81,7 +81,7 @@ TLS certs are issued by the cluster's shared **cert-manager** via a **namespaced
 
 | Feature | Setting | What it does |
 |---|---|---|
-| **NetworkPolicies** | `networkPolicies.enabled: true` (on in prod) | Default-deny baseline + targeted allow rules between tiers, enforced by **Calico**. The data tier (postgres/redis/rabbitmq) is locked to component selectors. `nodeCIDRs: [192.168.0.0/16]` (the Calico pod CIDR) admits ingress traffic — ingress-nginx is hostNetwork and Calico rewrites cross-node source IPs into the pod CIDR. Validated on `project-02` 2026-06-01 (all ingress + 13 Kuma monitors green). |
+| **NetworkPolicies** | `networkPolicies.enabled: true` (on in prod) | Default-deny baseline + targeted allow rules between tiers, enforced by **Calico**. The data tier (postgres/redis/rabbitmq) is locked to component selectors. `nodeCIDRs: [192.168.0.0/16]` (the Calico pod CIDR) admits ingress traffic — ingress-nginx is hostNetwork and Calico rewrites cross-node source IPs into the pod CIDR. Validated on `project-02` 2026-06-01 (all ingress + 15 Kuma monitors green). |
 | **Secrets** | `infrastructure/gjirafa/secrets.sh` | Idempotently creates all K8s Secrets in `project-02`. Generates stable random passwords once (Postgres, RabbitMQ, Keycloak admin + DB, Redis, API client secret, Grafana, Uptime-Kuma, the Unleash client token) and reads operator-supplied values (GHCR pull, Google OAuth, Anthropic key, Discord webhooks) from `.secrets.env`. **No External Secrets Operator** — it is cluster-scoped. |
 
 ## Deployment flow
@@ -95,7 +95,7 @@ The same `deploy.sh` script serves both manual and automated deploys; CD is push
 
 ## Critical hardening details
 
-- All workload images are **non-root** and **digest-pinned**. Backend UID 1654 (chiseled `$APP_UID`); frontend UID 65532 (distroless `nonroot`); AIOps webhook a dedicated `aiops` user; Unleash the image's UID 1000 `node` user (`automountServiceAccountToken: false`).
+- All workload images are **non-root** and **digest-pinned**. Backend UID 1654 (chiseled `$APP_UID`); frontend pod UID 1000 (image default `nonroot` is 65532, but the pod `securityContext` sets `runAsUser: 1000`); AIOps webhook a dedicated `aiops` user; Unleash the image's UID 1000 `node` user (`automountServiceAccountToken: false`).
 - **Trivy** scans every image in CI; CRITICAL CVEs block the build, HIGH appear in the GitHub Security tab. **CycloneDX SBOMs** are uploaded per build (90-day retention). See [`cicd.md`](./cicd.md).
 - **`deploy.sh --atomic`** rolls *workloads* back on a failed release. ⚠️ **EF schema migrations are forward-only** — `--atomic` does **not** un-apply them, so a failed deploy can leave the DB partly migrated; verify manually. To roll back a *successful* deploy, `git revert` the tag-bump commit (CD redeploys the prior image) or `helm rollback myproperty <REV>` as break-glass.
 - **Helm release name = `myproperty`, namespace = `project-02`** — `kubectl -n project-02` and `helm -n project-02` both address the release.
