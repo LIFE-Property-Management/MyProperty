@@ -1,7 +1,7 @@
 # MyProperty Backend — CLAUDE.md
 
 ## Stack
-.NET 10 · C# · Clean Architecture · EF Core 10 · PostgreSQL 16 · Keycloak · Hangfire · RabbitMQ · SignalR · Redis · MailKit · Serilog → Loki → Grafana · FluentValidation · Mapperly · xUnit + WebApplicationFactory + Testcontainers · OpenAI/Anthropic (receipt OCR)
+.NET 10 · C# · Clean Architecture · EF Core 10 · PostgreSQL 16 · Keycloak · Hangfire · RabbitMQ · SignalR · Redis · MailKit · Serilog → Loki → Grafana · FluentValidation · xUnit + WebApplicationFactory + Testcontainers · OpenAI/Anthropic (receipt OCR)
 
 ## Solution Layout
 
@@ -68,20 +68,10 @@ Application/Payments/
 - **No** generic `IRepository<T>` base class — generic repositories leak `IQueryable` and defeat the purpose.
 - Repositories return materialized results (`List<T>`, `T?`), not `IQueryable<T>`. Composing queries belongs inside the repository, not at the call site.
 
-### Mapping — Mapperly
-- All entity ↔ DTO mapping uses [Mapperly](https://mapperly.riok.app/) source generators.
-- One mapper per aggregate, in `Application/<Feature>/Mappers/`.
-- Compile-time generated, zero reflection. Mapping errors surface at build time.
+### Mapping — hand-constructed (Mapperly planned)
+- Handlers currently construct DTOs by hand inline — no mapping library is installed.
+- **Planned:** retrofit to [Mapperly](https://mapperly.riok.app/) source generators post-M3 (see Post-M3 follow-ups). One mapper per aggregate in `Application/<Feature>/Mappers/`.
 - **Do not** add AutoMapper.
-
-```csharp
-[Mapper]
-public partial class PaymentMapper
-{
-    public partial PaymentDto ToDto(Payment payment);
-    public partial List<PaymentDto> ToDtoList(IEnumerable<Payment> payments);
-}
-```
 
 ## Domain
 
@@ -294,7 +284,7 @@ Each technology has a distinct role; do not blur them.
 ### Post-M3 follow-ups
 
 - ~~Keycloak admin client for fresh-tenant role assignment.~~ **DELIVERED (M5).** `KeycloakAdminClient` (`Infrastructure/Keycloak/`, behind `IUserAccountProvisioner`) provisions Keycloak users and assigns realm roles via the Admin REST API using the `myproperty-api` client-credentials service account (token cached by `IKeycloakAdminTokenCache`; unit + integration tested). Email+password self-registration now assigns the role server-side. **Residual gap:** Google/IdP first-login provisioning (an OIDC-brokered user still lands without a portal role/entity) — tracked as Batch 8 in [deployment-roadmap.md](../docs/operations/deployment-roadmap.md).
-- Mapperly retrofit. Handlers currently construct DTOs by hand. Single retrofit batch post-M3.
+- Mapperly retrofit (`Riok.Mapperly` not yet installed). Install package, create per-aggregate mapper classes in `Application/<Feature>/Mappers/`, replace inline DTO construction in all handlers. Single batch.
 - ~~Remove `ClaimsPrincipal? Principal` from `ICurrentUser`.~~ **DONE.** `Principal` removed from `ICurrentUser` and `HttpContextCurrentUser` (now a private helper). `IUserRepository.GetOrSyncFromClaimsAsync` renamed to `GetOrSyncAsync` and takes scalar `sub/email/firstName/lastName/phone` params sourced from `ICurrentUser`. `CurrentUserContext.GetOrSyncUserAsync` guards on `KeycloakSubId` and forwards the scalar values — no `ClaimsPrincipal` anywhere in the call chain.
 - FluentValidation validators on commands (M3.12).
 - Invite audit fields (`AcceptedByUserId`, `ResultingLeaseId`, `RejectionReason`) — skipped this batch.
@@ -378,7 +368,7 @@ The dashboard, tenant detail page, and `GetActiveByTenantIdAsync` all assume a t
 
 - **RAG / pgvector (BE-17): not implemented.** Replaced with receipt OCR (M3.10). No domain use case for vector search at this stage.
 - **MediatR: not adopted.** CQRS folder structure used without the library — see Architecture Patterns.
-- **AutoMapper: not adopted.** Mapperly used instead.
+- **AutoMapper: not adopted.** Mapperly is the planned replacement (not yet installed — see Mapping section).
 - **MassTransit: not adopted.** Direct `RabbitMQ.Client` for event publishing.
 - **Cloud file storage: not adopted.** Local filesystem only for M3 — see File Storage. Re-introduces `IFileStorage.GetSignedUrlAsync` when a cloud impl lands.
 - **Two-step file upload: not adopted.** Single-step multipart on the submit endpoint for M3 — see File Storage. Splits into a dedicated upload endpoint when a second file consumer appears.
