@@ -91,6 +91,23 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
   - **Cluster:** add the `NEXT_PUBLIC_POSTHOG_KEY` GitHub **repo secret** (Settings → Secrets), then rebuild the frontend image — `frontend-ci.yml` bakes it in. No manifest change needed.
   - The key is a PostHog **project** API key (`phc_…`, publishable/write-only — safe to inline); NOT a personal API key.
 
+## Follow-ups — landlord payment confirm/reject UI (PR #181)
+The `useConfirmPayment` / `useRejectPayment` mutation hooks exist and match the backend
+contract (`POST /payments/{id}/confirm`, `POST /payments/{id}/reject` with `{ reason }`),
+but **no UI calls them yet** — `TenantDetailView` is read-only and the dashboard's
+upcoming-payments table has no action buttons. When wiring the confirm/reject buttons +
+reject-reason modal, carry these deliberately-deferred items:
+- **Reject reason validation lives at the form boundary, not in the hook.** Enforce it with
+  Zod — required, non-whitespace, **10–500 chars** — to mirror the server's
+  `RejectPaymentValidator`. The hook intentionally does no validation (matches
+  `useSubmitReceipt`); an empty reason currently round-trips to a server 400.
+- **Error UX is the consumer's job.** Both hooks omit `onError` by design (matches
+  `useDeleteProperty` / `useSubmitReceipt`) — the button/modal owns the toast/error state.
+- **Cache invalidation is currently broad.** On success both hooks invalidate
+  `queryKeys.landlord.tenant.all()` (list + detail) because they don't know the tenant id.
+  If the consuming view has the `tenantId`, consider threading it through the mutation input
+  and scoping to `queryKeys.landlord.tenant.detail(id)` to avoid an unneeded list refetch.
+
 ## Key Omissions (intentional)
 - **v0.dev: opted out.** Do not suggest it.
 

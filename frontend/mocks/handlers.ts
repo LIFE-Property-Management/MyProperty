@@ -123,4 +123,29 @@ export const handlers = [
         };
         return HttpResponse.json(currentPaymentState);
     }),
+
+    // Landlord confirms a Pending payment (Pending → Confirmed). Mirrors the
+    // real PaymentConfirmedDto { paymentId, confirmedAt }. The upcoming-payments
+    // list is rebuilt fresh per request, so there's no landlord-side state to
+    // mutate here. The hooks ignore the body and refetch via cache invalidation,
+    // so the shape is for contract fidelity only.
+    http.post("/payments/:id/confirm", async ({ params }) => {
+        await delay(400);
+        return HttpResponse.json({
+            paymentId: params.id as string,
+            confirmedAt: new Date().toISOString(),
+        });
+    }),
+
+    // Landlord rejects a Pending payment with a required reason
+    // (Pending → Rejected). Mirrors the real PaymentRejectedDto
+    // { paymentId, rejectedAt } — the reason is consumed server-side and not
+    // echoed back, so the mock ignores the request body.
+    http.post("/payments/:id/reject", async ({ params }) => {
+        await delay(400);
+        return HttpResponse.json({
+            paymentId: params.id as string,
+            rejectedAt: new Date().toISOString(),
+        });
+    }),
 ];
