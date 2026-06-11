@@ -25,13 +25,14 @@ public sealed class GetLandlordPropertiesHandler(
         // rather than two existence checks per property (N+1).
         var pageIds = items.Select(p => p.Id).ToList();
         var activeLeaseIds = await leases.GetActiveLeaseIdsByPropertyAsync(pageIds, ct);
-        var invited = await invites.GetPropertyIdsWithPendingInviteAsync(pageIds, ct);
+        var pendingInviteIds = await invites.GetPendingInviteIdsByPropertyAsync(pageIds, ct);
 
         var dtos = items.Select(p => new PropertyDto(
             p.Id, p.Name, p.Address, p.UnitNumber, p.PropertyType, p.CreatedAt,
             HasActiveLease: activeLeaseIds.ContainsKey(p.Id),
-            HasPendingInvite: invited.Contains(p.Id),
-            ActiveLeaseId: activeLeaseIds.TryGetValue(p.Id, out var leaseId) ? leaseId : null)).ToList();
+            HasPendingInvite: pendingInviteIds.ContainsKey(p.Id),
+            ActiveLeaseId: activeLeaseIds.TryGetValue(p.Id, out var leaseId) ? leaseId : null,
+            PendingInviteId: pendingInviteIds.TryGetValue(p.Id, out var inviteId) ? inviteId : null)).ToList();
 
         return new PagedResult<PropertyDto>(dtos, query.Page, query.PageSize, totalCount);
     }

@@ -30,11 +30,13 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
             $"/api/v1/properties/{propertyId}", ApiFixture.JsonOptions);
         Assert.False(detail!.HasActiveLease);
         Assert.False(detail.HasPendingInvite);
+        Assert.Null(detail.PendingInviteId);
 
         var listed = await ListItemAsync(client, propertyId);
         Assert.False(listed.HasActiveLease);
         Assert.False(listed.HasPendingInvite);
         Assert.Null(listed.ActiveLeaseId);
+        Assert.Null(listed.PendingInviteId);
     }
 
     [Fact]
@@ -42,16 +44,20 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
     {
         var (client, landlordId) = await LandlordWithRowAsync();
         var propertyId = await SeedPropertyAsync(landlordId, "Invited Apt");
-        await SeedInviteAsync(landlordId, propertyId, InviteStatus.Pending, DateTime.UtcNow.AddDays(7));
+        var inviteId = await SeedInviteAsync(
+            landlordId, propertyId, InviteStatus.Pending, DateTime.UtcNow.AddDays(7));
 
         var detail = await client.GetFromJsonAsync<PropertyDetailDto>(
             $"/api/v1/properties/{propertyId}", ApiFixture.JsonOptions);
         Assert.True(detail!.HasPendingInvite);
         Assert.False(detail.HasActiveLease);
+        // The pending invite's id rides along so the UI can revoke it inline.
+        Assert.Equal(inviteId, detail.PendingInviteId);
 
         var listed = await ListItemAsync(client, propertyId);
         Assert.True(listed.HasPendingInvite);
         Assert.False(listed.HasActiveLease);
+        Assert.Equal(inviteId, listed.PendingInviteId);
     }
 
     [Fact]
@@ -66,6 +72,7 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
             $"/api/v1/properties/{propertyId}", ApiFixture.JsonOptions);
         Assert.False(detail!.HasPendingInvite);
         Assert.False(detail.HasActiveLease);
+        Assert.Null(detail.PendingInviteId);
     }
 
     [Fact]
@@ -121,13 +128,14 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
         });
     }
 
-    private Task SeedInviteAsync(Guid landlordId, Guid propertyId, InviteStatus status, DateTime expiresAt) =>
+    private Task<Guid> SeedInviteAsync(Guid landlordId, Guid propertyId, InviteStatus status, DateTime expiresAt) =>
         fixture.WithDbAsync(async db =>
         {
             var plainToken = "T" + Convert.ToHexString(Guid.NewGuid().ToByteArray()).ToLowerInvariant();
+            var inviteId = Guid.NewGuid();
             db.Invites.Add(new Invite
             {
-                Id = Guid.NewGuid(),
+                Id = inviteId,
                 LandlordId = landlordId,
                 PropertyId = propertyId,
                 Email = "occupancy-tenant@test.local",
@@ -142,6 +150,7 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
                 Currency = "EUR",
             });
             await db.SaveChangesAsync();
+            return inviteId;
         });
 
     private Task<Guid> SeedActiveLeaseAsync(Guid landlordId, Guid propertyId) =>
