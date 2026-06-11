@@ -1,9 +1,4 @@
-export interface PublicStats {
-    rentCollected: number;
-    currency: string;
-    propertiesManaged: number;
-    landlordsOnboarded: number;
-}
+import type { PublicStats } from "@/lib/api/server";
 
 // Compact, currency-aware headline number (e.g. "€1.5K", "$1.2M"). A fixed
 // "en-US" locale keeps server-rendered output deterministic. When no currency
