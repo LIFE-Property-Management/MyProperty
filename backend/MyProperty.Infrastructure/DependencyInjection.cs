@@ -48,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<IInviteRepository, InviteRepository>();
         services.AddScoped<ILeaseRepository, LeaseRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
+        services.AddScoped<IPublicStatsRepository, PublicStatsRepository>();
         services.AddScoped<ILandlordDashboardRepository, LandlordDashboardRepository>();
         services.AddScoped<IStakeholderDashboardRepository, StakeholderDashboardRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();

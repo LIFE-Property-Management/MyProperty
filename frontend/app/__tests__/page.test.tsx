@@ -1,6 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import HomePage from "../page";
 
+// StatsStrip is an async Server Component (it fetches server-side). Stub it with
+// a sync placeholder so HomePage renders in jsdom; its behavior is covered by
+// StatsStrip.test.tsx / StatsStripView.test.tsx.
+jest.mock("../_components/landing/StatsStrip", () => ({
+    __esModule: true,
+    default: () => <div data-testid="stats-strip" />,
+}));
+
 describe("<HomePage />", () => {
     it("renders the hero heading", () => {
         render(<HomePage />);
@@ -21,7 +29,7 @@ describe("<HomePage />", () => {
 
     it("renders the stats strip", () => {
         render(<HomePage />);
-        expect(screen.getByTestId("stat-rent")).toBeInTheDocument();
+        expect(screen.getByTestId("stats-strip")).toBeInTheDocument();
     });
 
     it("renders the final CTA heading", () => {

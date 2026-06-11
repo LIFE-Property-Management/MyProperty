@@ -1,26 +1,68 @@
 import { render, screen } from "@testing-library/react";
 import StatsStrip from "../StatsStrip";
 
-describe("<StatsStrip />", () => {
-    it("renders all three stat items", () => {
-        render(<StatsStrip />);
-        expect(screen.getByTestId("stat-rent")).toBeInTheDocument();
-        expect(screen.getByTestId("stat-properties")).toBeInTheDocument();
-        expect(screen.getByTestId("stat-landlords")).toBeInTheDocument();
+// StatsStrip is an async Server Component that fetches the public stats. We mock
+// global.fetch and the backend env var, await the component, then render the
+// returned element.
+const ORIGINAL_FETCH = global.fetch;
+const ORIGINAL_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+beforeEach(() => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://backend.test";
+});
+
+afterEach(() => {
+    global.fetch = ORIGINAL_FETCH;
+    process.env.NEXT_PUBLIC_API_BASE_URL = ORIGINAL_BASE_URL;
+    jest.clearAllMocks();
+});
+
+describe("<StatsStrip /> (server component)", () => {
+    it("renders formatted stats from the backend response", async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                rentCollected: 1500,
+                currency: "EUR",
+                propertiesManaged: 3,
+                landlordsOnboarded: 2,
+            }),
+        }) as unknown as typeof fetch;
+
+        render(await StatsStrip());
+
+        expect(screen.getByTestId("stat-rent")).toHaveTextContent("€1.5K");
+        expect(screen.getByTestId("stat-properties")).toHaveTextContent("3");
+        expect(screen.getByTestId("stat-landlords")).toHaveTextContent("2");
     });
 
-    it("marks each stat value with data-todo='real-stats'", () => {
-        render(<StatsStrip />);
-        const statEls = screen.getAllByTestId(/^stat-/);
-        statEls.forEach((el) => {
-            expect(el).toHaveAttribute("data-todo", "real-stats");
-        });
+    it("falls back to zeros when the response is not ok", async () => {
+        global.fetch = jest.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
+
+        render(await StatsStrip());
+
+        expect(screen.getByTestId("stat-rent")).toHaveTextContent("0");
+        expect(screen.getByTestId("stat-properties")).toHaveTextContent("0");
+        expect(screen.getByTestId("stat-landlords")).toHaveTextContent("0");
     });
 
-    it("renders the stat labels", () => {
-        render(<StatsStrip />);
-        expect(screen.getByText("Rent collected")).toBeInTheDocument();
-        expect(screen.getByText("Properties managed")).toBeInTheDocument();
-        expect(screen.getByText("Landlords onboarded")).toBeInTheDocument();
+    it("falls back to zeros when the fetch throws", async () => {
+        global.fetch = jest.fn().mockRejectedValue(new Error("network down")) as unknown as typeof fetch;
+
+        render(await StatsStrip());
+
+        expect(screen.getByTestId("stat-rent")).toHaveTextContent("0");
+    });
+
+    it("falls back to zeros when the payload fails schema validation", async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ rentCollected: "not-a-number", currency: 42 }),
+        }) as unknown as typeof fetch;
+
+        render(await StatsStrip());
+
+        expect(screen.getByTestId("stat-rent")).toHaveTextContent("0");
+        expect(screen.getByTestId("stat-properties")).toHaveTextContent("0");
     });
 });
