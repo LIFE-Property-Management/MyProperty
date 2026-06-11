@@ -2,6 +2,7 @@ import { http, HttpResponse, delay } from "msw";
 
 const keycloakLogoutUrl = `${process.env.NEXT_PUBLIC_KEYCLOAK_URL}/realms/${process.env.NEXT_PUBLIC_KEYCLOAK_REALM}/protocol/openid-connect/logout`;
 import type { Payment } from "@/lib/types";
+import type { InviteStatus } from "@/lib/types/landlord/invite";
 import {
     tenantAccountFixture,
     leaseFixture,
@@ -11,6 +12,8 @@ import {
     stakeholderDashboardFixture,
     buildUpcomingPaymentsResponse,
     buildPropertiesResponse,
+    buildPropertyDetail,
+    buildLandlordInvitesResponse,
     buildTenantsResponse,
     tenantDetailFixtures,
 } from "./fixtures";
@@ -102,6 +105,55 @@ export const handlers = [
         const page = parsePositiveInt(url.searchParams.get("page"), 1);
         const pageSize = parsePositiveInt(url.searchParams.get("pageSize"), 10);
         return HttpResponse.json(buildPropertiesResponse(page, pageSize));
+    }),
+
+    http.get("/properties/:id", async ({ params }) => {
+        await delay(300);
+        const detail = buildPropertyDetail(params.id as string);
+        if (!detail) return new HttpResponse(null, { status: 404 });
+        return HttpResponse.json(detail);
+    }),
+
+    // ── Landlord invites (Plan 4) ─────────────────────────────────────────────
+    // Mutations return contract-shaped responses but do not mutate fixture state
+    // (the list is rebuilt fresh per GET) — mirrors the payment-confirm handler.
+    // The hooks invalidate + refetch, so the dev UI stays coherent on the GET.
+    http.get("/invites", async ({ request }) => {
+        await delay(300);
+        const url = new URL(request.url);
+        const page = parsePositiveInt(url.searchParams.get("page"), 1);
+        const pageSize = parsePositiveInt(url.searchParams.get("pageSize"), 10);
+        const status = url.searchParams.get("status") as InviteStatus | null;
+        return HttpResponse.json(
+            buildLandlordInvitesResponse(page, pageSize, status ?? undefined),
+        );
+    }),
+
+    http.post("/invites", async ({ request }) => {
+        await delay(400);
+        await request.json();
+        return HttpResponse.json({
+            inviteId: "02a00000-0000-7000-8000-0000000000ff",
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+    }),
+
+    http.post("/invites/:id/revoke", async () => {
+        await delay(300);
+        return new HttpResponse(null, { status: 204 });
+    }),
+
+    http.post("/invites/:id/resend", async ({ params }) => {
+        await delay(300);
+        return HttpResponse.json({
+            inviteId: params.id as string,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        });
+    }),
+
+    http.patch("/leases/:id/terminate", async () => {
+        await delay(300);
+        return new HttpResponse(null, { status: 204 });
     }),
 
     http.get("/landlord/payments/upcoming", async ({ request }) => {

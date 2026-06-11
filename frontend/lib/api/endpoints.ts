@@ -21,6 +21,13 @@ export const ENDPOINTS = {
   landlordTenants: "/landlord/tenants",
   landlordTenantById: (id: string) => `/landlord/tenants/${encodeURIComponent(id)}`,
   adminDashboard: "/admin/dashboard",
+  // Landlord invite management. GET (list) + POST (create) share /invites;
+  // revoke/resend are keyed by the invite Guid. Mirrors InvitesController.
+  landlordInvites: "/invites",
+  revokeInvite: (id: string) => `/invites/${encodeURIComponent(id)}/revoke`,
+  resendInvite: (id: string) => `/invites/${encodeURIComponent(id)}/resend`,
+  // Landlord terminates a lease (PATCH /leases/{id}/terminate).
+  terminateLease: (id: string) => `/leases/${encodeURIComponent(id)}/terminate`,
 } as const;
 
 export type EndpointKey = keyof typeof ENDPOINTS;
