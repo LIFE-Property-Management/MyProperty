@@ -3,6 +3,7 @@ using MyProperty.Domain.Enums;
 namespace MyProperty.Application.Properties.Queries.GetPropertyById;
 
 public sealed record PropertyTenantDto(
+    Guid LeaseId,
     Guid TenantId,
     string FullName,
     string Email,

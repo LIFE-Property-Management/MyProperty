@@ -33,6 +33,7 @@ internal sealed class PropertyRepository(AppDbContext db) : IPropertyRepository
             .ToListAsync(ct);
 
         var tenants = leases.Select(l => new PropertyTenantDto(
+            l.Id,
             l.TenantId,
             $"{l.Tenant!.FirstName} {l.Tenant.LastName}",
             l.Tenant.Email,

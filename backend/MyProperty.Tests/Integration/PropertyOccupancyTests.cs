@@ -34,6 +34,7 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
         var listed = await ListItemAsync(client, propertyId);
         Assert.False(listed.HasActiveLease);
         Assert.False(listed.HasPendingInvite);
+        Assert.Null(listed.ActiveLeaseId);
     }
 
     [Fact]
@@ -72,14 +73,17 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
     {
         var (client, landlordId) = await LandlordWithRowAsync();
         var propertyId = await SeedPropertyAsync(landlordId, "Leased Apt");
-        await SeedActiveLeaseAsync(landlordId, propertyId);
+        var leaseId = await SeedActiveLeaseAsync(landlordId, propertyId);
 
         var detail = await client.GetFromJsonAsync<PropertyDetailDto>(
             $"/api/v1/properties/{propertyId}", ApiFixture.JsonOptions);
         Assert.True(detail!.HasActiveLease);
+        // The active lease's id rides on its tenant row so the UI can terminate it.
+        Assert.Equal(leaseId, Assert.Single(detail.Tenants).LeaseId);
 
         var listed = await ListItemAsync(client, propertyId);
         Assert.True(listed.HasActiveLease);
+        Assert.Equal(leaseId, listed.ActiveLeaseId);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
@@ -140,7 +144,7 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
             await db.SaveChangesAsync();
         });
 
-    private Task SeedActiveLeaseAsync(Guid landlordId, Guid propertyId) =>
+    private Task<Guid> SeedActiveLeaseAsync(Guid landlordId, Guid propertyId) =>
         fixture.WithDbAsync(async db =>
         {
             var tenant = new User
@@ -153,9 +157,10 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
                 AccountStatus = TenantAccountStatus.Active,
             };
             db.Users.Add(tenant);
+            var leaseId = Guid.NewGuid();
             db.Leases.Add(new Lease
             {
-                Id = Guid.NewGuid(),
+                Id = leaseId,
                 LandlordId = landlordId,
                 PropertyId = propertyId,
                 TenantId = tenant.Id,
@@ -165,5 +170,6 @@ public sealed class PropertyOccupancyTests(ApiFixture fixture)
                 Currency = "EUR",
             });
             await db.SaveChangesAsync();
+            return leaseId;
         });
 }

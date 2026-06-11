@@ -10,4 +10,8 @@ public sealed record PropertyDto(
     PropertyType PropertyType,
     DateTime CreatedAt,
     bool HasActiveLease,
-    bool HasPendingInvite);
+    bool HasPendingInvite,
+    // The Active lease's id when HasActiveLease is true (null otherwise). Drives the
+    // landlord "Cancel lease" action (PATCH /leases/{id}/terminate) without a second
+    // round-trip. Unambiguous thanks to the single-active-lease-per-property invariant.
+    Guid? ActiveLeaseId);
