@@ -13,9 +13,22 @@ internal sealed class PublicStatsRepository(AppDbContext db) : IPublicStatsRepos
 {
     public async Task<PublicStatsDto> GetAsync(CancellationToken ct)
     {
-        var rentCollected = await db.Payments
+        // Rent is never summed across currencies (each lease/payment carries its
+        // own ISO-4217 currency — see StakeholderDashboardRepository's "never
+        // summed across" rule). For the single headline number the landing page
+        // wants, report the most-used currency: the one with the most confirmed
+        // payments, summing only that currency's confirmed amount. Ties broken
+        // by currency code for determinism.
+        var topCurrency = await db.Payments
             .Where(p => p.Status == PaymentStatus.Confirmed)
-            .SumAsync(p => (decimal?)p.Amount, ct) ?? 0m;
+            .GroupBy(p => p.Currency)
+            .Select(g => new { Currency = g.Key, Count = g.Count(), Total = g.Sum(p => p.Amount) })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Currency)
+            .FirstOrDefaultAsync(ct);
+
+        var rentCollected = topCurrency?.Total ?? 0m;
+        var currency = topCurrency?.Currency ?? "";
 
         var propertiesManaged = await db.Properties.CountAsync(ct);
 
@@ -24,6 +37,6 @@ internal sealed class PublicStatsRepository(AppDbContext db) : IPublicStatsRepos
             .Distinct()
             .CountAsync(ct);
 
-        return new PublicStatsDto(rentCollected, propertiesManaged, landlordsOnboarded);
+        return new PublicStatsDto(rentCollected, currency, propertiesManaged, landlordsOnboarded);
     }
 }

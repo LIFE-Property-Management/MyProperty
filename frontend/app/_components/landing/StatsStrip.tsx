@@ -1,51 +1,41 @@
-"use client";
+import { z } from "zod";
+import StatsStripView, { type PublicStats } from "./StatsStripView";
 
-import { usePublicStats } from "@/lib/hooks";
+// Public, global, cacheable landing-page stats. Fetched server-side so the
+// numbers ship in the initial HTML (SEO + no client CORS hop) and are cached
+// for 5 minutes via the Next data cache. The endpoint is unauthenticated.
+const publicStatsSchema = z.object({
+    rentCollected: z.number(),
+    currency: z.string(),
+    propertiesManaged: z.number().int().nonnegative(),
+    landlordsOnboarded: z.number().int().nonnegative(),
+});
 
-function formatRent(amount: number): string {
-    if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
-    if (amount >= 1_000) return `$${Math.round(amount / 1_000)}K`;
-    return `$${amount.toLocaleString()}`;
+const EMPTY_STATS: PublicStats = {
+    rentCollected: 0,
+    currency: "",
+    propertiesManaged: 0,
+    landlordsOnboarded: 0,
+};
+
+async function getPublicStats(): Promise<PublicStats> {
+    // Read at call time: in standalone runtime the var is present in process.env;
+    // unset in dev (and tests) — fall back to zeros rather than fetch a bad URL.
+    const backend = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+    if (!backend) return EMPTY_STATS;
+    try {
+        const res = await fetch(`${backend}/api/v1/stats/public`, {
+            next: { revalidate: 300 },
+        });
+        if (!res.ok) return EMPTY_STATS;
+        const parsed = publicStatsSchema.safeParse(await res.json());
+        return parsed.success ? parsed.data : EMPTY_STATS;
+    } catch {
+        return EMPTY_STATS;
+    }
 }
 
-export default function StatsStrip() {
-    const { data } = usePublicStats();
-
-    const stats = [
-        {
-            value: formatRent(data?.rentCollected ?? 0),
-            label: "Rent collected",
-            testId: "stat-rent",
-        },
-        {
-            value: String(data?.propertiesManaged ?? 0),
-            label: "Properties managed",
-            testId: "stat-properties",
-        },
-        {
-            value: String(data?.landlordsOnboarded ?? 0),
-            label: "Landlords onboarded",
-            testId: "stat-landlords",
-        },
-    ];
-
-    return (
-        <section className="px-6 py-14 md:py-20 bg-background border-t border-border">
-            <div className="max-w-5xl mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-                    {stats.map(({ value, label, testId }) => (
-                        <div key={label}>
-                            <p
-                                className="font-heading text-4xl md:text-5xl text-primary font-semibold mb-2"
-                                data-testid={testId}
-                            >
-                                {value}
-                            </p>
-                            <p className="text-sm text-muted-text">{label}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </section>
-    );
+export default async function StatsStrip() {
+    const stats = await getPublicStats();
+    return <StatsStripView {...stats} />;
 }
