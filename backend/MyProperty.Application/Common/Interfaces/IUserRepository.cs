@@ -1,11 +1,10 @@
-using System.Security.Claims;
 using MyProperty.Domain.Entities;
 
 namespace MyProperty.Application.Common.Interfaces;
 
 /// <summary>
 /// Repository for the <see cref="User"/> aggregate. The User table mirrors
-/// Keycloak identities — population is driven by <see cref="GetOrSyncFromClaimsAsync"/>,
+/// Keycloak identities — population is driven by <see cref="GetOrSyncAsync"/>,
 /// not by a public registration endpoint.
 /// </summary>
 public interface IUserRepository
@@ -27,13 +26,18 @@ public interface IUserRepository
     Task<User?> GetByEmailAsync(string email, CancellationToken ct);
 
     /// <summary>
-    /// Reads the JWT claims off <paramref name="principal"/>, ensures a matching
-    /// <see cref="User"/> row exists, updates email/name/phone if the claims have
-    /// drifted, and returns the entity. Persists changes via SaveChangesAsync.
-    /// Throws <see cref="InvalidOperationException"/> if the principal is not
-    /// authenticated or is missing a <c>sub</c> claim.
+    /// Ensures a <see cref="User"/> row exists for the given Keycloak subject,
+    /// updates email/name/phone if any value has drifted, and returns the entity.
+    /// Persists changes via SaveChangesAsync. Caller is responsible for ensuring
+    /// <paramref name="sub"/> is non-null before invoking.
     /// </summary>
-    Task<User> GetOrSyncFromClaimsAsync(ClaimsPrincipal principal, CancellationToken ct);
+    Task<User> GetOrSyncAsync(
+        string sub,
+        string? email,
+        string? firstName,
+        string? lastName,
+        string? phone,
+        CancellationToken ct);
 
     /// <summary>
     /// Adds a new user to the change tracker. Caller is responsible for SaveChangesAsync.

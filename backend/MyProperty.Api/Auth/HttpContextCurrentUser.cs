@@ -14,11 +14,19 @@ namespace MyProperty.Api.Auth;
 /// </remarks>
 public sealed class HttpContextCurrentUser(IHttpContextAccessor httpContextAccessor) : ICurrentUser
 {
-    public ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
+    private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
     public string? KeycloakSubId => Principal?.FindFirst("sub")?.Value;
 
     public string? UserName => Principal?.Identity?.Name;
+
+    public string? Email => Principal?.FindFirst("email")?.Value;
+
+    public string? FirstName => Principal?.FindFirst("given_name")?.Value;
+
+    public string? LastName => Principal?.FindFirst("family_name")?.Value;
+
+    public string? Phone => Principal?.FindFirst("phone_number")?.Value;
 
     public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated ?? false;
 

@@ -4,9 +4,8 @@ namespace MyProperty.Application.Common.Interfaces;
 
 /// <summary>
 /// Resolves the authenticated caller to the internal <see cref="User"/> entity,
-/// centralizing the <c>KeycloakSubId → User</c> lookup that the payment handlers
-/// previously duplicated and guarding the <c>ClaimsPrincipal</c> access that the
-/// invite/landlord handlers previously did with a null-forgiving <c>Principal!</c>.
+/// centralizing the <c>KeycloakSubId → User</c> lookup so handlers never touch
+/// identity primitives directly.
 /// </summary>
 public interface ICurrentUserContext
 {
@@ -18,9 +17,8 @@ public interface ICurrentUserContext
     Task<User> GetUserAsync(CancellationToken ct);
 
     /// <summary>
-    /// Resolves-or-syncs the authenticated user from claims. Throws
-    /// <see cref="Common.Exceptions.ForbiddenException"/> if there is no
-    /// authenticated principal.
+    /// Resolves-or-syncs the authenticated user from the current identity claims.
+    /// Throws <see cref="Common.Exceptions.ForbiddenException"/> if unauthenticated.
     /// </summary>
     Task<User> GetOrSyncUserAsync(CancellationToken ct);
 }

@@ -3,7 +3,6 @@ using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Domain.Entities;
 using MyProperty.Infrastructure.Identity;
-using MyProperty.Tests.Unit.Handlers.TestUtils;
 
 namespace MyProperty.Tests.Unit.Identity;
 
@@ -64,9 +63,12 @@ public sealed class CurrentUserContextTests
     public async Task GetOrSyncUserAsync_returns_synced_user_from_claims()
     {
         var user = SeedUser();
-        var principal = TestPrincipal.Authenticated(Sub);
-        _currentUser.SetupGet(c => c.Principal).Returns(principal);
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(principal, It.IsAny<CancellationToken>()))
+        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(Sub);
+        _currentUser.SetupGet(c => c.Email).Returns("user@example.com");
+        _currentUser.SetupGet(c => c.FirstName).Returns("User");
+        _currentUser.SetupGet(c => c.LastName).Returns("One");
+        _currentUser.SetupGet(c => c.Phone).Returns((string?)null);
+        _users.Setup(u => u.GetOrSyncAsync(Sub, "user@example.com", "User", "One", null, It.IsAny<CancellationToken>()))
               .ReturnsAsync(user);
 
         var result = await BuildSut().GetOrSyncUserAsync(CancellationToken.None);
@@ -75,9 +77,9 @@ public sealed class CurrentUserContextTests
     }
 
     [Fact]
-    public async Task GetOrSyncUserAsync_throws_Forbidden_when_no_principal()
+    public async Task GetOrSyncUserAsync_throws_Forbidden_when_unauthenticated()
     {
-        _currentUser.SetupGet(c => c.Principal).Returns((System.Security.Claims.ClaimsPrincipal?)null);
+        _currentUser.SetupGet(c => c.KeycloakSubId).Returns((string?)null);
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => BuildSut().GetOrSyncUserAsync(CancellationToken.None));
@@ -103,12 +105,15 @@ public sealed class CurrentUserContextTests
     {
         using var cts = new CancellationTokenSource();
         var user = SeedUser();
-        var principal = TestPrincipal.Authenticated(Sub);
-        _currentUser.SetupGet(c => c.Principal).Returns(principal);
-        _users.Setup(u => u.GetOrSyncFromClaimsAsync(principal, cts.Token)).ReturnsAsync(user);
+        _currentUser.SetupGet(c => c.KeycloakSubId).Returns(Sub);
+        _currentUser.SetupGet(c => c.Email).Returns("user@example.com");
+        _currentUser.SetupGet(c => c.FirstName).Returns("User");
+        _currentUser.SetupGet(c => c.LastName).Returns("One");
+        _currentUser.SetupGet(c => c.Phone).Returns((string?)null);
+        _users.Setup(u => u.GetOrSyncAsync(Sub, "user@example.com", "User", "One", null, cts.Token)).ReturnsAsync(user);
 
         await BuildSut().GetOrSyncUserAsync(cts.Token);
 
-        _users.Verify(u => u.GetOrSyncFromClaimsAsync(principal, cts.Token), Times.Once);
+        _users.Verify(u => u.GetOrSyncAsync(Sub, "user@example.com", "User", "One", null, cts.Token), Times.Once);
     }
 }

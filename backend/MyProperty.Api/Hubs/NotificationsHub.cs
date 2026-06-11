@@ -62,7 +62,7 @@ public sealed class NotificationsHub(
         if (user is null)
         {
             // The user has authenticated against Keycloak but never synced into
-            // our user table (no REST call has run GetOrSyncFromClaimsAsync).
+            // our user table (no REST call has run GetOrSyncAsync).
             // Without an internal id we can't assign a domain group; abort the
             // connection so the client retries after a REST round-trip.
             logger.LogInformation(
