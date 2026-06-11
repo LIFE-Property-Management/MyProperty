@@ -1,6 +1,8 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using MyProperty.Application.Invites;
+using MyProperty.Application.Invites.Queries.GetInviteByToken;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 using MyProperty.Tests.Integration.Fixtures;
@@ -8,9 +10,10 @@ using MyProperty.Tests.Integration.Fixtures;
 namespace MyProperty.Tests.Integration;
 
 /// <summary>
-/// Anonymous invite endpoints — preview (GET) and reject (POST). Tests cover
-/// the 404 cases (missing / non-Pending / expired) and the happy reject path,
-/// asserting the DB row reflects the new status.
+/// Anonymous invite endpoints — preview (GET) and reject (POST). Preview returns
+/// 404 only for a truly unknown token; a resolved invite returns 200 with its
+/// status (D3) so the accept page can render a status-specific view. Reject tests
+/// cover the 404 cases and the happy path, asserting the DB row's new status.
 /// </summary>
 [Collection(ApiCollection.Name)]
 public sealed class InvitePreviewAndRejectTests(ApiFixture fixture)
@@ -32,7 +35,7 @@ public sealed class InvitePreviewAndRejectTests(ApiFixture fixture)
     }
 
     [Fact]
-    public async Task Preview_returns_404_for_expired_invite()
+    public async Task Preview_returns_200_with_Expired_status_for_expired_invite()
     {
         var (_, plainToken) = await SeedInviteAsync(
             status: InviteStatus.Pending,
@@ -40,20 +43,28 @@ public sealed class InvitePreviewAndRejectTests(ApiFixture fixture)
 
         var client = fixture.CreateClient();
         var resp = await client.GetAsync($"/api/v1/invites/by-token/{plainToken}");
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var preview = await resp.Content.ReadFromJsonAsync<InvitePreviewDto>(ApiFixture.JsonOptions);
+        Assert.NotNull(preview);
+        Assert.Equal(InviteStatus.Expired, preview!.Status);
     }
 
     [Theory]
     [InlineData(InviteStatus.Accepted)]
     [InlineData(InviteStatus.Rejected)]
     [InlineData(InviteStatus.Expired)]
-    public async Task Preview_returns_404_for_non_pending_invite(InviteStatus status)
+    public async Task Preview_returns_200_with_status_for_non_pending_invite(InviteStatus status)
     {
         var (_, plainToken) = await SeedInviteAsync(status);
 
         var client = fixture.CreateClient();
         var resp = await client.GetAsync($"/api/v1/invites/by-token/{plainToken}");
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var preview = await resp.Content.ReadFromJsonAsync<InvitePreviewDto>(ApiFixture.JsonOptions);
+        Assert.NotNull(preview);
+        Assert.Equal(status, preview!.Status);
     }
 
     [Fact]

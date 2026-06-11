@@ -8,6 +8,8 @@ namespace MyProperty.Application.Properties.Queries.GetLandlordProperties;
 public sealed class GetLandlordPropertiesHandler(
     IValidator<GetLandlordPropertiesQuery> validator,
     IPropertyRepository properties,
+    ILeaseRepository leases,
+    IInviteRepository invites,
     ICurrentUserContext currentUserContext)
 {
     public async Task<PagedResult<PropertyDto>> Handle(GetLandlordPropertiesQuery query, CancellationToken ct)
@@ -19,8 +21,16 @@ public sealed class GetLandlordPropertiesHandler(
         var (items, totalCount) = await properties.ListByLandlordAsync(
             landlord.Id, query.Page, query.PageSize, ct);
 
+        // Per-property occupancy (D7): two set-based lookups for the whole page
+        // rather than two existence checks per property (N+1).
+        var pageIds = items.Select(p => p.Id).ToList();
+        var leased = await leases.GetPropertyIdsWithActiveLeaseAsync(pageIds, ct);
+        var invited = await invites.GetPropertyIdsWithPendingInviteAsync(pageIds, ct);
+
         var dtos = items.Select(p => new PropertyDto(
-            p.Id, p.Name, p.Address, p.UnitNumber, p.PropertyType, p.CreatedAt)).ToList();
+            p.Id, p.Name, p.Address, p.UnitNumber, p.PropertyType, p.CreatedAt,
+            HasActiveLease: leased.Contains(p.Id),
+            HasPendingInvite: invited.Contains(p.Id))).ToList();
 
         return new PagedResult<PropertyDto>(dtos, query.Page, query.PageSize, totalCount);
     }

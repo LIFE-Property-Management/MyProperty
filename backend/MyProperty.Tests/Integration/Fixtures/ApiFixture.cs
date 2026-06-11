@@ -1,4 +1,6 @@
 using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +32,17 @@ public sealed class ApiFixture : IAsyncLifetime
     public const string ImposterEmail = "imposter@test.local";
     public const string AdminEmail = "admin@test.local";
     public const string SeedPassword = "Password1!";
+
+    /// <summary>
+    /// JSON options mirroring the API's serializer (camelCase + string enums) so
+    /// tests can deserialize response DTOs that carry enum fields (e.g.
+    /// <c>InvitePreviewDto.Status</c>). The default <c>ReadFromJsonAsync</c>
+    /// options reject string-valued enums.
+    /// </summary>
+    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")

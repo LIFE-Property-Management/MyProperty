@@ -1,8 +1,10 @@
 using Moq;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Invites;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
+using MyProperty.Application.Invites.Events;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 
@@ -15,6 +17,7 @@ public sealed class AcceptInviteHandlerTests
     private readonly Mock<IUserRepository> _users = new(MockBehavior.Strict);
     private readonly Mock<IUserAccountProvisioner> _provisioner = new(MockBehavior.Strict);
     private readonly Mock<ILandlordDashboardCache> _cache = new(MockBehavior.Strict);
+    private readonly Mock<IEventPublisher> _events = new();
 
     private const string PlainToken = "valid-token-1234567890ABCDE";
     private static readonly string TokenHashHex = InviteTokenHasher.Hash(PlainToken);
@@ -29,7 +32,8 @@ public sealed class AcceptInviteHandlerTests
             _leases.Object,
             _users.Object,
             _provisioner.Object,
-            _cache.Object);
+            _cache.Object,
+            _events.Object);
 
     private static Invite SeedInvite(
         InviteStatus status = InviteStatus.Pending,
@@ -40,6 +44,13 @@ public sealed class AcceptInviteHandlerTests
             Id = Guid.NewGuid(),
             LandlordId = landlordId ?? Guid.NewGuid(),
             PropertyId = Guid.NewGuid(),
+            Property = new Property
+            {
+                Id = Guid.NewGuid(),
+                LandlordId = landlordId ?? Guid.NewGuid(),
+                Name = "Sunset Apt",
+                Address = "1 Sunset Blvd",
+            },
             Email = email,
             FirstName = "Ada",
             LastName = "Lovelace",
@@ -69,6 +80,9 @@ public sealed class AcceptInviteHandlerTests
         _users.Setup(u => u.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()))
               .Callback<User, CancellationToken>((u, _) => addedUser = u)
               .Returns(Task.CompletedTask);
+
+        _leases.Setup(l => l.HasActiveLeaseForPropertyAsync(invite.PropertyId, It.IsAny<CancellationToken>()))
+               .ReturnsAsync(false);
 
         Lease? addedLease = null;
         _leases.Setup(l => l.AddAsync(It.IsAny<Lease>(), It.IsAny<CancellationToken>()))
@@ -109,6 +123,16 @@ public sealed class AcceptInviteHandlerTests
             It.IsAny<CancellationToken>()), Times.Once);
 
         _cache.Verify(c => c.InvalidateAsync(invite.LandlordId, It.IsAny<CancellationToken>()), Times.Once);
+
+        // InviteAccepted event published after commit, carrying the new tenant.
+        _events.Verify(e => e.PublishAsync(
+            It.Is<InviteAcceptedEvent>(ev =>
+                ev.InviteId == invite.Id &&
+                ev.LandlordId == invite.LandlordId &&
+                ev.PropertyId == invite.PropertyId &&
+                ev.PropertyName == invite.Property!.Name &&
+                ev.TenantId == addedUser!.Id),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -175,5 +199,26 @@ public sealed class AcceptInviteHandlerTests
         _provisioner.VerifyNoOtherCalls();
         _leases.VerifyNoOtherCalls();
         _cache.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Throws_Conflict_when_property_already_has_active_lease()
+    {
+        var invite = SeedInvite();
+        _invites.Setup(i => i.GetByTokenHashAsync(TokenHashHex, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(invite);
+        _users.Setup(u => u.GetByEmailAsync(invite.Email, It.IsAny<CancellationToken>()))
+              .ReturnsAsync((User?)null);
+        _leases.Setup(l => l.HasActiveLeaseForPropertyAsync(invite.PropertyId, It.IsAny<CancellationToken>()))
+               .ReturnsAsync(true);
+
+        var ex = await Assert.ThrowsAsync<ConflictException>(
+            () => BuildSut().Handle(ValidCommand(), CancellationToken.None));
+        Assert.Contains("active lease", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // No Keycloak account provisioned, no lease added, no event published.
+        _provisioner.VerifyNoOtherCalls();
+        _leases.Verify(l => l.AddAsync(It.IsAny<Lease>(), It.IsAny<CancellationToken>()), Times.Never);
+        _events.Verify(e => e.PublishAsync(It.IsAny<InviteAcceptedEvent>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

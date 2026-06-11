@@ -1,8 +1,10 @@
 using Moq;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Invites;
 using MyProperty.Application.Invites.Commands.RejectInvite;
+using MyProperty.Application.Invites.Events;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 
@@ -11,12 +13,13 @@ namespace MyProperty.Tests.Unit.Handlers.Invites;
 public sealed class RejectInviteHandlerTests
 {
     private readonly Mock<IInviteRepository> _invites = new(MockBehavior.Strict);
+    private readonly Mock<IEventPublisher> _events = new();
 
     private const string PlainToken = "valid-token-1234567890ABCDE";
     private static readonly string TokenHashHex = InviteTokenHasher.Hash(PlainToken);
 
     private RejectInviteHandler BuildSut() =>
-        new(new RejectInviteValidator(), _invites.Object);
+        new(new RejectInviteValidator(), _invites.Object, _events.Object);
 
     private static Invite SeedInvite(
         InviteStatus status = InviteStatus.Pending,
@@ -25,6 +28,13 @@ public sealed class RejectInviteHandlerTests
             Id = Guid.NewGuid(),
             LandlordId = Guid.NewGuid(),
             PropertyId = Guid.NewGuid(),
+            Property = new Property
+            {
+                Id = Guid.NewGuid(),
+                LandlordId = Guid.NewGuid(),
+                Name = "Sunset Apt",
+                Address = "1 Sunset Blvd",
+            },
             Email = "tenant@example.com",
             FirstName = "Ada",
             LastName = "Lovelace",
@@ -53,6 +63,14 @@ public sealed class RejectInviteHandlerTests
         Assert.Equal(InviteStatus.Rejected, invite.Status);
         Assert.NotNull(invite.RejectedAt);
         _invites.Verify(i => i.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        // InviteRejected event published after commit.
+        _events.Verify(e => e.PublishAsync(
+            It.Is<InviteRejectedEvent>(ev =>
+                ev.InviteId == invite.Id &&
+                ev.LandlordId == invite.LandlordId &&
+                ev.PropertyName == invite.Property!.Name),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

@@ -112,4 +112,18 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
     public Task<bool> HasActiveLeaseForPropertyAsync(Guid propertyId, CancellationToken ct)
         => db.Leases.AnyAsync(
             l => l.PropertyId == propertyId && l.Status == LeaseStatus.Active, ct);
+
+    public async Task<IReadOnlySet<Guid>> GetPropertyIdsWithActiveLeaseAsync(
+        IReadOnlyCollection<Guid> propertyIds, CancellationToken ct)
+    {
+        if (propertyIds.Count == 0) return new HashSet<Guid>();
+
+        var matches = await db.Leases
+            .Where(l => l.Status == LeaseStatus.Active && propertyIds.Contains(l.PropertyId))
+            .Select(l => l.PropertyId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        return matches.ToHashSet();
+    }
 }

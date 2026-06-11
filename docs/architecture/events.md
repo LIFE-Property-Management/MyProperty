@@ -1,6 +1,6 @@
 # RabbitMQ event topology
 
-Single **topic exchange** (`myproperty.events`), four event types, five queues, five consumers. Routing keys are derived from the C# event type name (`IntegrationEventNaming.RoutingKey`) — change the class name, the binding follows automatically.
+Single **topic exchange** (`myproperty.events`), six event types, seven queues, seven consumers. Routing keys are derived from the C# event type name (`IntegrationEventNaming.RoutingKey`) — change the class name, the binding follows automatically.
 
 ![RabbitMQ event topology](./diagrams/events.svg)
 
@@ -15,6 +15,8 @@ Single **topic exchange** (`myproperty.events`), four event types, five queues, 
 | `PaymentConfirmedEvent` | `ConfirmPaymentHandler` | `payment.confirmed` | `myproperty.payment.confirmed.email` | `PaymentConfirmedConsumer` | Email Hangfire job + SignalR push to tenant |
 | `PaymentRejectedEvent` | `RejectPaymentHandler` | `payment.rejected` | `myproperty.payment.rejected.signalr` | `PaymentRejectedConsumer` | SignalR push to tenant |
 | `PaymentCreatedEvent` | `CreatePaymentHandler` | `payment.created` | `myproperty.payment.created.signalr` | `PaymentCreatedConsumer` | SignalR push |
+| `InviteAcceptedEvent` | `AcceptInviteHandler` / `ClaimInviteHandler` | `invite.accepted` | `myproperty.invite.accepted.landlord` | `InviteAcceptedConsumer` | Email Hangfire job + SignalR push to landlord |
+| `InviteRejectedEvent` | `RejectInviteHandler` | `invite.rejected` | `myproperty.invite.rejected.landlord` | `InviteRejectedConsumer` | SignalR push to landlord |
 
 **Two queues bound to one routing key** is the fan-out pattern for `payment.submitted`: a single publish dispatches to *both* the SignalR push and the OCR job, with independent ack semantics. If the OCR consumer is down, the SignalR push still happens; when OCR comes back up, RabbitMQ replays the queued messages.
 

@@ -1,8 +1,6 @@
-using System.Security.Cryptography;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MyProperty.Application.Common.Email;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Options;
@@ -33,8 +31,7 @@ public sealed class CreateInviteHandler(
         if (property.LandlordId != landlord.Id)
             throw new ForbiddenException("Property does not belong to current landlord.");
 
-        var plainToken = GeneratePlainToken();
-        var tokenHash = InviteTokenHasher.Hash(plainToken);
+        var token = InviteTokenFactory.Issue();
 
         var invite = new Invite
         {
@@ -43,7 +40,7 @@ public sealed class CreateInviteHandler(
             Email = cmd.Email,
             FirstName = cmd.FirstName,
             LastName = cmd.LastName,
-            TokenHash = tokenHash,
+            TokenHash = token.TokenHash,
             Status = InviteStatus.Pending,
             ExpiresAt = DateTime.UtcNow.AddDays(options.Value.ExpiryDays),
             ProposedStartDate = cmd.ProposedStartDate,
@@ -57,44 +54,9 @@ public sealed class CreateInviteHandler(
 
         logger.LogInformation("Invite {InviteId} created for {Email}", invite.Id, cmd.Email);
 
-        var body = BuildEmailBody(cmd, landlord, property, plainToken, invite.ExpiresAt, options.Value.PortalBaseUrl);
-        var message = new EmailMessage(
-            cmd.Email,
-            $"You've been invited to {property.Name}",
-            body,
-            IsHtml: true);
-
-        jobs.EnqueueEmail(message);
+        jobs.EnqueueEmail(InviteEmailFactory.Build(
+            invite, property, landlord, token.PlainToken, options.Value.PortalBaseUrl));
 
         return new InviteCreatedDto(invite.Id, invite.ExpiresAt);
-    }
-
-    private static string GeneratePlainToken()
-    {
-        var bytes = RandomNumberGenerator.GetBytes(32);
-        return Convert.ToBase64String(bytes)
-            .Replace("+", "-")
-            .Replace("/", "_")
-            .TrimEnd('=');
-    }
-
-    private static string BuildEmailBody(
-        CreateInviteCommand cmd,
-        User landlord,
-        Property property,
-        string plainToken,
-        DateTime expiresAt,
-        string portalBaseUrl)
-    {
-        var ctaLink = $"{portalBaseUrl}/invites/{plainToken}";
-        return $"""
-            <p>Hi {cmd.FirstName},</p>
-            <p>{landlord.FirstName} {landlord.LastName} has invited you to lease <strong>{property.Name}</strong>
-            located at {property.Address}.</p>
-            <p><strong>Proposed terms:</strong> {cmd.ProposedMonthlyRent} {cmd.Currency}
-            from {cmd.ProposedStartDate:yyyy-MM-dd} to {cmd.ProposedEndDate:yyyy-MM-dd}.</p>
-            <p><a href="{ctaLink}">Review and respond to your invite</a></p>
-            <p>This invite expires on {expiresAt:yyyy-MM-dd} UTC.</p>
-            """;
     }
 }

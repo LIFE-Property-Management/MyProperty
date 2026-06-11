@@ -234,6 +234,10 @@ namespace MyProperty.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EndDate");
 
+                    b.HasIndex("PropertyId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" = 'Active' AND \"DeletedAt\" IS NULL");
+
                     b.HasIndex("Status");
 
                     b.HasIndex("LandlordId", "Status");

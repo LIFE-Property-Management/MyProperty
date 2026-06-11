@@ -17,7 +17,6 @@ public sealed class LeaseExpiringSoonRepositoryTests(ApiFixture fixture)
 {
     private static readonly Guid LandlordId = new("55555555-5555-5555-5555-eeeeeeeeeeee");
     private static readonly Guid TenantId = new("66666666-6666-6666-6666-ffffffffffff");
-    private static readonly Guid PropertyId = new("77777777-7777-7777-7777-aaaaaaaaaaaa");
 
     private static async Task EnsureParentsAsync(AppDbContext db)
     {
@@ -40,45 +39,52 @@ public sealed class LeaseExpiringSoonRepositoryTests(ApiFixture fixture)
                 FirstName = "Synth",
                 LastName = "Tenant",
             });
-
-        if (await db.Properties.FindAsync(PropertyId) is null)
-            db.Properties.Add(new Property
-            {
-                Id = PropertyId,
-                LandlordId = LandlordId,
-                Name = "Expiring Property",
-                Address = "1 Expiry Way",
-            });
     }
 
-    private static Lease NewLease(DateOnly endDate) => new()
+    // Each lease gets its own property: the single-active-lease-per-property
+    // unique index forbids stacking multiple Active leases on one property, which
+    // is irrelevant to what this test exercises (the Active-only + date-window filter).
+    private static (Property Property, Lease Lease) NewLeaseOnOwnProperty(DateOnly endDate)
     {
-        Id = Guid.NewGuid(),
-        LandlordId = LandlordId,
-        PropertyId = PropertyId,
-        TenantId = TenantId,
-        StartDate = endDate.AddYears(-1),
-        EndDate = endDate,
-        MonthlyRent = 800m,
-        Currency = "EUR",
-    };
+        var propertyId = Guid.NewGuid();
+        var property = new Property
+        {
+            Id = propertyId,
+            LandlordId = LandlordId,
+            Name = "Expiring Property",
+            Address = "1 Expiry Way",
+        };
+        var lease = new Lease
+        {
+            Id = Guid.NewGuid(),
+            LandlordId = LandlordId,
+            PropertyId = propertyId,
+            TenantId = TenantId,
+            StartDate = endDate.AddYears(-1),
+            EndDate = endDate,
+            MonthlyRent = 800m,
+            Currency = "EUR",
+        };
+        return (property, lease);
+    }
 
     [Fact]
     public async Task ListAllExpiringSoon_returns_only_active_leases_inside_the_window()
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        var soon = NewLease(today.AddDays(10));        // Active, in window      → included
-        var farFuture = NewLease(today.AddDays(60));   // Active, beyond 30 days → excluded
-        var pastEnd = NewLease(today.AddDays(-5));      // Active, already ended  → excluded (lower bound)
-        var terminated = NewLease(today.AddDays(10));   // Terminated             → excluded
+        var (soonProp, soon) = NewLeaseOnOwnProperty(today.AddDays(10));            // Active, in window      → included
+        var (farFutureProp, farFuture) = NewLeaseOnOwnProperty(today.AddDays(60));  // Active, beyond 30 days → excluded
+        var (pastEndProp, pastEnd) = NewLeaseOnOwnProperty(today.AddDays(-5));       // Active, already ended  → excluded (lower bound)
+        var (terminatedProp, terminated) = NewLeaseOnOwnProperty(today.AddDays(10)); // Terminated             → excluded
         terminated.Terminate();
-        var softDeleted = NewLease(today.AddDays(10));  // Active but soft-deleted → excluded
+        var (softDeletedProp, softDeleted) = NewLeaseOnOwnProperty(today.AddDays(10)); // Active but soft-deleted → excluded
         softDeleted.DeletedAt = DateTime.UtcNow;
 
         await fixture.WithDbAsync(async db =>
         {
             await EnsureParentsAsync(db);
+            db.Properties.AddRange(soonProp, farFutureProp, pastEndProp, terminatedProp, softDeletedProp);
             db.Leases.AddRange(soon, farFuture, pastEnd, terminated, softDeleted);
             await db.SaveChangesAsync();
 

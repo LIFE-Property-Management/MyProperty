@@ -15,8 +15,13 @@
 
 ### Tenants Page
 - Tenant List table
-- Collapsible **Invitation Log** — shows `Pending`, `Rejected`, `Expired` only (not Accepted)
-- Banner alert when pending invites exist — clicking scrolls to and expands the Invitation Log
+
+### Invites Page (`/dashboard/invites`)
+- Dedicated invite-management page (replaces the Tenants-page "Invitation Log"). Lists the landlord's
+  invites with status (`Pending`/`Accepted`/`Rejected`/`Expired`/`Revoked`), filterable by status.
+- **Revoke** a `Pending`/`Expired` invite (→ `Revoked`) and **resend** one (fresh token, expiry reset,
+  email re-sent). Backed by `GET /api/v1/invites`, `POST /api/v1/invites/{id}/revoke`,
+  `POST /api/v1/invites/{id}/resend`.
 
 ### Tenant Detail Page
 - Tenant summary card
@@ -28,7 +33,15 @@
 ## Tenant Portal
 
 ### Dashboard
-**Lease Summary card**
+**Lease Summary card** — reads the tenant's active lease from `GET /api/v1/tenant/lease`
+(`200` `TenantLeaseDto`, or `204` when the tenant has no active lease).
+
+**Cancel lease.** A tenant may end their own active lease immediately via
+`POST /api/v1/tenant/lease/cancel` (shown only while the lease is `Active`). This
+terminates the lease on the spot (`Lease.Terminate()`) and emails the landlord
+that their tenant cancelled. `404` if there is no active lease. Notice period /
+early-termination penalty / deposit handling are deferred (see decision D2) — the
+real-world levers don't exist in the domain yet.
 
 **Payment Section — four states:**
 | State | Meaning |
@@ -90,11 +103,21 @@ Backed by `GET /api/v1/admin/dashboard` (cached, Redis, 5-min TTL). Operational 
 ## Auth / Invite Flow
 
 Three cases the invite flow must handle:
-1. New user (no existing account)
-2. Existing user, not logged in
-3. Existing user, already logged in
+1. New user (no existing account) → anonymous `POST /invites/{token}/accept` provisions a Keycloak
+   account + `User` row and creates the lease.
+2. Existing user, not logged in → the accept page detects the existing account (the anonymous accept
+   returns `409` with "Please log in instead.") and routes them to sign in, then case 3.
+3. Existing user, already logged in → authenticated `POST /invites/{token}/claim` reuses the account
+   (no Keycloak provisioning); the JWT email must match the invite email (else `403`). **Implemented**
+   (returning-tenant accept).
 
-Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired`
+Invite statuses: `Pending` · `Accepted` · `Rejected` · `Expired` · `Revoked` (landlord-cancelled,
+distinct from a naturally `Expired` invite).
+
+**Preview is status-aware.** `GET /invites/by-token/{token}` returns `200` with a `status` field for
+any *resolved* invite (so the accept page can show a specific Accepted/Rejected/Expired view); `404`
+is returned only for a **truly unknown** token (the token is a secret bearer — we don't confirm
+existence). A `Pending` invite past its `ExpiresAt` is reported as `Expired`.
 
 **Lease acceptance screen comes before account creation or password setup.**
 

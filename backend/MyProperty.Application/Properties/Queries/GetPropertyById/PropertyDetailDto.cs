@@ -19,4 +19,6 @@ public sealed record PropertyDetailDto(
     string? UnitNumber,
     PropertyType PropertyType,
     DateTime CreatedAt,
+    bool HasActiveLease,
+    bool HasPendingInvite,
     IReadOnlyList<PropertyTenantDto> Tenants);

@@ -1,7 +1,9 @@
 using FluentValidation;
 using MyProperty.Application.Common.Exceptions;
 using MyProperty.Application.Common.Interfaces;
+using MyProperty.Application.Common.Messaging;
 using MyProperty.Application.Common.Validation;
+using MyProperty.Application.Invites.Events;
 using MyProperty.Domain.Entities;
 using MyProperty.Domain.Enums;
 
@@ -13,7 +15,8 @@ public sealed class AcceptInviteHandler(
     ILeaseRepository leases,
     IUserRepository users,
     IUserAccountProvisioner provisioner,
-    ILandlordDashboardCache dashboardCache)
+    ILandlordDashboardCache dashboardCache,
+    IEventPublisher events)
 {
     public async Task<InviteAcceptedDto> Handle(AcceptInviteCommand cmd, CancellationToken ct)
     {
@@ -36,6 +39,13 @@ public sealed class AcceptInviteHandler(
         if (existingUser is not null)
             throw new ConflictException(
                 $"An account for {invite.Email} already exists. Please log in instead.");
+
+        // Single-active-lease-per-property invariant: never materialize a second
+        // active lease on an already-occupied property (a stale invite could
+        // otherwise be accepted onto a property that's since been leased). Checked
+        // before provisioning so we don't create an orphaned Keycloak account.
+        if (await leases.HasActiveLeaseForPropertyAsync(invite.PropertyId, ct))
+            throw new ConflictException("This property already has an active lease.");
 
         var keycloakSub = await provisioner.CreateAsync(new ProvisionUserRequest(
             Email: invite.Email,
@@ -74,6 +84,18 @@ public sealed class AcceptInviteHandler(
         await invites.SaveChangesAsync(ct);
 
         await dashboardCache.InvalidateAsync(invite.LandlordId, ct);
+
+        // After commit: notify the landlord (SignalR + email) via the bus.
+        // Property is eagerly loaded by GetByTokenHashAsync.
+        await events.PublishAsync(
+            new InviteAcceptedEvent(
+                invite.Id,
+                invite.LandlordId,
+                invite.PropertyId,
+                invite.Property!.Name,
+                user.Id,
+                $"{user.FirstName} {user.LastName}"),
+            ct);
 
         return new InviteAcceptedDto(invite.Id, lease.Id);
     }

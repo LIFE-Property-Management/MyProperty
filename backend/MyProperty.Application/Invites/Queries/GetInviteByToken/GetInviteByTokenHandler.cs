@@ -16,16 +16,21 @@ public sealed class GetInviteByTokenHandler(
 
         var tokenHash = InviteTokenHasher.Hash(query.Token);
 
+        // Only a truly unknown token-hash is hidden as 404 (don't confirm token
+        // existence to an enumerator). A resolved invite returns 200 with its
+        // status so the accept page can render a status-specific view (D3).
         var invite = await invites.GetByTokenHashAsync(tokenHash, ct)
             ?? throw new NotFoundException("Invite", "token");
 
-        if (invite.Status != InviteStatus.Pending)
-            throw new NotFoundException("Invite", "token");
-
-        if (invite.ExpiresAt <= DateTime.UtcNow)
-            throw new NotFoundException("Invite", "token");
+        // A Pending invite whose ExpiresAt has passed but which the hourly
+        // MarkExpiredInvites job hasn't swept yet is effectively Expired — report
+        // it as such so the frontend never shows an accept form for a dead link.
+        var status = invite.Status == InviteStatus.Pending && invite.ExpiresAt <= DateTime.UtcNow
+            ? InviteStatus.Expired
+            : invite.Status;
 
         return new InvitePreviewDto(
+            Status: status,
             PropertyName: invite.Property!.Name,
             PropertyAddress: invite.Property.Address,
             LandlordFullName: $"{invite.Landlord!.FirstName} {invite.Landlord.LastName}",

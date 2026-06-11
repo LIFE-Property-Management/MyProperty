@@ -23,13 +23,18 @@ using MyProperty.Application.Common.Interfaces;
 using MyProperty.Application.Common.Notifications;
 using MyProperty.Application.Common.Options;
 using MyProperty.Application.Invites.Commands.AcceptInvite;
+using MyProperty.Application.Invites.Commands.ClaimInvite;
 using MyProperty.Application.Invites.Commands.CreateInvite;
 using MyProperty.Application.Invites.Commands.RejectInvite;
+using MyProperty.Application.Invites.Commands.ResendInvite;
+using MyProperty.Application.Invites.Commands.RevokeInvite;
 using MyProperty.Application.Invites.Queries.GetInviteByToken;
+using MyProperty.Application.Invites.Queries.GetLandlordInvites;
 using MyProperty.Application.Landlord.Queries.GetLandlordDashboard;
 using MyProperty.Application.Landlord.Queries.GetLandlordTenants;
 using MyProperty.Application.Landlord.Queries.GetTenantDetail;
 using MyProperty.Application.Landlord.Queries.GetUpcomingPayments;
+using MyProperty.Application.Leases.Commands.CancelOwnLease;
 using MyProperty.Application.Leases.Commands.TerminateLease;
 using MyProperty.Application.Leases.Queries.GetLandlordLeases;
 using MyProperty.Application.Leases.Queries.GetLeasesExpiringSoon;
@@ -174,7 +179,11 @@ try
     builder.Services.AddScoped<CreateInviteHandler>();
     builder.Services.AddScoped<GetInviteByTokenHandler>();
     builder.Services.AddScoped<AcceptInviteHandler>();
+    builder.Services.AddScoped<ClaimInviteHandler>();
     builder.Services.AddScoped<RejectInviteHandler>();
+    builder.Services.AddScoped<GetLandlordInvitesHandler>();
+    builder.Services.AddScoped<RevokeInviteHandler>();
+    builder.Services.AddScoped<ResendInviteHandler>();
 
     // Public handlers
     builder.Services.AddScoped<GetPublicStatsHandler>();
@@ -200,6 +209,7 @@ try
     builder.Services.AddScoped<GetLeasesExpiringSoonHandler>();
     builder.Services.AddScoped<GetTenantLeaseHandler>();
     builder.Services.AddScoped<TerminateLeaseHandler>();
+    builder.Services.AddScoped<CancelOwnLeaseHandler>();
 
     // Payment handlers
     builder.Services.AddScoped<CreatePaymentHandler>();

@@ -109,6 +109,8 @@ public static class DependencyInjection
         services.AddHostedService<PaymentSubmittedOcrConsumer>();
         services.AddHostedService<PaymentRejectedConsumer>();
         services.AddHostedService<PaymentCreatedConsumer>();
+        services.AddHostedService<InviteAcceptedConsumer>();
+        services.AddHostedService<InviteRejectedConsumer>();
 
         return services;
     }

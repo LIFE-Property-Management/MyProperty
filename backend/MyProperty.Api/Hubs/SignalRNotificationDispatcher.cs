@@ -44,6 +44,14 @@ public sealed class SignalRNotificationDispatcher(
         Guid landlordId, LeaseExpiringNotification payload, CancellationToken ct)
         => SendAsync(NotificationsHub.LandlordGroup(landlordId), "LeaseExpiringSoon", payload, ct);
 
+    public Task NotifyLandlordInviteAcceptedAsync(
+        Guid landlordId, InviteAcceptedNotification payload, CancellationToken ct)
+        => SendAsync(NotificationsHub.LandlordGroup(landlordId), "InviteAccepted", payload, ct);
+
+    public Task NotifyLandlordInviteRejectedAsync(
+        Guid landlordId, InviteRejectedNotification payload, CancellationToken ct)
+        => SendAsync(NotificationsHub.LandlordGroup(landlordId), "InviteRejected", payload, ct);
+
     private async Task SendAsync(string groupName, string method, object payload, CancellationToken ct)
     {
         try
