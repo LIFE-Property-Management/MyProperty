@@ -42,7 +42,10 @@ describe("useResendInvite", () => {
     expect(mockedPost).toHaveBeenCalledWith(`/invites/${inviteId}/resend`);
   });
 
-  it("invalidates only the invite list on success (occupancy is unchanged)", async () => {
+  it("invalidates invites, properties, and the dashboard on success", async () => {
+    // Resending an Expired invite flips it back to effective-pending, which
+    // changes property occupancy — so the property + dashboard caches must
+    // refresh too, mirroring useRevokeInvite in reverse.
     mockedPost.mockResolvedValueOnce({ data: {} });
     const { Wrapper, invalidateSpy } = makeWrapper();
     const { result } = renderHook(() => useResendInvite(), { wrapper: Wrapper });
@@ -52,7 +55,9 @@ describe("useResendInvite", () => {
     });
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.landlord.invites.all() });
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.landlord.property.all() });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.landlord.dashboard() });
+    expect(invalidateSpy).toHaveBeenCalledTimes(3);
   });
 
   it("does not invalidate caches when the request fails", async () => {

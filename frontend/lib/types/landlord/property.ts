@@ -34,7 +34,7 @@ export const propertyDetailSchema = z.object({
   // property as having a single pending invite. The one-pending-invite-per-
   // property guard rail is NOT yet enforced server-side (a property can still
   // technically have several pending invites; this returns one of them). See
-  // PLAN-4-HANDOFF § "Pending backend dependency".
+  // backend/CLAUDE.md § Invites and the TODO(guard rail) comments.
   pendingInviteId: z.uuid().nullable(),
   tenants: z.array(propertyTenantSchema),
 });
