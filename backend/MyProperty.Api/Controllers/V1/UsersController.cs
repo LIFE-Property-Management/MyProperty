@@ -19,7 +19,7 @@ namespace MyProperty.Api.Controllers.V1;
 [Route("api/v{version:apiVersion}/me")]
 [Authorize]
 [EnableRateLimiting("authenticated")]
-public sealed class MeController(
+public sealed class UsersController(
     ICurrentUserContext currentUserContext,
     ICurrentUser currentUser) : ControllerBase
 {

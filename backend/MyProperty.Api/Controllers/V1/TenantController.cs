@@ -11,7 +11,7 @@ namespace MyProperty.Api.Controllers.V1;
 /// <summary>
 /// Tenant-only endpoints (the tenant portal surface). Owns the authenticated
 /// tenant's own-lease read and lease cancellation. Identity / user-row upsert
-/// stays on <see cref="MeController"/> (<c>/me</c>).
+/// stays on <see cref="UsersController"/> (<c>/me</c>).
 /// </summary>
 [ApiController]
 [ApiVersion("1.0")]
