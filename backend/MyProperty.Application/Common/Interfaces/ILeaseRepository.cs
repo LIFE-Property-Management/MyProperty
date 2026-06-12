@@ -68,10 +68,13 @@ public interface ILeaseRepository
     Task<bool> HasActiveLeaseForPropertyAsync(Guid propertyId, CancellationToken ct);
 
     /// <summary>
-    /// Of the given property ids, returns the subset that have at least one Active
-    /// lease. Single set-based query — used to compute per-property occupancy on
-    /// the landlord property list without an N+1 of per-property existence checks.
+    /// Of the given property ids, returns a map from property id to its Active lease
+    /// id (only for properties that have one). Single set-based query — used to
+    /// compute per-property occupancy (<c>HasActiveLease</c> = key present) and the
+    /// <c>ActiveLeaseId</c> that drives "Cancel lease" on the landlord property list,
+    /// without an N+1 of per-property existence checks. The map is well-defined
+    /// (one id per property) by the single-active-lease-per-property invariant.
     /// </summary>
-    Task<IReadOnlySet<Guid>> GetPropertyIdsWithActiveLeaseAsync(
+    Task<IReadOnlyDictionary<Guid, Guid>> GetActiveLeaseIdsByPropertyAsync(
         IReadOnlyCollection<Guid> propertyIds, CancellationToken ct);
 }

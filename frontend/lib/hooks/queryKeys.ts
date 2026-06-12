@@ -18,6 +18,12 @@ export const queryKeys = {
     all: ["admin"] as const,
     dashboard: () => [...queryKeys.admin.all, "dashboard"] as const,
   },
+  // Anonymous invite-accept flow (not portal-scoped — the invitee may have no
+  // account yet). Keyed by the opaque token from the email link.
+  invite: {
+    all: ["invite"] as const,
+    preview: (token: string) => [...queryKeys.invite.all, "preview", token] as const,
+  },
   landlord: {
     all: ["landlord"] as const,
     dashboard: () => [...queryKeys.landlord.all, "dashboard"] as const,
@@ -31,6 +37,15 @@ export const queryKeys = {
       list: (page: number, pageSize: number) =>
         [...queryKeys.landlord.property.all(), "list", { page, pageSize }] as const,
       detail: (id: string) => [...queryKeys.landlord.property.all(), "detail", id] as const,
+    },
+    invites: {
+      all: () => [...queryKeys.landlord.all, "invites"] as const,
+      list: (page: number, pageSize: number, status?: string) =>
+        [
+          ...queryKeys.landlord.invites.all(),
+          "list",
+          { page, pageSize, status: status ?? null },
+        ] as const,
     },
     tenant: {
       all: () => [...queryKeys.landlord.all, "tenant"] as const,

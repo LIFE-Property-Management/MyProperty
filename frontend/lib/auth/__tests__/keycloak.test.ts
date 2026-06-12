@@ -85,9 +85,12 @@ describe("keycloak", () => {
     );
   });
 
-  it("decodePayload does not include tenantAccountStatus in return value", async () => {
+  it("decodePayload does not include accountStatus in return value", async () => {
     const { decodePayload } = await import("../keycloak");
     const result = decodePayload(makeJwt(["tenant"]));
+    // Domain account status is fetched from /me (MeDto.accountStatus), never
+    // carried in the JWT — see frontend/CLAUDE.md § Auth.
+    expect(result).not.toHaveProperty("accountStatus");
     expect(result).not.toHaveProperty("tenantAccountStatus");
   });
 

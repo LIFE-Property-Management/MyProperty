@@ -23,12 +23,18 @@ public interface IInviteRepository
         Guid landlordId, int page, int pageSize, InviteStatus? statusFilter, CancellationToken ct);
 
     /// <summary>
-    /// Of the given property ids, returns the subset that have at least one
-    /// <c>Pending</c> invite that has not yet passed <c>ExpiresAt</c> (an expired-
-    /// but-not-yet-swept invite is not "pending"). Single set-based query — used to
-    /// compute per-property occupancy without an N+1 of per-property checks.
+    /// Of the given property ids, returns a map from property id to its pending
+    /// invite id — for properties that have an effective-pending invite
+    /// (<c>Pending</c> and not past <c>ExpiresAt</c>; an expired-but-unswept invite
+    /// is not "pending"). Single set-based query — used to compute per-property
+    /// occupancy (<c>HasPendingInvite</c> = key present) and the <c>PendingInviteId</c>
+    /// that drives "Cancel invitation", without an N+1 of per-property checks.
+    /// TODO(guard rail): a property may currently have several pending invites; this
+    /// returns one of them (treated as the single one). Enforce the
+    /// one-pending-invite-per-property invariant in <c>CreateInviteHandler</c>
+    /// (+ a DB constraint) later — see backend/CLAUDE.md § Invites.
     /// </summary>
-    Task<IReadOnlySet<Guid>> GetPropertyIdsWithPendingInviteAsync(
+    Task<IReadOnlyDictionary<Guid, Guid>> GetPendingInviteIdsByPropertyAsync(
         IReadOnlyCollection<Guid> propertyIds, CancellationToken ct);
 
     /// <summary>

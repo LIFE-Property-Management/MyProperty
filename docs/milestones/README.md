@@ -23,3 +23,11 @@ Index of milestone records. Each milestone has its own file: completed milestone
 - [`../portals.md`](../portals.md) — portal feature specs
 - [`../audits/`](../audits/) — codebase audit reports
 - [`../performance/`](../performance/) — Lighthouse + bundle analysis artifacts
+
+## Cross-cutting features
+
+- **Invites** (landlord create/manage → invitee accept/claim → lease + tenant cancel) — completed across a
+  6-plan effort spanning the M5/M6 window. Full feature state, live e2e results, deviations, and remaining
+  deferred items are recorded in `INVITES-FEATURE-CLOSEOUT.md` (repo root). Notable deferred follow-ups:
+  single-active-lease-per-tenant invariant, one-pending-invite-per-property guard, tenant payment wiring,
+  and the Keycloak silent check-sso prod bug (see memory / closeout).

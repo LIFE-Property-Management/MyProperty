@@ -74,8 +74,8 @@ past-tense for completed actions, `*_started` for funnel-entry intents.
 | `signup_started` | — | Landlord opens the signup form | `app/(auth)/signup/page.tsx` (mount) |
 | `signup_completed` | `method: "email"` | Registration request succeeds | `lib/hooks/auth/useSignupMutation.ts` |
 | `property_created` | `propertyType` | A property is created | `lib/hooks/useCreateProperty.ts` |
-| `tenant_invite_started` | `propertyId` | Landlord clicks "Invite Tenant" | `app/dashboard/properties/[id]/_components/PropertyDetailView.tsx` |
-| `tenant_invited` | `propertyId` | Invite actually created/sent | **not yet wired** — invite-creation UI is a stub (see Known gaps) |
+| `tenant_invite_started` | `propertyId` | Landlord clicks "Add lease" (vacant property action) | `app/dashboard/properties/_components/PropertyOccupancyAction.tsx` |
+| `tenant_invited` | `propertyId` | Invite actually created/sent | `lib/hooks/useCreateInvite.ts` (mutation `onSuccess`) |
 | `invite_opened` | — | Tenant opens an invite link | `app/invite/[token]/_components/InviteWizard.tsx` (mount) |
 | `lease_reviewed` | — | Tenant advances past lease review | `InviteWizard.tsx` (step 0 → 1) |
 | `invite_accepted` | — | Lease accepted + account created | `app/invite/[token]/_lib/useAcceptInvite.ts` |
@@ -102,9 +102,11 @@ The acquisition → activation path for the paying side of the marketplace.
 | 3. Account created | `signup_completed` |
 | 4. First property | `property_created` |
 | 5. First tenant invite (intent) | `tenant_invite_started` |
+| 6. First tenant invited | `tenant_invited` |
 
-> Step 5 is **intent** today (click of "Invite Tenant"). When the invite-creation flow
-> ships, repoint step 5 at `tenant_invited` for a true activation funnel.
+> Step 5 is **intent** (click of "Add lease"); step 6 is the **completed** invite
+> (`tenant_invited`, fired on create-invite success) — the true activation endpoint now
+> that the invite-creation flow has shipped (Plan 4).
 
 ### Tenant onboarding funnel
 
@@ -183,11 +185,11 @@ No code change required; the next build bakes it in.
 
 ## Known gaps
 
-- **`tenant_invited` not wired.** The invite-*creation* flow doesn't exist yet
-  (`/dashboard/invites` is a stub; PropertyDetailView's "Invite Tenant" is a placeholder
-  link). The funnel's final step is `tenant_invite_started` (intent) until then. The event
-  is defined in the taxonomy; wire it into the create-invite mutation's `onSuccess` when
-  that flow ships.
+- ~~**`tenant_invited` not wired.**~~ **DONE (Plan 4).** The invite-creation flow shipped:
+  `app/dashboard/invites/new` (create form) + the three-state property action + the
+  `/dashboard/invites` management page. `tenant_invited` (`{ propertyId }`) fires from
+  `useCreateInvite`'s `onSuccess`; `tenant_invite_started` moved to the "Add lease" action
+  in `PropertyOccupancyAction`. The headline funnel now ends on `tenant_invited` (step 6).
 - Funnels themselves live in the PostHog project UI (configuration), recreatable from the
   definitions above — they are not committed as code.
 - Server-side events (`posthog-node`) not added; the funnel is entirely client-driven, so

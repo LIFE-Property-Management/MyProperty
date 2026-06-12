@@ -10,4 +10,15 @@ public sealed record PropertyDto(
     PropertyType PropertyType,
     DateTime CreatedAt,
     bool HasActiveLease,
-    bool HasPendingInvite);
+    bool HasPendingInvite,
+    // The Active lease's id when HasActiveLease is true (null otherwise). Drives the
+    // landlord "Cancel lease" action (PATCH /leases/{id}/terminate) without a second
+    // round-trip. Unambiguous thanks to the single-active-lease-per-property invariant.
+    Guid? ActiveLeaseId,
+    // The pending invite's id when HasPendingInvite is true (null otherwise). Drives
+    // the landlord "Cancel invitation" action (POST /invites/{id}/revoke) inline.
+    // TODO(guard rail): returned as if the property has a single pending invite. The
+    // one-pending-invite-per-property invariant is NOT yet enforced — a property can
+    // still have several pending invites and this returns one of them. Enforce it in
+    // CreateInviteHandler (+ a DB constraint) later; see backend/CLAUDE.md § Invites.
+    Guid? PendingInviteId);

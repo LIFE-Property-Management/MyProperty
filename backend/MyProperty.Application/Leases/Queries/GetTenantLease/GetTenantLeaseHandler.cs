@@ -22,6 +22,8 @@ public sealed class GetTenantLeaseHandler(
         return new TenantLeaseDto(
             lease.Id,
             lease.Property!.Name,
+            lease.Property!.Address,
+            lease.Property!.UnitNumber,
             landlordName,
             lease.StartDate,
             lease.EndDate,

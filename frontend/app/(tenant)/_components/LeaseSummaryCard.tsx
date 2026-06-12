@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useLease, useAuth } from '@/lib/hooks';
 import type { LeaseStatus } from '@/lib/types';
+import { CancelLeaseButton } from './CancelLeaseButton';
 
 // Resolved once at module scope; 'en-US' fallback covers SSR/test environments.
 const locale =
@@ -101,6 +102,8 @@ export function LeaseSummaryCard() {
                     </div>
                 ))}
             </dl>
+
+            <CancelLeaseButton status={lease.status} />
         </Card>
     );
 }

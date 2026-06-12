@@ -3,6 +3,7 @@ using MyProperty.Domain.Enums;
 namespace MyProperty.Application.Properties.Queries.GetPropertyById;
 
 public sealed record PropertyTenantDto(
+    Guid LeaseId,
     Guid TenantId,
     string FullName,
     string Email,
@@ -21,4 +22,9 @@ public sealed record PropertyDetailDto(
     DateTime CreatedAt,
     bool HasActiveLease,
     bool HasPendingInvite,
+    // The pending invite's id when HasPendingInvite is true (null otherwise). Drives
+    // the landlord "Cancel invitation" action (POST /invites/{id}/revoke) inline.
+    // TODO(guard rail): returned as if the property has a single pending invite — the
+    // one-pending-invite-per-property invariant is NOT yet enforced. See PropertyDto.
+    Guid? PendingInviteId,
     IReadOnlyList<PropertyTenantDto> Tenants);

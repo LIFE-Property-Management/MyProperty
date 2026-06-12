@@ -9,6 +9,7 @@ import Spinner from "@/components/ui/Spinner";
 import { useLandlordProperties } from "@/lib/hooks/useLandlordProperties";
 import { formatDate } from "@/lib/utils/formatDate";
 import type { PropertyDto } from "@/lib/types/landlord/property";
+import PropertyOccupancyAction from "./_components/PropertyOccupancyAction";
 
 const PAGE_SIZE = 10;
 
@@ -40,6 +41,22 @@ const columns = [
         header: "Added",
         accessor: (row: PropertyDto) => (
             <span className="text-muted-text">{formatDate(row.createdAt)}</span>
+        ),
+    },
+    {
+        key: "actions",
+        header: "Lease",
+        accessor: (row: PropertyDto) => (
+            <div className="flex justify-end">
+                <PropertyOccupancyAction
+                    propertyId={row.id}
+                    hasActiveLease={row.hasActiveLease}
+                    hasPendingInvite={row.hasPendingInvite}
+                    activeLeaseId={row.activeLeaseId}
+                    pendingInviteId={row.pendingInviteId}
+                    size="sm"
+                />
+            </div>
         ),
     },
 ];
