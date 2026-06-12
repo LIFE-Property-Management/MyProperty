@@ -249,7 +249,7 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
   - Default-deny authorization via `FallbackPolicy = RequireAuthenticatedUser`
   - `HealthController` explicitly `[AllowAnonymous]`, sealed, `HealthResponse` extracted to `Application/Health/`
 - `ICurrentUser` abstraction: interface in `Application/Common/Interfaces/`, `HttpContextCurrentUser` impl in `Api/Auth/`, registered scoped
-- `MeController`: `GET /api/v1/me` (any authenticated user), `GET /api/v1/me/tenant-only` (RequireTenant policy)
+- `UsersController`: `GET /api/v1/me` (any authenticated user), `GET /api/v1/me/tenant-only` (RequireTenant policy)
 - Google IdP added to Keycloak realm with env-var-substituted credentials; real Google OAuth credentials provisioned and verified end-to-end
 - `defaultClientScopes` explicitly assigned to `myproperty-frontend` client (defensive against Keycloak default changes)
 - Repo-root `.env.example` created for compose-level secrets (Google OAuth)
@@ -318,7 +318,7 @@ Note: Cleanup batches were not enumerated in the original April 22 plan. Surface
     oracle (404-vs-200 / 404-vs-204) flagged in the post-M3 follow-up list.
   - `authenticated` — per-user (`sub` claim), 120 req/min, with IP
     fallback when the claim is missing. Applied to `LandlordController`,
-    `MeController`, `POST /api/v1/invites`, `POST /api/v1/invites/{token}/accept`.
+    `UsersController`, `POST /api/v1/invites`, `POST /api/v1/invites/{token}/accept`.
   - 429 on rejection. `app.UseRateLimiter()` placed after authn/authz so
     the `sub` claim is available for partitioning.
 - `[ProducesResponseType]` attributes updated to advertise 400 and 429.
