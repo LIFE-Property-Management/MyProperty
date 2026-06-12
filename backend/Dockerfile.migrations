@@ -47,12 +47,10 @@
 # busybox, no /bin, no /usr/bin tools. Same base as backend/Dockerfile
 # so the migration image and API image share their base layer
 # (improves registry cache locality).
-# Digest pinning TODO: first post-merge Dependabot run will append
-# the @sha256:... digest. Manual lookup recipe:
-#   docker pull mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
-#   docker inspect --format '{{index .RepoDigests 0}}' \
-#     mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
+# Digest pinned (same base as backend/Dockerfile so the layers stay shared) —
+# maintained by Dependabot. Manual lookup recipe if ever needed:
+#   docker buildx imagetools inspect mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:f140a7fd9d0885581e70bfcc935ec1f738c30eeef04a54764db3064e60d9389e
 
 WORKDIR /app
 
