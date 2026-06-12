@@ -6,11 +6,15 @@ on:
     paths:
       - "infrastructure/aiops-webhook/**"
       - ".github/workflows/aiops-webhook-ci.yml"
+      - ".trivyignore"
+      - "trivy-secret.yaml"
   pull_request:
     branches: [develop, main]
     paths:
       - "infrastructure/aiops-webhook/**"
       - ".github/workflows/aiops-webhook-ci.yml"
+      - ".trivyignore"
+      - "trivy-secret.yaml"
 
 concurrency:
   group: aiops-webhook-ci-${{ github.ref }}
@@ -121,6 +125,8 @@ jobs:
           exit-code: '0'
           ignore-unfixed: true
           trivyignores: .trivyignore
+        env:
+          TRIVY_SECRET_CONFIG: trivy-secret.yaml
 
       - name: Upload Trivy results to GitHub Security
         if: always()
