@@ -33,7 +33,7 @@ Application's interfaces — `IPaymentRepository`, `INotificationDispatcher`, `I
 
 | Component | Tech | What it does |
 |---|---|---|
-| Controllers (v1) | ASP.NET Core MVC, `Asp.Versioning` | AuthController, InvitesController, PropertiesController, LeasesController, PaymentsController, LandlordController, AdminController, MeController — thin: deserialise → call handler → return result. No business logic. (There is **no** `TenantsController` — landlord-facing tenant views are served by `LandlordController`; `AdminController` backs the stakeholder dashboard; `AuthController` exposes landlord self-registration.) |
+| Controllers (v1) | ASP.NET Core MVC, `Asp.Versioning` | AuthController, InvitesController, PropertiesController, LeasesController, PaymentsController, LandlordController, AdminController, UsersController — thin: deserialise → call handler → return result. No business logic. (There is **no** `TenantsController` — landlord-facing tenant views are served by `LandlordController`; `AdminController` backs the stakeholder dashboard; `AuthController` exposes landlord self-registration.) |
 | `NotificationsHub` | SignalR + Redis backplane | Server-push only. Auto-groups connections into `tenant:{userId}` or `landlord:{userId}` on connect. JWT-authenticated via `?access_token=` for the WebSocket handshake. |
 | Middleware pipeline | ASP.NET Core | CorrelationId → Serilog request logging → ForwardedHeaders → CORS allowlist → JwtBearer auth → RateLimiter (`anon-invite` per-IP 30/min + `authenticated` per-user 120/min) → Authorization policies. |
 | Hangfire dashboard | Hangfire UI | Mounted at `/hangfire`, gated by `RequireAdmin` policy. |
