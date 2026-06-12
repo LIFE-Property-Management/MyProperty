@@ -78,6 +78,12 @@ Next.js App Router · TypeScript strict (no any) · Tailwind CSS · TanStack Que
 - On every received event, the client calls `queryClient.invalidateQueries([...])` for the relevant query key. TanStack Query refetches authoritative data from the API.
 - **TanStack Query remains the source of truth.** Do not store SignalR payloads as canonical state. Do not bypass the API to read pushed payloads as data.
 - Connection management: one hub connection per authenticated session, lifecycle owned by a top-level provider (`SignalRProvider`). Auto-reconnect enabled with `withAutomaticReconnect()`.
+- **Implemented in:**
+  - `components/SignalRProvider.tsx` — the top-level provider. Mounted inside `components/Providers.tsx` (so it sits under the `QueryClientProvider` and can invalidate caches). Renders nothing — it's an effect host, not a context provider. Subscribes to `useAuthStore`; opens the connection on tenant/landlord login and tears it down on logout / portal switch.
+  - `lib/realtime/connection.ts` — `buildHubConnection(url, tokenFactory)`: `withUrl` + `withAutomaticReconnect()` + `LogLevel.Warning`. The hub mounts at the API **root** (`/hubs/notifications`), so the URL is `NEXT_PUBLIC_API_BASE_URL` + the path, **not** the `/api/v1` REST base.
+  - `lib/realtime/events.ts` — `HUB_EVENTS` (wire method names, must match the backend `SignalRNotificationDispatcher`) and `invalidationKeysFor(portal)`, the portal-specific event→query-key map (e.g. `LeaseExpiringSoon` invalidates `tenant.lease()` for a tenant but `landlord.dashboard()` + `landlord.tenant.all()` for a landlord).
+  - `lib/auth/keycloak.ts` → `getAccessToken()` — the async `accessTokenFactory`; refreshes via `updateToken(30)` so reconnects never present a stale JWT.
+- **Does not connect** when: portal is `admin` (the hub assigns no group and aborts the connection server-side), `NEXT_PUBLIC_DEV_AUTH_BYPASS=true` (no real token), or `NEXT_PUBLIC_API_BASE_URL` is unset (MSW dev mode — no real backend / WS hub to reach).
 
 ## Analytics (M6.1 — PostHog)
 - All product analytics go through the typed facade in `lib/analytics` — **never import `posthog-js` directly.** Use `capture(ANALYTICS_EVENTS.x, …)`; the payload shape is enforced per event by `AnalyticsEventProperties`.
