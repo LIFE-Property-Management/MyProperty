@@ -120,13 +120,15 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
 
         var matches = await db.Leases
             .Where(l => l.Status == LeaseStatus.Active && propertyIds.Contains(l.PropertyId))
-            .Select(l => new { l.PropertyId, l.Id })
+            .Select(l => new { l.PropertyId, l.Id, l.CreatedAt })
             .ToListAsync(ct);
 
-        // One Active lease per property by invariant; GroupBy guards defensively
-        // against any legacy duplicate rather than throwing on a duplicate key.
+        // One Active lease per property by invariant (partial unique index); GroupBy
+        // guards defensively against any legacy duplicate rather than throwing on a
+        // duplicate key. Pick the most recent so the choice is deterministic — same
+        // ordering convention as InviteRepository.GetPendingInviteIdsByPropertyAsync.
         return matches
             .GroupBy(m => m.PropertyId)
-            .ToDictionary(g => g.Key, g => g.First().Id);
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.CreatedAt).First().Id);
     }
 }
