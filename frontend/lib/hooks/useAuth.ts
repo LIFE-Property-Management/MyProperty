@@ -21,7 +21,7 @@ export function useAuth(): UseAuthReturn {
   const isReadOnly = (() => {
     if (isMeLoading) return false;
     if (user?.portal !== "tenant") return false;
-    return meData?.tenantAccountStatus === "ReadOnly";
+    return meData?.accountStatus === "ReadOnly";
   })();
 
   const signOut = async () => {

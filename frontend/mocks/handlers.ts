@@ -4,7 +4,6 @@ const keycloakLogoutUrl = `${process.env.NEXT_PUBLIC_KEYCLOAK_URL}/realms/${proc
 import type { Payment } from "@/lib/types";
 import type { InviteStatus } from "@/lib/types/landlord/invite";
 import {
-    tenantAccountFixture,
     leaseFixture,
     currentPaymentFixture,
     buildPaymentHistoryResponse,
@@ -35,19 +34,23 @@ export const handlers = [
         return new HttpResponse(null, { status: 204 });
     }),
 
+    // GET /me → MeDto. We mock the slice useMe consumes (accountStatus); the
+    // real response also carries id/email/roles etc. There is no /tenant/me
+    // route — identity stays on /me (the lease read moved to /tenant/lease).
     http.get("/me", async () => {
         await delay(300);
-        return HttpResponse.json({ tenantAccountStatus: "Active" });
-    }),
-
-    http.get("/tenant/me", async () => {
-        await delay(300);
-        return HttpResponse.json(tenantAccountFixture);
+        return HttpResponse.json({ accountStatus: "Active" });
     }),
 
     http.get("/tenant/lease", async () => {
         await delay(300);
         return HttpResponse.json(leaseFixture);
+    }),
+
+    // Tenant self-service cancel. No body; 204. Mirrors POST /tenant/lease/cancel.
+    http.post("/tenant/lease/cancel", async () => {
+        await delay(300);
+        return new HttpResponse(null, { status: 204 });
     }),
 
     http.get("/tenant/payments/current", async () => {

@@ -4,6 +4,10 @@ import type { LeaseSummary } from "@/lib/types";
 jest.mock("../../../../lib/hooks", () => ({
     useLease: jest.fn(),
     useAuth: jest.fn(),
+    // The card renders <CancelLeaseButton/>, which calls useCancelLease. Provide
+    // a stable no-op mutation so the card under test renders without a real
+    // QueryClient (the hook itself is covered by useCancelLease.test).
+    useCancelLease: () => ({ mutate: jest.fn(), isPending: false, isError: false }),
 }));
 
 import { useLease, useAuth } from "../../../../lib/hooks";
@@ -14,7 +18,6 @@ const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
 const LEASE: LeaseSummary = {
     id: "1c7e4f88-2d5a-4f93-bb20-7a6c8e1d4f02",
-    propertyId: "a9e5b3d1-6f24-4e8c-9a13-5d7b2c8e0f64",
     propertyName: "Banesa Pejton",
     propertyAddress: "Rruga Fehmi Agani 12",
     unitNumber: "3A",

@@ -9,7 +9,6 @@ import apiClient from "../../api/client";
 import { ENDPOINTS } from "../../api/endpoints";
 
 import { useLease } from "../useLease";
-import { useTenantAccount } from "../useTenantAccount";
 import { useCurrentPayment } from "../useCurrentPayment";
 import { usePaymentHistory } from "../usePaymentHistory";
 import { useSubmitManualRequest } from "../useSubmitManualRequest";
@@ -40,16 +39,6 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   mockedGet.mockReset();
   mockedPost.mockReset();
-});
-
-describe("useTenantAccount", () => {
-  it("GETs /tenant/me and returns the body", async () => {
-    mockedGet.mockResolvedValueOnce({ data: { id: "u1" } });
-    const { result } = renderHook(() => useTenantAccount(), { wrapper });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockedGet).toHaveBeenCalledWith(ENDPOINTS.tenantAccount);
-    expect(result.current.data).toEqual({ id: "u1" });
-  });
 });
 
 describe("useLease", () => {

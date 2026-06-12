@@ -17,6 +17,7 @@
 - Tenant List table
 
 ### Invites Page (`/dashboard/invites`)
+- Reachable from the dashboard sidebar nav ("Invites", alongside Dashboard / Properties / Tenants).
 - Dedicated invite-management page (replaces the Tenants-page "Invitation Log"). Lists the landlord's
   invites with status (`Pending`/`Accepted`/`Rejected`/`Expired`/`Revoked`), filterable by status.
 - **Revoke** a `Pending`/`Expired` invite (→ `Revoked`) and **resend** one (fresh token, expiry reset,

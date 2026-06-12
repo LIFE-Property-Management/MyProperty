@@ -1,8 +1,14 @@
 export const ENDPOINTS = {
   registerLandlord: "/auth/register-landlord",
+  // Identity + lazy User-row upsert. Backend kept tenant identity here (MeDto:
+  // { …, accountStatus, roles }); the tenant lease read moved to /tenant/lease.
+  // There is NO /tenant/me route (only a /me/tenant-only policy echo).
   me: "/me",
-  tenantAccount: "/tenant/me",
   lease: "/tenant/lease",
+  // Tenant self-service lease cancellation. POST, no body (tenant from JWT) →
+  // 204; backend terminates the active lease and emails the landlord. 404 when
+  // no active lease, 409 when already terminated. Mirrors TenantController.
+  cancelLease: "/tenant/lease/cancel",
   currentPayment: "/tenant/payments/current",
   paymentHistory: "/tenant/payments/history",
   submitReceipt: "/tenant/payments/receipt",
