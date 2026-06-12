@@ -14,6 +14,7 @@ import {
     buildPropertiesResponse,
     buildPropertyDetail,
     buildLandlordInvitesResponse,
+    buildInvitePreview,
     buildTenantsResponse,
     tenantDetailFixtures,
 } from "./fixtures";
@@ -154,6 +155,52 @@ export const handlers = [
     http.patch("/leases/:id/terminate", async () => {
         await delay(300);
         return new HttpResponse(null, { status: 204 });
+    }),
+
+    // ── Invite-accept flow (Plan 5) ───────────────────────────────────────────
+    // Anonymous preview. Returns 200 with the real status for any resolved
+    // invite; 404 only for an unknown token. Token keywords drive the dev/test
+    // status (see buildInvitePreview): "...-accepted/-rejected/-expired/-revoked",
+    // "...-unknown" → 404. "...-existing" (accept) → 409, "...-mismatch" (claim)
+    // → 403, so every branch of the wizard is reachable by URL.
+    http.get("/invites/by-token/:token", async ({ params }) => {
+        await delay(300);
+        const token = params.token as string;
+        if (token.toLowerCase().includes("unknown")) {
+            return HttpResponse.json({ detail: "Invite not found." }, { status: 404 });
+        }
+        return HttpResponse.json(buildInvitePreview(token));
+    }),
+
+    http.post("/invites/:token/accept", async ({ request, params }) => {
+        await delay(400);
+        await request.json();
+        const token = (params.token as string).toLowerCase();
+        if (token.includes("existing")) {
+            return HttpResponse.json(
+                { detail: "An account for tenant@example.com already exists. Please log in instead." },
+                { status: 409 },
+            );
+        }
+        return HttpResponse.json({
+            inviteId: "02a00000-0000-7000-8000-0000000000aa",
+            leaseId: "02b00000-0000-7000-8000-0000000000aa",
+        });
+    }),
+
+    http.post("/invites/:token/claim", async ({ params }) => {
+        await delay(400);
+        const token = (params.token as string).toLowerCase();
+        if (token.includes("mismatch")) {
+            return HttpResponse.json(
+                { detail: "This invite was sent to a different email address." },
+                { status: 403 },
+            );
+        }
+        return HttpResponse.json({
+            inviteId: "02a00000-0000-7000-8000-0000000000bb",
+            leaseId: "02b00000-0000-7000-8000-0000000000bb",
+        });
     }),
 
     http.get("/landlord/payments/upcoming", async ({ request }) => {

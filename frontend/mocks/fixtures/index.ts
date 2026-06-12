@@ -9,6 +9,6 @@ export {
 } from "./landlordDashboard";
 export { stakeholderDashboardFixture } from "./stakeholderDashboard";
 export { propertiesFixture, buildPropertiesResponse, buildPropertyDetail } from "./properties";
-export { invitesFixture, buildLandlordInvitesResponse } from "./invites";
+export { invitesFixture, buildLandlordInvitesResponse, buildInvitePreview } from "./invites";
 export { tenantsFixture, buildTenantsResponse } from "./tenants";
 export { tenantDetailFixtures } from "./tenantDetail";

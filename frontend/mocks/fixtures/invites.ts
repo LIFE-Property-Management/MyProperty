@@ -51,6 +51,56 @@ function row(
 
 z.array(inviteListItemSchema).parse(invitesFixture);
 
+// ── Invite-accept preview (GET /invites/by-token/{token}) ───────────────────
+// Mirrors the backend InvitePreviewDto (camelCase; `status` is a string enum).
+// The dev/test status is keyed off the token so each branch of the accept flow
+// is reachable by URL: a token containing "accepted"/"rejected"/"expired"/
+// "revoked" reports that status; anything else is Pending. (A token containing
+// "unknown" 404s — see the handler.)
+export interface InvitePreviewFixture {
+  status: InviteStatus;
+  propertyName: string;
+  propertyAddress: string;
+  landlordFullName: string;
+  tenantFirstName: string;
+  tenantLastName: string;
+  tenantEmail: string;
+  proposedStartDate: string;
+  proposedEndDate: string;
+  proposedMonthlyRent: number;
+  currency: string;
+  expiresAt: string;
+}
+
+const PREVIEW_STATUS_KEYWORDS: ReadonlyArray<[string, InviteStatus]> = [
+  ["accepted", "Accepted"],
+  ["rejected", "Rejected"],
+  ["expired", "Expired"],
+  ["revoked", "Revoked"],
+];
+
+function statusForToken(token: string): InviteStatus {
+  const lower = token.toLowerCase();
+  return PREVIEW_STATUS_KEYWORDS.find(([kw]) => lower.includes(kw))?.[1] ?? "Pending";
+}
+
+export function buildInvitePreview(token: string): InvitePreviewFixture {
+  return {
+    status: statusForToken(token),
+    propertyName: "Maple Court",
+    propertyAddress: "123 Main St, Prishtina",
+    landlordFullName: "Ada Landlord",
+    tenantFirstName: "Jane",
+    tenantLastName: "Doe",
+    tenantEmail: "tenant@example.com",
+    proposedStartDate: "2026-07-01",
+    proposedEndDate: "2027-06-30",
+    proposedMonthlyRent: 450,
+    currency: "EUR",
+    expiresAt: "2026-07-08T09:00:00Z",
+  };
+}
+
 export function buildLandlordInvitesResponse(
   page: number,
   pageSize: number,

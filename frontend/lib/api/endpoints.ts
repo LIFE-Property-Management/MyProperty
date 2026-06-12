@@ -7,8 +7,14 @@ export const ENDPOINTS = {
   paymentHistory: "/tenant/payments/history",
   submitReceipt: "/tenant/payments/receipt",
   submitManualRequest: "/tenant/payments/manual-request",
-  inviteByToken: (token: string) => `/invites/${encodeURIComponent(token)}`,
+  // Anonymous invite preview. Backend route is /invites/by-token/{token} —
+  // returns 200 for ANY resolved invite WITH its real status, 404 only for an
+  // unknown token-hash. Mirrors InvitesController.GetByToken.
+  inviteByToken: (token: string) => `/invites/by-token/${encodeURIComponent(token)}`,
+  // Anonymous new-user accept (carries password). Returning, authenticated
+  // tenants use claimInvite instead (no body — identity from the JWT).
   acceptInvite: (token: string) => `/invites/${encodeURIComponent(token)}/accept`,
+  claimInvite: (token: string) => `/invites/${encodeURIComponent(token)}/claim`,
   landlordDashboard: "/landlord/dashboard",
   landlordUpcomingPayments: "/landlord/payments/upcoming",
   // Landlord payment-confirmation actions. Mirror the backend routes
