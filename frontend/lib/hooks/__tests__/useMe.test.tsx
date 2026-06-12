@@ -18,9 +18,9 @@ beforeEach(() => {
 });
 
 describe("useMe", () => {
-  it("fires the query when portal is tenant and returns tenantAccountStatus", async () => {
+  it("fires the query when portal is tenant and returns accountStatus", async () => {
     useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
-    mockedGet.mockResolvedValueOnce({ data: { tenantAccountStatus: "Active" } });
+    mockedGet.mockResolvedValueOnce({ data: { accountStatus: "Active" } });
 
     const { client } = renderWithQuery(<></>);
     const { QueryClientProvider } = await import("@tanstack/react-query");
@@ -32,7 +32,7 @@ describe("useMe", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockedGet).toHaveBeenCalledWith("/me");
-    expect(result.current.data?.tenantAccountStatus).toBe("Active");
+    expect(result.current.data?.accountStatus).toBe("Active");
   });
 
   it("does not fire the query when portal is landlord", async () => {
@@ -66,6 +66,6 @@ describe("useMe", () => {
     });
 
     expect(result.current.isLoading).toBe(true);
-    resolve({ data: { tenantAccountStatus: "Active" } });
+    resolve({ data: { accountStatus: "Active" } });
   });
 });

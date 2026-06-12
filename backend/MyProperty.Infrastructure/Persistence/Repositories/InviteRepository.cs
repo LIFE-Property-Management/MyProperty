@@ -43,21 +43,27 @@ internal sealed class InviteRepository(AppDbContext db) : IInviteRepository
         return (items, totalCount);
     }
 
-    public async Task<IReadOnlySet<Guid>> GetPropertyIdsWithPendingInviteAsync(
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetPendingInviteIdsByPropertyAsync(
         IReadOnlyCollection<Guid> propertyIds, CancellationToken ct)
     {
-        if (propertyIds.Count == 0) return new HashSet<Guid>();
+        if (propertyIds.Count == 0) return new Dictionary<Guid, Guid>();
 
         var now = DateTime.UtcNow;
         var matches = await db.Invites
             .Where(i => i.Status == InviteStatus.Pending
                 && i.ExpiresAt > now
                 && propertyIds.Contains(i.PropertyId))
-            .Select(i => i.PropertyId)
-            .Distinct()
+            .Select(i => new { i.PropertyId, i.Id, i.CreatedAt })
             .ToListAsync(ct);
 
-        return matches.ToHashSet();
+        // TODO(guard rail): a property may currently have multiple pending invites.
+        // Until the one-pending-invite-per-property invariant is enforced, pick the
+        // most recent as "the" pending invite so the id is stable and meaningful.
+        return matches
+            .GroupBy(m => m.PropertyId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(m => m.CreatedAt).First().Id);
     }
 
     public Task SaveChangesAsync(CancellationToken ct)

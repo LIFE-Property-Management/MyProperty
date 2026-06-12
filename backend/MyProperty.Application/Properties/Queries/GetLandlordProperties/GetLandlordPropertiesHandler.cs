@@ -24,13 +24,15 @@ public sealed class GetLandlordPropertiesHandler(
         // Per-property occupancy (D7): two set-based lookups for the whole page
         // rather than two existence checks per property (N+1).
         var pageIds = items.Select(p => p.Id).ToList();
-        var leased = await leases.GetPropertyIdsWithActiveLeaseAsync(pageIds, ct);
-        var invited = await invites.GetPropertyIdsWithPendingInviteAsync(pageIds, ct);
+        var activeLeaseIds = await leases.GetActiveLeaseIdsByPropertyAsync(pageIds, ct);
+        var pendingInviteIds = await invites.GetPendingInviteIdsByPropertyAsync(pageIds, ct);
 
         var dtos = items.Select(p => new PropertyDto(
             p.Id, p.Name, p.Address, p.UnitNumber, p.PropertyType, p.CreatedAt,
-            HasActiveLease: leased.Contains(p.Id),
-            HasPendingInvite: invited.Contains(p.Id))).ToList();
+            HasActiveLease: activeLeaseIds.ContainsKey(p.Id),
+            HasPendingInvite: pendingInviteIds.ContainsKey(p.Id),
+            ActiveLeaseId: activeLeaseIds.TryGetValue(p.Id, out var leaseId) ? leaseId : null,
+            PendingInviteId: pendingInviteIds.TryGetValue(p.Id, out var inviteId) ? inviteId : null)).ToList();
 
         return new PagedResult<PropertyDto>(dtos, query.Page, query.PageSize, totalCount);
     }

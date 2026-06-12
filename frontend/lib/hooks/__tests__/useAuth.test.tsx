@@ -76,9 +76,9 @@ describe("useAuth", () => {
     expect(result.current.isReadOnly).toBe(false);
   });
 
-  it("isReadOnly is true when portal is tenant and tenantAccountStatus is ReadOnly", async () => {
+  it("isReadOnly is true when portal is tenant and accountStatus is ReadOnly", async () => {
     useAuthStore.setState({ user: { portal: "tenant", sub: "s1", email: "t@dev.local" } });
-    mockedGet.mockResolvedValueOnce({ data: { tenantAccountStatus: "ReadOnly" } });
+    mockedGet.mockResolvedValueOnce({ data: { accountStatus: "ReadOnly" } });
     const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isMeLoading).toBe(false));
     expect(result.current.isReadOnly).toBe(true);

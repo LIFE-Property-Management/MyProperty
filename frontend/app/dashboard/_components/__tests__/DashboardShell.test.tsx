@@ -60,12 +60,13 @@ describe("DashboardShell", () => {
     expect(main).toContainElement(screen.getByTestId("child"));
   });
 
-  it("renders the three nav links", () => {
+  it("renders the nav links including Invites", () => {
     render(<DashboardShell><div /></DashboardShell>);
     const nav = screen.getByRole("navigation", { name: /landlord navigation/i });
     expect(within(nav).getByText("Dashboard")).toBeInTheDocument();
     expect(within(nav).getByText("Properties")).toBeInTheDocument();
     expect(within(nav).getByText("Tenants")).toBeInTheDocument();
+    expect(within(nav).getByText("Invites")).toBeInTheDocument();
   });
 
   it("renders the brand MyProperty", () => {

@@ -1,19 +1,14 @@
 import { wizardSchema, STEP_FIELDS, STEP_TITLES } from "../schema";
 
-// The wizard schema is the rules engine for the whole invite flow. These tests
-// drive it directly (no DOM, no RHF) — one assertion per business rule, so a
-// regression in any single rule surfaces here rather than silently in the UI.
-
-function makeFile(type = "image/png", sizeBytes = 1024, name = "id.png"): File {
-  return new File([new Uint8Array(sizeBytes)], name, { type });
-}
+// The wizard schema is the rules engine for the new-user accept flow. These
+// tests drive it directly (no DOM, no RHF) — one assertion per business rule, so
+// a regression in any single rule surfaces here rather than silently in the UI.
+// The signature + ID-document fields were removed (D6).
 
 // A fully-valid set of values; individual tests override one field at a time.
 function base(): Record<string, unknown> {
   return {
     acknowledgedLease: true,
-    signatureName: "Jane Doe",
-    idDocument: makeFile(),
     firstName: "Jane",
     lastName: "Doe",
     password: "secret123",
@@ -36,50 +31,6 @@ describe("wizardSchema", () => {
       expect(messagesFor({ ...base(), acknowledgedLease: false })).toContain(
         "You must acknowledge the lease terms to continue",
       );
-    });
-  });
-
-  describe("signatureName", () => {
-    it("rejects fewer than 2 characters", () => {
-      expect(messagesFor({ ...base(), signatureName: "J" })).toContain(
-        "Signature must be at least 2 characters",
-      );
-    });
-
-    it("rejects more than 120 characters", () => {
-      expect(messagesFor({ ...base(), signatureName: "a".repeat(121) })).toContain(
-        "Signature must be 120 characters or fewer",
-      );
-    });
-  });
-
-  describe("idDocument", () => {
-    it("rejects a missing file", () => {
-      expect(messagesFor({ ...base(), idDocument: undefined })).toContain(
-        "An ID document is required",
-      );
-    });
-
-    it("rejects a file larger than 5MB", () => {
-      const tooBig = makeFile("application/pdf", 5 * 1024 * 1024 + 1, "big.pdf");
-      expect(messagesFor({ ...base(), idDocument: tooBig })).toContain(
-        "File must be 5MB or smaller",
-      );
-    });
-
-    it("rejects an unsupported MIME type", () => {
-      const gif = makeFile("image/gif", 1024, "bad.gif");
-      expect(messagesFor({ ...base(), idDocument: gif })).toContain(
-        "File must be JPEG, PNG, or PDF",
-      );
-    });
-
-    it("accepts JPEG, PNG and PDF", () => {
-      for (const type of ["image/jpeg", "image/png", "application/pdf"]) {
-        expect(
-          wizardSchema.safeParse({ ...base(), idDocument: makeFile(type) }).success,
-        ).toBe(true);
-      }
     });
   });
 
@@ -138,12 +89,11 @@ describe("step configuration", () => {
     // fields change without updating STEP_FIELDS, gating breaks silently.
     expect(STEP_FIELDS).toEqual([
       ["acknowledgedLease"],
-      ["signatureName", "idDocument"],
       ["firstName", "lastName", "password", "confirmPassword"],
     ]);
   });
 
-  it("has a title for each of the three steps", () => {
-    expect(STEP_TITLES).toHaveLength(3);
+  it("has a title for each of the two steps", () => {
+    expect(STEP_TITLES).toEqual(["Review lease", "Create account"]);
   });
 });

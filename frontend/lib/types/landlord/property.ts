@@ -4,6 +4,10 @@ export const propertyTypeSchema = z.enum(["House", "Apartment", "Commercial", "O
 export type PropertyType = z.infer<typeof propertyTypeSchema>;
 
 export const propertyTenantSchema = z.object({
+  // The id of this tenant's lease on the property. Drives the landlord
+  // "Cancel lease" action on the detail page (find the row with leaseStatus
+  // "Active" → terminate by leaseId).
+  leaseId: z.uuid(),
   tenantId: z.uuid(),
   fullName: z.string(),
   email: z.email(),
@@ -21,6 +25,17 @@ export const propertyDetailSchema = z.object({
   unitNumber: z.string().nullable(),
   propertyType: propertyTypeSchema,
   createdAt: z.iso.datetime(),
+  // Per-property occupancy (D7). Two bools — precedence: active lease →
+  // "Cancel lease"; else pending → "Cancel invitation"; else → "Add lease".
+  hasActiveLease: z.boolean(),
+  hasPendingInvite: z.boolean(),
+  // The property's pending invite id when HasPendingInvite (else null) — drives
+  // inline "Cancel invitation". NOTE: the backend returns this treating the
+  // property as having a single pending invite. The one-pending-invite-per-
+  // property guard rail is NOT yet enforced server-side (a property can still
+  // technically have several pending invites; this returns one of them). See
+  // backend/CLAUDE.md § Invites and the TODO(guard rail) comments.
+  pendingInviteId: z.uuid().nullable(),
   tenants: z.array(propertyTenantSchema),
 });
 
@@ -34,6 +49,15 @@ export const propertyDtoSchema = z.object({
   unitNumber: z.string().nullable(),
   propertyType: propertyTypeSchema,
   createdAt: z.iso.datetime(),
+  hasActiveLease: z.boolean(),
+  hasPendingInvite: z.boolean(),
+  // The Active lease's id when HasActiveLease (else null) — drives "Cancel
+  // lease" on the property list without a second round-trip.
+  activeLeaseId: z.uuid().nullable(),
+  // The pending invite id when HasPendingInvite (else null) — drives "Cancel
+  // invitation". Returned as if the property has a single pending invite; the
+  // enforcing guard rail is a documented backend TODO (see propertyDetailSchema).
+  pendingInviteId: z.uuid().nullable(),
 });
 
 export const propertiesResponseSchema = z.object({
