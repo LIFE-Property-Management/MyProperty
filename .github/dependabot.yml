@@ -1,7 +1,9 @@
 # Dependabot configuration — M4.3.
 # Weekly updates for package ecosystems; DAILY for docker base images (the
 # 2026-06 image-CVE incident: openssl fixes published Tuesday 06-09 sat
-# unpicked because docker checks ran Mondays — see image-hardening-plan.md).
+# unpicked because docker checks ran Mondays — see
+# docs/operations/security-hardening.md, "Image-CVE allowlist & the 2026-06
+# hardening work").
 # Docker entries cover every Dockerfile location.
 # Open-PR limits keep review load tractable.
 

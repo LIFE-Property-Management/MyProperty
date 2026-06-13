@@ -48,7 +48,8 @@
 #     triage; our images are amd64/arm64.
 # Remove this block AND re-pin the runtime to a rebuilt nodejs24 digest as soon as
 # distroless ships the patched libssl3 (daily Dependabot docker checks will surface
-# the rebuild as a digest-bump PR). See image-hardening-plan.md PR-2.
+# the rebuild as a digest-bump PR). See docs/operations/security-hardening.md
+# ("Image-CVE allowlist & the 2026-06 hardening work") for the PR-1/PR-2 split.
 CVE-2026-31789 exp:2026-07-01  # libssl3; CRITICAL per Trivy, not applicable per Debian triage; node uses bundled OpenSSL
 CVE-2026-28387 exp:2026-07-01  # libssl3 OpenSSL DANE UAF, HIGH (SARIF inbox cleanup)
 CVE-2026-28388 exp:2026-07-01  # libssl3 OpenSSL NULL deref in delta, HIGH
