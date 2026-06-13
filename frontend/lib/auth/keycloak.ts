@@ -88,6 +88,29 @@ export function getToken(): string | null {
   return _keycloak?.token ?? null;
 }
 
+// Async token accessor for the SignalR WebSocket handshake. SignalR invokes the
+// configured accessTokenFactory on every (re)connect — including after an
+// automatic reconnect that may happen long after init — so we refresh first
+// when the token is within 30s of expiry rather than handing out a stale one.
+// updateToken(minValidity) is a no-op (resolves immediately) when the token is
+// still fresh. Returns "" when there is no live Keycloak session (dev bypass,
+// pre-init, or post-logout). The provider decides *whether* to connect from its
+// own gating (portal / dev-bypass / API-base), not from this token's value; an
+// empty token only matters once a handshake is attempted, where the server
+// rejects the unauthenticated connection.
+export async function getAccessToken(): Promise<string> {
+  const kc = _keycloak;
+  if (!kc) return "";
+  try {
+    await kc.updateToken(30);
+  } catch {
+    // Refresh failed (refresh token expired or network blip). Fall through with
+    // whatever token we currently hold; SignalR surfaces the resulting 401 and
+    // stops, and onTokenExpired/logout will have cleared auth state by then.
+  }
+  return kc.token ?? "";
+}
+
 export function clearCachedToken(): void {
   _keycloak = null;
   initPromise = null;
