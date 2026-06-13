@@ -68,17 +68,21 @@ export function invalidationKeysFor(
     ],
     // Invite accepted creates a lease + tenant and flips a property's occupancy
     // (Vacant/Invite-pending → Leased), so tenants, properties, and the
-    // dashboard all change.
+    // dashboard all change — and the invite itself flips to Accepted on the
+    // landlord's Invites list, so refresh that too.
     [HUB_EVENTS.inviteAccepted]: [
       queryKeys.landlord.tenant.all(),
       queryKeys.landlord.property.all(),
       queryKeys.landlord.dashboard(),
+      queryKeys.landlord.invites.all(),
     ],
     // Invite rejected clears a property's pending-invite badge; no lease is
-    // created, so only property occupancy and the dashboard need a refresh.
+    // created, so property occupancy and the dashboard need a refresh — plus
+    // the invite flips to Rejected on the landlord's Invites list.
     [HUB_EVENTS.inviteRejected]: [
       queryKeys.landlord.property.all(),
       queryKeys.landlord.dashboard(),
+      queryKeys.landlord.invites.all(),
     ],
   };
 }

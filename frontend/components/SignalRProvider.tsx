@@ -7,6 +7,7 @@ import { getAccessToken } from "@/lib/auth/keycloak";
 import { requirePublicEnv } from "@/lib/utils/env";
 import { buildHubConnection, NOTIFICATIONS_HUB_PATH } from "@/lib/realtime/connection";
 import { invalidationKeysFor } from "@/lib/realtime/events";
+import { queryKeys } from "@/lib/hooks/queryKeys";
 
 /**
  * Root-level SignalR wiring (the frontend half of M3.6 real-time).
@@ -40,7 +41,9 @@ export function SignalRProvider() {
     // An unset API base means there is no real backend to reach — the MSW dev
     // setup intercepts relative REST URLs but cannot serve a WebSocket hub. Skip
     // so dev/test runs don't thrash against a hub that isn't there. In prod the
-    // base is always set (requirePublicEnv throws at build otherwise).
+    // base is always set (requirePublicEnv throws at runtime in production builds
+    // otherwise; client.ts calls it at module scope, so a missing var also fails
+    // the prerender at build time).
     const apiBase = requirePublicEnv("NEXT_PUBLIC_API_BASE_URL");
     if (apiBase === "") return;
 
@@ -58,11 +61,36 @@ export function SignalRProvider() {
       });
     }
 
+    // Root key for this portal (["tenant"] | ["landlord"]); invalidating it marks
+    // the whole portal subtree stale so any mounted query refetches.
+    const portalRootKey = queryKeys[portal].all;
+
     // `disposed` guards the cleanup race: in React StrictMode (dev) and on fast
     // login/logout, the effect can tear down before start()'s promise settles.
     // We swallow the start rejection in that window so it doesn't surface as an
-    // unhandled error, and stop() is fire-and-forget.
+    // unhandled error, and stop() is fire-and-forget. It also gates the onclose
+    // handler so an intentional teardown (which calls stop(), firing onclose)
+    // doesn't trigger a stray refetch.
     let disposed = false;
+
+    // Auto-reconnect restored the socket, but events pushed during the gap were
+    // not replayed and focus-refetch is disabled (see Providers.tsx) — resync the
+    // whole portal subtree so nothing missed stays stale.
+    connection.onreconnected(() => {
+      queryClient.invalidateQueries({ queryKey: portalRootKey });
+    });
+
+    // Auto-reconnect gave up: the socket is permanently closed. Invalidate once so
+    // on-screen data is correct as of now. We deliberately do NOT reopen — after a
+    // long outage real-time stays off until reload/remount (accepted; see
+    // signalr-improvement-plan.md / CLAUDE.md). Guarded by `disposed` so an
+    // intentional teardown (logout / portal switch) doesn't refetch with a cleared
+    // or expiring token.
+    connection.onclose(() => {
+      if (disposed) return;
+      queryClient.invalidateQueries({ queryKey: portalRootKey });
+    });
+
     connection.start().catch((err) => {
       if (!disposed) {
         console.warn(

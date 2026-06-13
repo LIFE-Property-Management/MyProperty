@@ -22,7 +22,11 @@ interface FakeConnection {
   on: jest.Mock;
   start: jest.Mock;
   stop: jest.Mock;
+  onreconnected: jest.Mock;
+  onclose: jest.Mock;
   emit: (event: string, payload?: unknown) => void;
+  triggerReconnected: () => void;
+  triggerClose: () => void;
 }
 
 let fakeConnection: FakeConnection;
@@ -30,13 +34,23 @@ let buildArgs: { url: string; tokenFactory: unknown } | null;
 
 function makeFakeConnection(): FakeConnection {
   const handlers = new Map<string, Handler>();
+  let reconnectedCb: (() => void) | undefined;
+  let closeCb: (() => void) | undefined;
   return {
     on: jest.fn((event: string, cb: Handler) => {
       handlers.set(event, cb);
     }),
     start: jest.fn().mockResolvedValue(undefined),
     stop: jest.fn().mockResolvedValue(undefined),
+    onreconnected: jest.fn((cb: () => void) => {
+      reconnectedCb = cb;
+    }),
+    onclose: jest.fn((cb: () => void) => {
+      closeCb = cb;
+    }),
     emit: (event, payload) => handlers.get(event)?.(payload),
+    triggerReconnected: () => reconnectedCb?.(),
+    triggerClose: () => closeCb?.(),
   };
 }
 
@@ -85,8 +99,13 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env.NEXT_PUBLIC_API_BASE_URL = ORIGINAL_BASE_URL;
-  process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS = ORIGINAL_BYPASS;
+  // Assigning an undefined original back to process.env coerces to the literal
+  // string "undefined" (leaving the var *set*), which can leak to other tests in
+  // the same Jest worker — delete the key instead when it was originally unset.
+  if (ORIGINAL_BASE_URL === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL;
+  else process.env.NEXT_PUBLIC_API_BASE_URL = ORIGINAL_BASE_URL;
+  if (ORIGINAL_BYPASS === undefined) delete process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS;
+  else process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS = ORIGINAL_BYPASS;
 });
 
 describe("SignalRProvider — connecting", () => {
@@ -142,6 +161,35 @@ describe("SignalRProvider — connecting", () => {
 
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it("resyncs the portal subtree when the socket auto-reconnects", () => {
+    setUser("landlord");
+    const { invalidateSpy } = renderProvider();
+
+    act(() => fakeConnection.triggerReconnected());
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.landlord.all });
+  });
+
+  it("invalidates the portal subtree on an unexpected close", () => {
+    setUser("landlord");
+    const { invalidateSpy } = renderProvider();
+
+    act(() => fakeConnection.triggerClose());
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.landlord.all });
+  });
+
+  it("does not invalidate on close after the provider has been torn down", () => {
+    setUser("landlord");
+    const { invalidateSpy, unmount } = renderProvider();
+
+    unmount();
+    invalidateSpy.mockClear();
+    act(() => fakeConnection.triggerClose());
+
+    expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: queryKeys.landlord.all });
   });
 });
 

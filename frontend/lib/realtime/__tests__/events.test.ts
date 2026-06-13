@@ -43,18 +43,20 @@ describe("invalidationKeysFor — landlord", () => {
     ]);
   });
 
-  it("refreshes tenants, properties, and dashboard on InviteAccepted", () => {
+  it("refreshes tenants, properties, dashboard, and the invites list on InviteAccepted", () => {
     expect(map[HUB_EVENTS.inviteAccepted]).toEqual([
       queryKeys.landlord.tenant.all(),
       queryKeys.landlord.property.all(),
       queryKeys.landlord.dashboard(),
+      queryKeys.landlord.invites.all(),
     ]);
   });
 
-  it("refreshes properties and dashboard on InviteRejected", () => {
+  it("refreshes properties, dashboard, and the invites list on InviteRejected", () => {
     expect(map[HUB_EVENTS.inviteRejected]).toEqual([
       queryKeys.landlord.property.all(),
       queryKeys.landlord.dashboard(),
+      queryKeys.landlord.invites.all(),
     ]);
   });
 
