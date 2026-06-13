@@ -114,24 +114,29 @@ function UpcomingPaymentsSection() {
                 <h2 className="text-base font-semibold text-primary-text">Upcoming payments</h2>
                 <p className="text-sm text-muted-text mt-1">All payments due in the next 30 days</p>
             </div>
-                        <DataTable
-                columns={upcomingColumns}
-                data={upcomingQuery.isError ? [] : upcomingQuery.data?.items ?? []}
-                isLoading={upcomingQuery.isLoading}
-                getRowKey={(row) => row.id}
-                emptyMessage={
-                    upcomingQuery.isError
-                        ? "Failed to load upcoming payments. Please refresh the page."
-                        : "No upcoming payments."
-                }
-            />
-            {!upcomingQuery.isError && (
-                <Pagination
-                    page={page}
-                    totalCount={upcomingQuery.data?.totalCount ?? 0}
-                    pageSize={PAGE_SIZE}
-                    onPageChange={setPage}
-                />
+            {upcomingQuery.isError ? (
+                <Card>
+                    <div className="flex flex-col items-center justify-center py-10 gap-2">
+                        <p className="text-danger font-medium">Failed to load upcoming payments.</p>
+                        <p className="text-muted-text text-sm">Please refresh the page.</p>
+                    </div>
+                </Card>
+            ) : (
+                <>
+                    <DataTable
+                        columns={upcomingColumns}
+                        data={upcomingQuery.data?.items ?? []}
+                        isLoading={upcomingQuery.isLoading}
+                        getRowKey={(row) => row.id}
+                        emptyMessage="No upcoming payments."
+                    />
+                    <Pagination
+                        page={page}
+                        totalCount={upcomingQuery.data?.totalCount ?? 0}
+                        pageSize={PAGE_SIZE}
+                        onPageChange={setPage}
+                    />
+                </>
             )}
         </section>
     );
