@@ -70,7 +70,7 @@ uptimeKuma:
   storage:
     storageClassName: longhorn
   seedImage:
-    tag: "c233aab"
+    tag: "8dbfe0e"
   # Kuma's own alert emails flow through the in-cluster Mailpit, which relays
   # them out via Resend. From stays on the verified domain (DKIM); To is a real
   # monitored inbox so alerts actually arrive (and don't bounce).
