@@ -19,7 +19,7 @@
 # Bumped via Dependabot (see .github/dependabot.yml) — do not hand-edit.
 
 # ── Stage 1: build venv ──────────────────────────────────────
-FROM python:3.14-slim@sha256:c845af9399020c7e562969a13689e929074a10fd057acd1b1fad06a2fb068e97 AS deps
+FROM python:3.14-slim@sha256:d7a925f9eb9639a93e455b9f12c167569358818c0f62b51b88edbc8fcf34c421 AS deps
 WORKDIR /build
 
 ENV VENV_PATH=/opt/aiops-venv
@@ -30,7 +30,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Stage 2: runtime ─────────────────────────────────────────
-FROM python:3.14-slim@sha256:c845af9399020c7e562969a13689e929074a10fd057acd1b1fad06a2fb068e97 AS runtime
+FROM python:3.14-slim@sha256:d7a925f9eb9639a93e455b9f12c167569358818c0f62b51b88edbc8fcf34c421 AS runtime
 
 # Non-root user, in the spirit of M4.2 / M4.8 hardening even though
 # this file lives outside the API/frontend production Dockerfile scope.
