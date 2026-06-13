@@ -90,7 +90,7 @@ describe("LandlordDashboard", () => {
     render(<LandlordDashboard />);
     expect(screen.getByText("Failed to load upcoming payments.")).toBeInTheDocument();
     // Overview still renders its stats from the (successful) dashboard query.
-    expect(screen.getByText("12")).toBeInTheDocument(); // totalProperties
+    expect(screen.getByText("Total properties").nextElementSibling).toHaveTextContent("12");
     expect(screen.queryByText("Failed to load dashboard data.")).toBeNull();
   });
 
@@ -103,7 +103,7 @@ describe("LandlordDashboard", () => {
 
   it("renders stat values from the fixture", () => {
     render(<LandlordDashboard />);
-    expect(screen.getByText("12")).toBeInTheDocument(); // totalProperties
+    expect(screen.getByText("Total properties").nextElementSibling).toHaveTextContent("12");
     expect(screen.getAllByText("9").length).toBeGreaterThan(0); // activeTenants + activeLeases
   });
 
