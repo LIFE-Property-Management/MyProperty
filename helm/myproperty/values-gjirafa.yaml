@@ -38,16 +38,16 @@ mailpit:
 backend:
   enabled: true
   image:
-    tag: "46f9a6b"
+    tag: "c233aab"
   storage:
     storageClassName: longhorn
 migration:
   image:
-    tag: "46f9a6b"
+    tag: "c233aab"
 frontend:
   enabled: true
   image:
-    tag: "0b213b3"
+    tag: "c233aab"
 
 ingress:
   enabled: true
@@ -70,7 +70,7 @@ uptimeKuma:
   storage:
     storageClassName: longhorn
   seedImage:
-    tag: "4944cb5"
+    tag: "c233aab"
   # Kuma's own alert emails flow through the in-cluster Mailpit, which relays
   # them out via Resend. From stays on the verified domain (DKIM); To is a real
   # monitored inbox so alerts actually arrive (and don't bounce).
@@ -82,7 +82,7 @@ uptimeKuma:
 
 aiopsWebhook:
   image:
-    tag: "b4440fd"
+    tag: "c233aab"
 
 prometheus:
   storage:
