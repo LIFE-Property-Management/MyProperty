@@ -38,12 +38,12 @@ mailpit:
 backend:
   enabled: true
   image:
-    tag: "f0e2850"
+    tag: "2e01b83"
   storage:
     storageClassName: longhorn
 migration:
   image:
-    tag: "f0e2850"
+    tag: "2e01b83"
 frontend:
   enabled: true
   image:
