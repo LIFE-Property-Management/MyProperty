@@ -16,7 +16,7 @@
 # Bumped via Dependabot (see .github/dependabot.yml) — do not hand-edit.
 
 # ── Stage 1: build venv ──────────────────────────────────────
-FROM python:3.14-slim@sha256:a7185a8e40af01bf891414a4df16ef10fc6000cee460a404a13da9029fe41604 AS deps
+FROM python:3.14-slim@sha256:d7a925f9eb9639a93e455b9f12c167569358818c0f62b51b88edbc8fcf34c421 AS deps
 WORKDIR /build
 
 ENV VENV_PATH=/opt/kuma-seed-venv
@@ -27,7 +27,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ── Stage 2: runtime ─────────────────────────────────────────
-FROM python:3.14-slim@sha256:a7185a8e40af01bf891414a4df16ef10fc6000cee460a404a13da9029fe41604 AS runtime
+FROM python:3.14-slim@sha256:d7a925f9eb9639a93e455b9f12c167569358818c0f62b51b88edbc8fcf34c421 AS runtime
 
 # Non-root user — the seed script only needs outbound HTTP/socket.io to Kuma,
 # no filesystem writes, so the principle-of-least-privilege swap is essentially
