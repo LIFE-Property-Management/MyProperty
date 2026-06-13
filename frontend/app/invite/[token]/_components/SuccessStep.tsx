@@ -22,9 +22,9 @@ export function SuccessStep({ email }: SuccessStepProps) {
       </div>
       <h2 className="font-heading text-xl text-primary-text">You&apos;re all set</h2>
       <p className="text-sm text-muted-text">
-        Your acceptance and ID document were submitted. We&apos;ve sent a confirmation to{" "}
-        <strong className="text-primary-text">{email}</strong>. Your landlord will confirm the
-        lease shortly.
+        Your lease is accepted and your account is ready. We&apos;ve sent a confirmation to{" "}
+        <strong className="text-primary-text">{email}</strong>. Sign in to your tenant portal to
+        manage your tenancy.
       </p>
       <Link href="/">
         <Button variant="primary">Back to home</Button>

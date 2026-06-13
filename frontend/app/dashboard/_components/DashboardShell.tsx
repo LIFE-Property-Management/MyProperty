@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Menu, LayoutDashboard, Building2, Users } from "lucide-react";
+import { Menu, LayoutDashboard, Building2, Users, Mail } from "lucide-react";
 import { Sidebar, type NavItem } from "@/components/ui/Sidebar";
 import { AccountBlock } from "./AccountBlock";
 
@@ -17,12 +17,14 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/properties", label: "Properties", icon: Building2 },
   { href: "/dashboard/tenants", label: "Tenants", icon: Users },
+  { href: "/dashboard/invites", label: "Invites", icon: Mail },
 ];
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/dashboard/properties": "Properties",
   "/dashboard/tenants": "Tenants",
+  "/dashboard/invites": "Invites",
 };
 
 export function DashboardShell({ children }: { children: ReactNode }) {

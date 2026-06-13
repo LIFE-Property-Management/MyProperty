@@ -43,6 +43,7 @@ public sealed class TenantLeaseCancelTests(ApiFixture fixture)
                 LandlordId = landlordId,
                 Name = "Cancel Test Apt",
                 Address = "9 Leaving Ln",
+                UnitNumber = "2B",
             });
             db.Leases.Add(new Lease
             {
@@ -65,6 +66,8 @@ public sealed class TenantLeaseCancelTests(ApiFixture fixture)
         Assert.NotNull(leaseDto);
         Assert.Equal(leaseId, leaseDto!.Id);
         Assert.Equal("Cancel Test Apt", leaseDto.PropertyName);
+        Assert.Equal("9 Leaving Ln", leaseDto.PropertyAddress);
+        Assert.Equal("2B", leaseDto.UnitNumber);
 
         fixture.Queue.Clear();
 

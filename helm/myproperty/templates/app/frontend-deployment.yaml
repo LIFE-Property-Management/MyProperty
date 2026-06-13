@@ -35,8 +35,13 @@ spec:
         - name: ghcr-pull-secret
       securityContext:
         runAsNonRoot: true
-        runAsUser: 1000
-        fsGroup: 1000
+        # Must match the image's built-in `nonroot` user (UID 65532). The
+        # Dockerfile copies .next with --chown=65532:65532; running as any other
+        # UID makes the ISR prerender cache (.next/server/app/*) read-only to the
+        # process, so revalidation writes fail with EACCES and statically-rendered
+        # pages (e.g. the landing stats strip) freeze on their build-time output.
+        runAsUser: 65532
+        fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       containers:

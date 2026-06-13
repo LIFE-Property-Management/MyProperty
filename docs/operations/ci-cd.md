@@ -122,6 +122,69 @@ Secrets remain manual K8s Secrets (`secrets.sh`); no ESO (cluster-scoped). Realm
 (`helm/myproperty/files/realm-export.template.json`) build no image, so they don't trigger CD
 — they ride a component deploy or a manual run.
 
+### Deploy ordering: additive backend → frontend changes
+
+> **Status: MANUAL convention — not enforced by the pipeline.** `cd.yml` does **not** sequence
+> backend before frontend; following this is currently on the person doing the release. See
+> [Enforcing it automatically](#enforcing-it-automatically-not-yet-implemented) below for the
+> change that would make it a real gate.
+
+When a frontend change **hard-depends on a new backend field** — e.g. the property read-model
+fields `activeLeaseId` / `pendingInviteId` (list `PropertyDto`) and `leaseId` (detail
+`PropertyTenantDto`), which the frontend Zod schemas parse as **required** — the **backend must
+be live before the frontend**. A new frontend against an old backend gets a response missing
+those keys, the strict `z.parse()` throws, and the whole property list/detail renders the error
+state until the backend catches up.
+
+⚠️ **Auto-CD does not guarantee this order.** Tag bumps are **per-component and fire on each
+image-CI workflow's completion** (see [§ Per-component tag resolution](#continuous-deployment-cdyml)).
+For one push touching both `backend/**` and `frontend/**`, `Backend CI` and `Frontend CI` race; a
+CD run only bumps the components whose images **already exist** at that SHA when it fires. If
+Frontend CI finishes and triggers CD before Backend CI has pushed its image, that run bumps only
+the frontend → frontend-new + backend-old, and the property pages break for the minutes until the
+backend deploy lands. The order is non-deterministic.
+
+**Until the gate below exists, enforce it manually by controlling what reaches the deploy branch when:**
+
+- **Preferred — land the backend ahead.** Merge/deploy the backend contract change in an earlier
+  commit (or its own PR) and let it go live first; merge the dependent frontend only once the new
+  field is serving in `project-02`. The contract ships before its consumer.
+- **Coupled PR — manual ordered deploy.** If backend + frontend must land together, skip waiting
+  on auto-CD: deploy the backend image first via `deploy.sh`, confirm
+  `https://api.myproperty.works/api/v1/health/ready` + a spot-check that the new field serializes,
+  then deploy the frontend image.
+
+**Do not** "fix" this by loosening the frontend schema (making the new fields
+`.optional()`/`.catch(null)`). That permanently masks genuinely missing/malformed fields from a
+*current* backend (a real bug) as a silent UI degrade — the strict parse is the wanted signal.
+Keep the schema strict; control deploy order instead.
+
+#### Enforcing it automatically (not yet implemented)
+
+To turn the convention into a real gate, `cd.yml` needs a **frontend-bump guard**: before bumping
+`frontend.image.tag` to commit SHA `X`, require that the backend at `X` is already rolled out —
+*when a backend image at `X` is expected*. Sketch:
+
+1. **Detect backend involvement at `X`.** When the CD run would bump the frontend, determine whether
+   the source commit `X` also produces a backend image — either by inspecting the commit's changed
+   paths (`backend/**` / `MyProperty.sln`) or by polling `docker buildx imagetools inspect
+   ghcr.io/.../myproperty-api:X` for a short bounded window (Backend CI may still be building).
+   A **frontend-only** change (no backend image at `X`, no backend paths touched) must **not** be
+   blocked — bump and deploy as today.
+2. **Gate on backend readiness.** If a backend image at `X` is expected, hold the frontend bump
+   until `backend.image.tag` in `values-gjirafa.yaml` equals `X` **and** `kubectl rollout status`
+   for the backend deployment is healthy. In practice: skip the frontend bump on this run and let
+   the Backend CI → CD run land the backend first; the subsequent frontend CD run (or a re-dispatch)
+   then passes the gate. Equivalently, coalesce both into one ordered job (bump backend → wait →
+   bump frontend).
+3. **Bound + alarm.** Cap the wait (e.g. 15 min) and post to `#deployments` on timeout so a stuck
+   backend build doesn't silently strand the frontend.
+
+This is **non-trivial and unbuilt**, and `cd.yml` is itself still pending its first verified live
+run — so it should land as its own scoped, separately-tested change, not bolted on opportunistically.
+Until then the manual convention above is the control; carry this as a CD follow-up alongside the
+other deferred items in [deployment-roadmap.md](./deployment-roadmap.md).
+
 ## Trivy scanning
 
 Every image-build job runs a **two-pass** Trivy scan after the push step

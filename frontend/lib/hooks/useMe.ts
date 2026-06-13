@@ -7,7 +7,12 @@ import { ENDPOINTS } from "@/lib/api/endpoints";
 import useAuthStore from "@/lib/store/auth/useAuthStore";
 import { tenantAccountStatusSchema } from "@/lib/types";
 
-const meResponseSchema = z.object({ tenantAccountStatus: tenantAccountStatusSchema })
+// Mirrors the relevant slice of the backend MeDto (GET /me). We only consume
+// accountStatus (drives read-only mode); Zod strips the other identity fields.
+// It is nullable on the backend (TenantAccountStatus?), so accept null too.
+const meResponseSchema = z.object({
+  accountStatus: tenantAccountStatusSchema.nullable(),
+})
 
 export type MeResponse = z.infer<typeof meResponseSchema>
 

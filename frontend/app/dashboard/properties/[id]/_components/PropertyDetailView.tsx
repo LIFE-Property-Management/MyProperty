@@ -10,9 +10,9 @@ import Spinner from "@/components/ui/Spinner";
 import DataTable from "@/components/ui/DataTable";
 import { useLandlordPropertyDetail } from "@/lib/hooks/useLandlordPropertyDetail";
 import { useDeleteProperty } from "@/lib/hooks/useDeleteProperty";
-import { ANALYTICS_EVENTS, capture } from "@/lib/analytics";
 import { formatDate } from "@/lib/utils/formatDate";
 import type { PropertyTenant } from "@/lib/types/landlord/property";
+import PropertyOccupancyAction from "../../_components/PropertyOccupancyAction";
 
 const STATUS_TONE: Record<string, "success" | "neutral" | "danger"> = {
     Active: "success",
@@ -214,24 +214,18 @@ export default function PropertyDetailView({ propertyId }: { propertyId: string 
                             {p.tenants.length} lease{p.tenants.length === 1 ? "" : "s"} on this property
                         </p>
                     </div>
-                    {/* ⚠️ PLACEHOLDER LINK — the invite-CREATION flow does not exist yet (the
-                        /dashboard/invites page is currently a stub, and there is no
-                        /dashboard/properties/[id]/invite route). This points at the invites list so the
-                        button doesn't 404. Repoint this at the real "new invite" route, ideally prefilled
-                        with propertyId={propertyId}, once that flow is built. DO NOT ship the invite button
-                        as a primary CTA without revisiting this. */}
-                    <Link
-                        href="/dashboard/invites"
-                        // Landlord activation funnel — step 4 (intent to invite). This is
-                        // the last measurable step until the invite-creation flow ships and
-                        // can fire ANALYTICS_EVENTS.tenantInvited. See events.ts.
-                        onClick={() =>
-                            capture(ANALYTICS_EVENTS.tenantInviteStarted, { propertyId })
+                    {/* Three-state property action (D7). Off the detail DTO occupancy
+                        fields; the Active lease's id comes from the tenant row whose
+                        lease is Active. "Add lease" keeps firing tenant_invite_started. */}
+                    <PropertyOccupancyAction
+                        propertyId={propertyId}
+                        hasActiveLease={p.hasActiveLease}
+                        hasPendingInvite={p.hasPendingInvite}
+                        activeLeaseId={
+                            p.tenants.find((t) => t.leaseStatus === "Active")?.leaseId ?? null
                         }
-                        className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary transition-colors duration-150"
-                    >
-                        Invite Tenant
-                    </Link>
+                        pendingInviteId={p.pendingInviteId}
+                    />
                 </div>
                 <Card padding="none">
                     <DataTable

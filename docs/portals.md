@@ -17,6 +17,7 @@
 - Tenant List table
 
 ### Invites Page (`/dashboard/invites`)
+- Reachable from the dashboard sidebar nav ("Invites", alongside Dashboard / Properties / Tenants).
 - Dedicated invite-management page (replaces the Tenants-page "Invitation Log"). Lists the landlord's
   invites with status (`Pending`/`Accepted`/`Rejected`/`Expired`/`Revoked`), filterable by status.
 - **Revoke** a `Pending`/`Expired` invite (→ `Revoked`) and **resend** one (fresh token, expiry reset,
@@ -120,6 +121,24 @@ is returned only for a **truly unknown** token (the token is a secret bearer —
 existence). A `Pending` invite past its `ExpiresAt` is reported as `Expired`.
 
 **Lease acceptance screen comes before account creation or password setup.**
+
+**Accept wizard (frontend, `app/invite/[token]`) — implemented.** The page server-resolves the route
+token and hands it to a client flow that fetches the live preview (`usePreviewInvite`) and runs a
+**non-gating** Keycloak check-sso (`useOptionalKeycloak`) — anonymous visitors stay anonymous, an
+existing session enables the claim path. It then branches:
+- **Unknown token / load failure** → generic "invalid invite" view (existence never confirmed).
+- **Non-`Pending` status** → a friendly status view (`Accepted` → "go to sign in"; `Rejected`/`Expired`/
+  `Revoked` → dead-end back home). Only `Pending` renders the wizard.
+- **`Pending`, not signed in** → new-user form (Review → Create account → anonymous `accept`), which also
+  offers "Sign in" for returning tenants and, on a `409`, swaps to a sign-in CTA. New users land on
+  `/login` after accepting (no session yet).
+- **`Pending`, signed in, email matches** → claim confirmation (Review → confirm, **no password**) →
+  authenticated `claim`; the tenant lands on `/tenant/dashboard`.
+- **`Pending`, signed in, email differs** → "this invite is for a different account" (also the `403`
+  fallback from `claim`).
+
+The legacy **signature + ID-document step was removed** — the backend never received those fields
+(ID-document upload/storage is a deferred future enhancement).
 
 **Auth model:** Auth state lives in a shared `useAuthStore` (Zustand). Each user has exactly one
 portal role (`tenant`, `landlord`, or `admin`), derived from `realm_access.roles[]` in the JWT.

@@ -113,17 +113,22 @@ internal sealed class LeaseRepository(AppDbContext db) : ILeaseRepository
         => db.Leases.AnyAsync(
             l => l.PropertyId == propertyId && l.Status == LeaseStatus.Active, ct);
 
-    public async Task<IReadOnlySet<Guid>> GetPropertyIdsWithActiveLeaseAsync(
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetActiveLeaseIdsByPropertyAsync(
         IReadOnlyCollection<Guid> propertyIds, CancellationToken ct)
     {
-        if (propertyIds.Count == 0) return new HashSet<Guid>();
+        if (propertyIds.Count == 0) return new Dictionary<Guid, Guid>();
 
         var matches = await db.Leases
             .Where(l => l.Status == LeaseStatus.Active && propertyIds.Contains(l.PropertyId))
-            .Select(l => l.PropertyId)
-            .Distinct()
+            .Select(l => new { l.PropertyId, l.Id, l.CreatedAt })
             .ToListAsync(ct);
 
-        return matches.ToHashSet();
+        // One Active lease per property by invariant (partial unique index); GroupBy
+        // guards defensively against any legacy duplicate rather than throwing on a
+        // duplicate key. Pick the most recent so the choice is deterministic — same
+        // ordering convention as InviteRepository.GetPendingInviteIdsByPropertyAsync.
+        return matches
+            .GroupBy(m => m.PropertyId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.CreatedAt).First().Id);
     }
 }

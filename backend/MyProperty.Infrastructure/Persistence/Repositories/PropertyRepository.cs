@@ -33,6 +33,7 @@ internal sealed class PropertyRepository(AppDbContext db) : IPropertyRepository
             .ToListAsync(ct);
 
         var tenants = leases.Select(l => new PropertyTenantDto(
+            l.Id,
             l.TenantId,
             $"{l.Tenant!.FirstName} {l.Tenant.LastName}",
             l.Tenant.Email,
@@ -43,18 +44,24 @@ internal sealed class PropertyRepository(AppDbContext db) : IPropertyRepository
             l.Status.ToString())).ToList();
 
         // Per-property occupancy (D7). HasActiveLease reuses the already-loaded
-        // leases; HasPendingInvite is a single existence check (effective-pending:
-        // Pending and not past ExpiresAt, matching the preview's expiry semantics).
+        // leases; the pending invite id is fetched directly (effective-pending:
+        // Pending and not past ExpiresAt, matching the preview's expiry semantics)
+        // so HasPendingInvite = the id is present and "Cancel invitation" has its id.
+        // TODO(guard rail): a property may have several pending invites; this picks
+        // the most recent as "the" one until the one-pending-invite-per-property
+        // invariant is enforced (see backend/CLAUDE.md § Invites).
         var hasActiveLease = leases.Any(l => l.Status == LeaseStatus.Active);
-        var hasPendingInvite = await db.Invites.AnyAsync(
-            i => i.PropertyId == propertyId
+        var pendingInviteId = await db.Invites
+            .Where(i => i.PropertyId == propertyId
                 && i.Status == InviteStatus.Pending
-                && i.ExpiresAt > DateTime.UtcNow,
-            ct);
+                && i.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(i => i.CreatedAt)
+            .Select(i => (Guid?)i.Id)
+            .FirstOrDefaultAsync(ct);
 
         return new PropertyDetailDto(property.Id, property.Name, property.Address,
             property.UnitNumber, property.PropertyType, property.CreatedAt,
-            hasActiveLease, hasPendingInvite, tenants);
+            hasActiveLease, pendingInviteId.HasValue, pendingInviteId, tenants);
     }
 
     public async Task<(IReadOnlyList<Property> Items, int TotalCount)> ListByLandlordAsync(
