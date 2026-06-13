@@ -42,7 +42,7 @@
 # NuGet restore as its own stage so source-only changes don't
 # bust the NuGet cache. We copy csproj/props files only, restore,
 # then layer source in the build stage.
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:c0790639332692a0d56cdd81ed581cfd24d040d9839764c138994866df89a3b6 AS restore
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:548d93f8a18a1acbe6cc127bc4f47281430d34a9e35c18afa80a8d6741c2adc3 AS restore
 WORKDIR /src
 
 COPY Directory.Build.props ./
