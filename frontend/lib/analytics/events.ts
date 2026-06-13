@@ -26,14 +26,13 @@ export const ANALYTICS_EVENTS = {
   propertyCreated: "property_created",
   tenantInviteStarted: "tenant_invite_started",
   /**
-   * Fires when a landlord actually creates/sends an invite — the final step of
-   * the landlord activation funnel.
+   * Fires when a landlord actually creates/sends an invite — the final step
+   * (step 6) of the landlord activation funnel.
    *
-   * NOT YET WIRED: the invite-CREATION UI does not exist (the /dashboard/invites
-   * page is a stub and PropertyDetailView's "Invite Tenant" button is a
-   * placeholder link). Call `capture(ANALYTICS_EVENTS.tenantInvited, …)` from
-   * the create-invite mutation's onSuccess once that flow ships. Until then the
-   * funnel's last measurable step is `tenant_invite_started` (intent click).
+   * Wired (Plan 4): emitted from `useCreateInvite`'s `onSuccess`
+   * (`lib/hooks/useCreateInvite.ts`), driven by the create-invite flow at
+   * `app/dashboard/invites/new`. The preceding intent step,
+   * `tenant_invite_started`, fires from the "Add lease" property action.
    */
   tenantInvited: "tenant_invited",
 
