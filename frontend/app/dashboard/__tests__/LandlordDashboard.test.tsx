@@ -75,9 +75,35 @@ describe("LandlordDashboard", () => {
     expect(screen.getByText("Failed to load dashboard data.")).toBeInTheDocument();
   });
 
+  it("still renders the upcoming payments section when the dashboard query errors", () => {
+    // Per-section error states: a dashboard-query failure must not blank the
+    // independent upcoming-payments section.
+    mockDashboard.mockReturnValue(makeDashboardReturn({ isError: true, data: undefined }));
+    render(<LandlordDashboard />);
+    expect(screen.getByText("Failed to load dashboard data.")).toBeInTheDocument();
+    expect(screen.getByText("Upcoming payments")).toBeInTheDocument();
+    expect(screen.getAllByText("Elena Vasic").length).toBeGreaterThan(0); // table row from fixture
+  });
+
+  it("shows an upcoming-payments error without blanking the overview when the upcoming query errors", () => {
+    mockUpcoming.mockReturnValue(makeUpcomingReturn({ isError: true, data: undefined }));
+    render(<LandlordDashboard />);
+    expect(screen.getByText("Failed to load upcoming payments.")).toBeInTheDocument();
+    // Overview still renders its stats from the (successful) dashboard query.
+    expect(screen.getByText("Total properties").nextElementSibling).toHaveTextContent("12");
+    expect(screen.queryByText("Failed to load dashboard data.")).toBeNull();
+  });
+
+  it('does not show the "No upcoming payments." empty state when the upcoming query errors', () => {
+    // Regression guard: a failed fetch must not masquerade as "genuinely empty".
+    mockUpcoming.mockReturnValue(makeUpcomingReturn({ isError: true, data: undefined }));
+    render(<LandlordDashboard />);
+    expect(screen.queryByText("No upcoming payments.")).toBeNull();
+  });
+
   it("renders stat values from the fixture", () => {
     render(<LandlordDashboard />);
-    expect(screen.getByText("12")).toBeInTheDocument(); // totalProperties
+    expect(screen.getByText("Total properties").nextElementSibling).toHaveTextContent("12");
     expect(screen.getAllByText("9").length).toBeGreaterThan(0); // activeTenants + activeLeases
   });
 
