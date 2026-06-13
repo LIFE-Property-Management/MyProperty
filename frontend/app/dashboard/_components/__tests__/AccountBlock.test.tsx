@@ -3,9 +3,17 @@ import { AccountBlock } from "../AccountBlock";
 
 const mockSignOut = jest.fn();
 
+// Mutable so each test can vary the profile name surfaced by useAuth. Reset to
+// the no-name landlord default in beforeEach.
+let mockAuthState: {
+  user: { portal: "landlord"; sub: string; email: string } | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
 jest.mock("@/lib/hooks", () => ({
   useAuth: () => ({
-    user: { portal: "landlord", sub: "u1", email: "landlord@dev.local" },
+    ...mockAuthState,
     isAuthenticated: true,
     isReadOnly: false,
     isMeLoading: false,
@@ -18,14 +26,36 @@ jest.mock("next/navigation", () => ({ useRouter: () => ({ push: jest.fn() }) }))
 beforeEach(() => {
   mockSignOut.mockReset();
   global.fetch = jest.fn().mockResolvedValue({ ok: true });
+  mockAuthState = {
+    user: { portal: "landlord", sub: "u1", email: "landlord@dev.local" },
+    firstName: null,
+    lastName: null,
+  };
 });
 
 describe("AccountBlock", () => {
-  it("renders trigger with display name, role, and avatar initials", () => {
+  it("falls back to the email initial and email display name when no name is set", () => {
     render(<AccountBlock />);
     expect(screen.getByText("landlord@dev.local")).toBeInTheDocument();
     expect(screen.getByText("Landlord")).toBeInTheDocument();
     expect(screen.getByText("L")).toBeInTheDocument();
+  });
+
+  it("derives avatar initials and display name from first + last name", () => {
+    mockAuthState.firstName = "Drin";
+    mockAuthState.lastName = "Prekaj";
+    render(<AccountBlock />);
+    expect(screen.getByText("DP")).toBeInTheDocument();
+    expect(screen.getByText("Drin Prekaj")).toBeInTheDocument();
+    // The email is no longer shown as the display name once a name exists.
+    expect(screen.queryByText("landlord@dev.local")).toBeNull();
+  });
+
+  it("uses just the first-name initial when only the first name is present", () => {
+    mockAuthState.firstName = "Drin";
+    render(<AccountBlock />);
+    expect(screen.getByText("D")).toBeInTheDocument();
+    expect(screen.getByText("Drin")).toBeInTheDocument();
   });
 
   it("trigger has correct ARIA attributes when closed", () => {
