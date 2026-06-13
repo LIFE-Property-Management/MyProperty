@@ -13,11 +13,15 @@ on:
     paths:
       - "infrastructure/uptime-kuma/**"
       - ".github/workflows/uptime-kuma-init-ci.yml"
+      - ".trivyignore"
+      - "trivy-secret.yaml"
   pull_request:
     branches: [develop, main]
     paths:
       - "infrastructure/uptime-kuma/**"
       - ".github/workflows/uptime-kuma-init-ci.yml"
+      - ".trivyignore"
+      - "trivy-secret.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -77,6 +81,9 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
           ignore-unfixed: true
+          trivyignores: .trivyignore
+        env:
+          TRIVY_SECRET_CONFIG: trivy-secret.yaml
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -93,6 +100,7 @@ jobs:
           severity: CRITICAL
           exit-code: '1'
           ignore-unfixed: true
+          trivyignores: .trivyignore
 
       - name: Generate SBOM (CycloneDX)
         if: always()

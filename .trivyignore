@@ -36,13 +36,21 @@
 # the first post-merge scan goes here with a triage decision attached, or
 # gets fixed at the source.
 
-# libssl3 OpenSSL bundle (CVE-2026-31789 CRITICAL + 4 HIGH siblings).
-# Fix 3.0.19-1~deb12u2 is in Debian 12 stable but not yet baked into the
-# gcr.io/distroless/nodejs20-debian12:nonroot tag rebuild. Tracked: re-scan
-# weekly; remove this block as soon as a rebuilt distroless image ships the
-# patched libssl3. Verified on 2026-05-26 against both nodejs20 and nodejs22
-# distroless digests — both still affected.
-CVE-2026-31789 exp:2026-07-01  # libssl3 OpenSSL heap overflow, CRITICAL gate blocker
+# libssl3 OpenSSL bundle (CVE-2026-31789 + 4 HIGH siblings) — frontend image only
+# (distroless nodejs runtime). Debian shipped fixed libssl3 (3.0.19/3.0.20-1~deb12u2,
+# 2026-06-09), but gcr.io/distroless has NOT rebuilt its nodejs images against the
+# patched packages yet — verified by direct Trivy scan on 2026-06-12: the current
+# nodejs22 AND nodejs24 :nonroot digests both still ship libssl3 3.0.18-1~deb12u2.
+# Practical exposure is negligible while we wait:
+#   - Node bundles its own statically-linked OpenSSL (process.versions.openssl =
+#     3.5.x); the only process in the container never loads the flagged libssl3.
+#   - CVE-2026-31789 is 32-bit-only and needs a >1 GB certificate per Debian's
+#     triage; our images are amd64/arm64.
+# Remove this block AND re-pin the runtime to a rebuilt nodejs24 digest as soon as
+# distroless ships the patched libssl3 (daily Dependabot docker checks will surface
+# the rebuild as a digest-bump PR). See docs/operations/security-hardening.md
+# ("Image-CVE allowlist & the 2026-06 hardening work") for the PR-1/PR-2 split.
+CVE-2026-31789 exp:2026-07-01  # libssl3; CRITICAL per Trivy, not applicable per Debian triage; node uses bundled OpenSSL
 CVE-2026-28387 exp:2026-07-01  # libssl3 OpenSSL DANE UAF, HIGH (SARIF inbox cleanup)
 CVE-2026-28388 exp:2026-07-01  # libssl3 OpenSSL NULL deref in delta, HIGH
 CVE-2026-28389 exp:2026-07-01  # libssl3 OpenSSL CMS DoS, HIGH

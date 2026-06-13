@@ -7,12 +7,16 @@ on:
       - 'backend/**'
       - 'MyProperty.sln'
       - '.github/workflows/backend-ci.yml'
+      - '.trivyignore'
+      - 'trivy-secret.yaml'
   pull_request:
     branches: [develop, main]
     paths:
       - 'backend/**'
       - 'MyProperty.sln'
       - '.github/workflows/backend-ci.yml'
+      - '.trivyignore'
+      - 'trivy-secret.yaml'
   
 
 jobs:
@@ -146,6 +150,8 @@ jobs:
           exit-code: '0'
           ignore-unfixed: true
           trivyignores: .trivyignore
+        env:
+          TRIVY_SECRET_CONFIG: trivy-secret.yaml
 
       - name: Upload Trivy results to GitHub Security
         if: always()

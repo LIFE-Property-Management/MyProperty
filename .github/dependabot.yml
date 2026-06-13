@@ -1,5 +1,9 @@
 # Dependabot configuration — M4.3.
-# Weekly updates across all five ecosystems used in this repo.
+# Weekly updates for package ecosystems; DAILY for docker base images (the
+# 2026-06 image-CVE incident: openssl fixes published Tuesday 06-09 sat
+# unpicked because docker checks ran Mondays — see
+# docs/operations/security-hardening.md, "Image-CVE allowlist & the 2026-06
+# hardening work").
 # Docker entries cover every Dockerfile location.
 # Open-PR limits keep review load tractable.
 
@@ -53,8 +57,7 @@ updates:
   - package-ecosystem: "docker"
     directory: "/backend"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
@@ -64,21 +67,37 @@ updates:
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "docker"
       - "frontend"
+    ignore:
+      # Node majors must be bumped by hand: the alpine builder AND the
+      # distroless runtime (whose major lives in the image NAME, which
+      # Dependabot never changes) have to move together. An automated major
+      # bump of the builder alone recreates the build-on-X/run-on-Y mismatch
+      # that PR #73 (node 20-alpine -> 26-alpine) caused.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/infrastructure/aiops-webhook"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
       - "docker"
       - "aiops"
+
+  - package-ecosystem: "docker"
+    directory: "/infrastructure/uptime-kuma"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "docker"
+      - "monitoring"

@@ -25,10 +25,14 @@
 #    PSS=baseline exemption for the migration job — once promtail's
 #    root requirement is also resolved (M5), namespace PSS can flip
 #    to restricted.
-#  • Trivy CVE scanning runs against this image as part of the
-#    backend-ci.yml api-image job's Trivy gate flow (the migration
-#    bundle ships under the same backend/ workflow even though it
-#    has a separate Dockerfile). See .trivyignore at repo root.
+#  • Trivy CVE scanning does NOT yet cover this image. The
+#    backend-ci.yml `api-image` job scans `myproperty-api` only; the
+#    `migration-bundle` job builds and pushes this image but runs no
+#    Trivy step. The shared chiseled base means the API scan covers the
+#    bulk of the OS/.NET surface, but the migration image's own layers
+#    are unscanned — adding a Trivy pass to `migration-bundle` is a
+#    follow-up. The .trivyignore allowlist at repo root applies wherever
+#    Trivy does run.
 #
 #  KNOWN GAPS — out of scope for M4.8:
 #  • Reflection-trimming risk for the EF Core migration assembly
@@ -47,12 +51,9 @@
 # busybox, no /bin, no /usr/bin tools. Same base as backend/Dockerfile
 # so the migration image and API image share their base layer
 # (improves registry cache locality).
-# Digest pinning TODO: first post-merge Dependabot run will append
-# the @sha256:... digest. Manual lookup recipe:
-#   docker pull mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
-#   docker inspect --format '{{index .RepoDigests 0}}' \
-#     mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
+# Digest pinned and maintained by Dependabot. Manual lookup recipe if ever needed:
+#   docker buildx imagetools inspect mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:f140a7fd9d0885581e70bfcc935ec1f738c30eeef04a54764db3064e60d9389e
 
 WORKDIR /app
 

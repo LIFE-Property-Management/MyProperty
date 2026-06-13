@@ -116,6 +116,41 @@ attack-surface reduction is judged worth a third-party registry dependency.
 
 Sizes are approximate and depend on the digest pinned at build time.
 
+### Image-CVE allowlist & the 2026-06 hardening work (PR-1 / PR-2)
+
+The June 2026 image-CVE incident is the worked example of the triage workflow
+above. Root cause: Debian published patched `libssl3` (`3.0.19/3.0.20-1~deb12u2`)
+on **Tuesday 2026-06-09**, but the Dependabot docker checks ran **Mondays**, so
+the fix sat unpicked. Two structural fixes came out of it:
+
+- **Docker Dependabot moved weekly → daily** (`.github/dependabot.yml`), so a
+  base-image rebuild surfaces as a digest-bump PR within a day. Node **major**
+  bumps on `/frontend` are pinned out of automation: the alpine builder and the
+  distroless runtime (whose major lives in the image *name*, which Dependabot
+  never edits) must move together by hand.
+- **The allowlist is split across two PRs** because the fix landed in Debian but
+  not yet in the `gcr.io/distroless` nodejs rebuild:
+  - **PR-1 (#191):** everything fixable immediately. Re-pinned the API and
+    migration images to the patched `aspnet:10.0-noble-chiseled` digest
+    (verified 0 Trivy findings); transitive-pinned MessagePack to `2.5.301`
+    (NU1903 audit failure); added `trivy-secret.yaml` to allowlist the sample
+    JWTs vendored inside `uptime_kuma_api`; widened CI path filters so
+    scan-config changes trigger the image scans.
+  - **PR-2 (follow-up):** once distroless rebuilds its nodejs images against the
+    patched packages, re-pin the frontend runtime to the rebuilt **nodejs24**
+    digest (aligning builder and runtime majors) and **delete the five
+    `libssl3` suppressions** from `.trivyignore`. The daily docker cadence added
+    in PR-1 will surface that rebuild automatically.
+
+**The five `libssl3` suppressions** (`CVE-2026-31789` CRITICAL + four HIGH
+siblings) apply only to the frontend distroless runtime and are held with a
+short `exp:` so they force re-triage rather than rot. Practical exposure is
+negligible meanwhile: Node bundles its own statically-linked OpenSSL
+(`process.versions.openssl` = 3.5.x) and never loads the flagged system
+`libssl3`, and `CVE-2026-31789` is 32-bit-only per Debian's triage while our
+images are amd64/arm64. They cannot be removed before PR-2 without failing the
+blocking CRITICAL gate on every frontend build.
+
 ## External Secrets Operator (Key Vault / Secret Manager)
 
 ESO syncs values from a cloud secret manager into in-cluster `Secret`
