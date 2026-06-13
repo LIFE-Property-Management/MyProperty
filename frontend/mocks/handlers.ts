@@ -34,12 +34,17 @@ export const handlers = [
         return new HttpResponse(null, { status: 204 });
     }),
 
-    // GET /me → MeDto. We mock the slice useMe consumes (accountStatus); the
-    // real response also carries id/email/roles etc. There is no /tenant/me
-    // route — identity stays on /me (the lease read moved to /tenant/lease).
+    // GET /me → MeDto. We mock the slice useMe consumes (firstName/lastName for
+    // the account block, accountStatus for tenant read-only mode); the real
+    // response also carries id/email/roles etc. There is no /tenant/me route —
+    // identity stays on /me (the lease read moved to /tenant/lease).
     http.get("/me", async () => {
         await delay(300);
-        return HttpResponse.json({ accountStatus: "Active" });
+        return HttpResponse.json({
+            firstName: "Drin",
+            lastName: "Prekaj",
+            accountStatus: "Active",
+        });
     }),
 
     http.get("/tenant/lease", async () => {

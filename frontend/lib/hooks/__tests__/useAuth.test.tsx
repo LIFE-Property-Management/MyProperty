@@ -40,6 +40,10 @@ function makeWrapper() {
 beforeEach(() => {
   resetAuthStore();
   mockedGet.mockReset();
+  // /me now fires for any authenticated user; give it a benign default so tests
+  // that don't care about the response don't hit an unmocked call. Per-test
+  // mockResolvedValueOnce still takes precedence.
+  mockedGet.mockResolvedValue({ data: { accountStatus: null } });
   mockPush.mockReset();
   mockKeycloakLogout.mockClear();
   delete process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS;
@@ -59,12 +63,31 @@ describe("useAuth", () => {
     expect(result.current.isAuthenticated).toBe(true);
   });
 
-  it("isReadOnly is false when portal is landlord", async () => {
+  it("isReadOnly is false when portal is landlord (even though /me is fetched for the name)", async () => {
     useAuthStore.setState({ user: { portal: "landlord", sub: "s1", email: "l@dev.local" } });
+    mockedGet.mockResolvedValueOnce({ data: { firstName: "Lara", lastName: "Landlord", accountStatus: null } });
     const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
-    await new Promise((r) => setTimeout(r, 0));
+    await waitFor(() => expect(result.current.isMeLoading).toBe(false));
     expect(result.current.isReadOnly).toBe(false);
-    expect(mockedGet).not.toHaveBeenCalled();
+    // /me now fires for every authenticated user — it carries the profile name.
+    expect(mockedGet).toHaveBeenCalledWith("/me");
+  });
+
+  it("surfaces firstName/lastName from /me", async () => {
+    useAuthStore.setState({ user: { portal: "landlord", sub: "s1", email: "l@dev.local" } });
+    mockedGet.mockResolvedValueOnce({ data: { firstName: "Drin", lastName: "Prekaj", accountStatus: null } });
+    const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.firstName).toBe("Drin"));
+    expect(result.current.lastName).toBe("Prekaj");
+  });
+
+  it("normalizes blank/whitespace name fields to null", async () => {
+    useAuthStore.setState({ user: { portal: "landlord", sub: "s1", email: "l@dev.local" } });
+    mockedGet.mockResolvedValueOnce({ data: { firstName: "  ", lastName: "", accountStatus: null } });
+    const { result } = renderHook(() => useAuth(), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isMeLoading).toBe(false));
+    expect(result.current.firstName).toBeNull();
+    expect(result.current.lastName).toBeNull();
   });
 
   it("isReadOnly is false when portal is tenant and isMeLoading is true", () => {
