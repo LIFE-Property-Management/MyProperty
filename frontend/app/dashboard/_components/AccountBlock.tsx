@@ -4,20 +4,35 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/lib/hooks";
 
+/**
+ * Avatar initials from the profile name (e.g. "Drin Prekaj" → "DP"). Falls back
+ * to the first email character, then "U", so the avatar is never empty while
+ * /me is loading or when a name is absent.
+ */
+function getInitials(
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+  email: string | null,
+): string {
+  const fromName = `${firstName?.charAt(0) ?? ""}${lastName?.charAt(0) ?? ""}`;
+  if (fromName) return fromName.toUpperCase();
+  return email ? email.charAt(0).toUpperCase() : "U";
+}
+
 export function AccountBlock() {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const { user, signOut } = useAuth();
+  const { user, firstName, lastName, signOut } = useAuth();
 
   const email = user?.email ?? null;
   const role = user?.portal
     ? user.portal.charAt(0).toUpperCase() + user.portal.slice(1)
     : "User";
-  // TODO M3.2: derive initials from name field once /me returns landlord profile data.
-  const initials = email ? email.charAt(0).toUpperCase() : "U";
-  const displayName = email ?? "User";
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+  const initials = getInitials(firstName, lastName, email);
+  const displayName = fullName || email || "User";
 
   const handleSignOut = async () => {
     setIsOpen(false);
